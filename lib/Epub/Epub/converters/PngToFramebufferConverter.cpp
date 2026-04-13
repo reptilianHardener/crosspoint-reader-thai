@@ -163,9 +163,9 @@ void convertLineToGray(uint8_t* pPixels, uint8_t* grayLine, int width, int pixel
   }
 }
 
-void pngDrawCallback(PNGDRAW* pDraw) {
+int pngDrawCallback(PNGDRAW* pDraw) {
   PngContext* ctx = reinterpret_cast<PngContext*>(pDraw->pUser);
-  if (!ctx || !ctx->config || !ctx->renderer || !ctx->grayLineBuffer) return;
+  if (!ctx || !ctx->config || !ctx->renderer || !ctx->grayLineBuffer) return 0;
 
   int srcY = pDraw->y;
   int srcWidth = ctx->srcWidth;
@@ -174,14 +174,14 @@ void pngDrawCallback(PNGDRAW* pDraw) {
   int dstY = (int)(srcY * ctx->scale);
 
   // Skip if we already rendered this destination row (multiple source rows map to same dest)
-  if (dstY == ctx->lastDstY) return;
+  if (dstY == ctx->lastDstY) return 1;
   ctx->lastDstY = dstY;
 
   // Check bounds
-  if (dstY >= ctx->dstHeight) return;
+  if (dstY >= ctx->dstHeight) return 1;
 
   int outY = ctx->config->y + dstY;
-  if (outY >= ctx->screenHeight) return;
+  if (outY >= ctx->screenHeight) return 1;
 
   // Convert entire source line to grayscale (improves cache locality)
   convertLineToGray(pDraw->pPixels, ctx->grayLineBuffer, srcWidth, pDraw->iPixelType, pDraw->pPalette,
@@ -232,6 +232,7 @@ void pngDrawCallback(PNGDRAW* pDraw) {
     }
   }
 
+  return 1;
 }
 
 }  // namespace

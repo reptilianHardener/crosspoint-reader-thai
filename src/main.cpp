@@ -44,12 +44,6 @@ EpdFont notosans14BoldItalicFont(&notosans_14_bolditalic);
 EpdFontFamily notosans14FontFamily(&notosans14RegularFont, &notosans14BoldFont, &notosans14ItalicFont,
                                    &notosans14BoldItalicFont);
 #ifndef OMIT_FONTS
-EpdFont notosans12RegularFont(&notosans_12_regular);
-EpdFont notosans12BoldFont(&notosans_12_bold);
-EpdFont notosans12ItalicFont(&notosans_12_italic);
-EpdFont notosans12BoldItalicFont(&notosans_12_bolditalic);
-EpdFontFamily notosans12FontFamily(&notosans12RegularFont, &notosans12BoldFont, &notosans12ItalicFont,
-                                   &notosans12BoldItalicFont);
 EpdFont notosans16RegularFont(&notosans_16_regular);
 EpdFont notosans16BoldFont(&notosans_16_bold);
 EpdFont notosans16ItalicFont(&notosans_16_italic);
@@ -63,13 +57,6 @@ EpdFont notosans18BoldItalicFont(&notosans_18_bolditalic);
 EpdFontFamily notosans18FontFamily(&notosans18RegularFont, &notosans18BoldFont, &notosans18ItalicFont,
                                    &notosans18BoldItalicFont);
 
-EpdFont notoserifthai12RegularFont(&notoserifthai_12_regular);
-EpdFont notoserifthai12BoldFont(&notoserifthai_12_bold);
-// 12pt: omit dedicated italic/bold-italic glyph sets to save flash; map styles to regular/bold.
-EpdFont notoserifthai12ItalicFont(&notoserifthai_12_regular);
-EpdFont notoserifthai12BoldItalicFont(&notoserifthai_12_bold);
-EpdFontFamily notoserifthai12FontFamily(&notoserifthai12RegularFont, &notoserifthai12BoldFont,
-                                        &notoserifthai12ItalicFont, &notoserifthai12BoldItalicFont);
 EpdFont notoserifthai14RegularFont(&notoserifthai_14_regular);
 EpdFont notoserifthai14BoldFont(&notoserifthai_14_bold);
 EpdFont notoserifthai14ItalicFont(&notoserifthai_14_italic);
@@ -88,31 +75,6 @@ EpdFont notoserifthai18ItalicFont(&notoserifthai_18_italic);
 EpdFont notoserifthai18BoldItalicFont(&notoserifthai_18_bolditalic);
 EpdFontFamily notoserifthai18FontFamily(&notoserifthai18RegularFont, &notoserifthai18BoldFont,
                                         &notoserifthai18ItalicFont, &notoserifthai18BoldItalicFont);
-
-EpdFont opendyslexic8RegularFont(&opendyslexic_8_regular);
-EpdFont opendyslexic8BoldFont(&opendyslexic_8_bold);
-EpdFont opendyslexic8ItalicFont(&opendyslexic_8_italic);
-EpdFont opendyslexic8BoldItalicFont(&opendyslexic_8_bolditalic);
-EpdFontFamily opendyslexic8FontFamily(&opendyslexic8RegularFont, &opendyslexic8BoldFont, &opendyslexic8ItalicFont,
-                                      &opendyslexic8BoldItalicFont);
-EpdFont opendyslexic10RegularFont(&opendyslexic_10_regular);
-EpdFont opendyslexic10BoldFont(&opendyslexic_10_bold);
-EpdFont opendyslexic10ItalicFont(&opendyslexic_10_italic);
-EpdFont opendyslexic10BoldItalicFont(&opendyslexic_10_bolditalic);
-EpdFontFamily opendyslexic10FontFamily(&opendyslexic10RegularFont, &opendyslexic10BoldFont, &opendyslexic10ItalicFont,
-                                       &opendyslexic10BoldItalicFont);
-EpdFont opendyslexic12RegularFont(&opendyslexic_12_regular);
-EpdFont opendyslexic12BoldFont(&opendyslexic_12_bold);
-EpdFont opendyslexic12ItalicFont(&opendyslexic_12_italic);
-EpdFont opendyslexic12BoldItalicFont(&opendyslexic_12_bolditalic);
-EpdFontFamily opendyslexic12FontFamily(&opendyslexic12RegularFont, &opendyslexic12BoldFont, &opendyslexic12ItalicFont,
-                                       &opendyslexic12BoldItalicFont);
-EpdFont opendyslexic14RegularFont(&opendyslexic_14_regular);
-EpdFont opendyslexic14BoldFont(&opendyslexic_14_bold);
-EpdFont opendyslexic14ItalicFont(&opendyslexic_14_italic);
-EpdFont opendyslexic14BoldItalicFont(&opendyslexic_14_bolditalic);
-EpdFontFamily opendyslexic14FontFamily(&opendyslexic14RegularFont, &opendyslexic14BoldFont, &opendyslexic14ItalicFont,
-                                       &opendyslexic14BoldItalicFont);
 #endif  // OMIT_FONTS
 
 EpdFont smallFont(&notosans_8_regular);
@@ -209,17 +171,11 @@ void setupDisplayAndFonts() {
   renderer.setFontCacheManager(&fontCacheManager);
   renderer.insertFont(NOTOSANS_14_FONT_ID, notosans14FontFamily);
 #ifndef OMIT_FONTS
-  renderer.insertFont(NOTOSANS_12_FONT_ID, notosans12FontFamily);
   renderer.insertFont(NOTOSANS_16_FONT_ID, notosans16FontFamily);
   renderer.insertFont(NOTOSANS_18_FONT_ID, notosans18FontFamily);
-  renderer.insertFont(NOTOSERIFTHAI_12_FONT_ID, notoserifthai12FontFamily);
   renderer.insertFont(NOTOSERIFTHAI_14_FONT_ID, notoserifthai14FontFamily);
   renderer.insertFont(NOTOSERIFTHAI_16_FONT_ID, notoserifthai16FontFamily);
   renderer.insertFont(NOTOSERIFTHAI_18_FONT_ID, notoserifthai18FontFamily);
-  renderer.insertFont(OPENDYSLEXIC_8_FONT_ID, opendyslexic8FontFamily);
-  renderer.insertFont(OPENDYSLEXIC_10_FONT_ID, opendyslexic10FontFamily);
-  renderer.insertFont(OPENDYSLEXIC_12_FONT_ID, opendyslexic12FontFamily);
-  renderer.insertFont(OPENDYSLEXIC_14_FONT_ID, opendyslexic14FontFamily);
 #endif  // OMIT_FONTS
   renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);

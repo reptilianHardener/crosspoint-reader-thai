@@ -91,8 +91,8 @@ class CrossPointSettings {
   // Swapped: Next, Previous
   enum SIDE_BUTTON_LAYOUT { PREV_NEXT = 0, NEXT_PREV = 1, SIDE_BUTTON_LAYOUT_COUNT };
 
-  // Font family options (settings.json schema v2+ uses 0..FONT_FAMILY_COUNT-1)
-  enum FONT_FAMILY { NOTOSANS = 0, OPENDYSLEXIC = 1, NOTO_SERIF_THAI = 2, FONT_FAMILY_COUNT };
+  // Font family options (settings.json stores 0=Noto Sans, 1=Noto Serif Thai).
+  enum FONT_FAMILY { NOTOSANS = 0, NOTO_SERIF_THAI = 1, FONT_FAMILY_COUNT };
   // Font size options
   enum FONT_SIZE { SMALL = 0, MEDIUM = 1, LARGE = 2, EXTRA_LARGE = 3, FONT_SIZE_COUNT };
   enum LINE_COMPRESSION { TIGHT = 0, NORMAL = 1, WIDE = 2, LINE_COMPRESSION_COUNT };
@@ -220,6 +220,9 @@ class CrossPointSettings {
 
   /** Map stored fontFamily from schema v1 (0=Bookerly..4=Sarabun) to current enum. */
   static uint8_t migrateFontFamilyFromLegacy(uint8_t stored);
+
+  /** Map v2 encoding (0=Noto, 1=OpenDyslexic removed, 2=Thai) to current 0/1 enum. */
+  static uint8_t normalizeFontFamilyStoredValue(uint8_t raw);
 
  private:
   bool loadFromBinaryFile();
