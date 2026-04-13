@@ -2,7 +2,7 @@ _language_name: "English"
 _language_code: "EN"
 _order: "0"
 
-STR_CROSSPOINT: "CrossPoint"
+STR_CROSSPOINT: "CAT Pose"
 STR_BOOTING: "BOOTING"
 STR_BOOT_CREDIT: "Mod: OhTeera"
 STR_SLEEPING: "SLEEPING"
