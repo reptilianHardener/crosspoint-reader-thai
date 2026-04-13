@@ -266,10 +266,10 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
   std::vector<size_t> lineBreakIndices;
   // When the parser has already inserted zero-width break markers (for example
   // between Thai dictionary words), use the DP line breaker instead of the
-  // greedy hyphenation loop. This produces noticeably fuller lines without
+  // greedy split loop. This produces noticeably fuller lines without
   // stretching glyph spacing, while still preserving gapless Thai rendering.
-  if (hyphenationEnabled && !hasZeroWidthBreakTokens(words)) {
-    // Use greedy layout that can split words mid-loop when a hyphenated prefix fits.
+  if (!hasZeroWidthBreakTokens(words)) {
+    // Greedy layout splits long tokens at legal breakpoints; visible '-' only when hyphenation is enabled.
     lineBreakIndices = computeHyphenatedLineBreaks(renderer, fontId, pageWidth, wordWidths, wordContinues);
   } else {
     lineBreakIndices = computeLineBreaks(renderer, fontId, pageWidth, wordWidths, wordContinues);
@@ -316,15 +316,14 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
           ? blockStyle.textIndent
           : 0;
 
-  // Ensure any word that would overflow even as the first entry on a line is split using fallback hyphenation.
-  if (hyphenationEnabled) {
-    for (size_t i = 0; i < wordWidths.size(); ++i) {
-      // First word needs to fit in reduced width if there's an indent
-      const int effectiveWidth = i == 0 ? pageWidth - firstLineIndent : pageWidth;
-      while (wordWidths[i] > effectiveWidth) {
-        if (!hyphenateWordAtIndex(i, effectiveWidth, renderer, fontId, wordWidths, /*allowFallbackBreaks=*/true)) {
-          break;
-        }
+  // Ensure any word that would overflow even as the first entry on a line is split at legal breakpoints
+  // (Liang/fallback/Thai); hyphenation setting only controls inserting a visible '-'.
+  for (size_t i = 0; i < wordWidths.size(); ++i) {
+    // First word needs to fit in reduced width if there's an indent
+    const int effectiveWidth = i == 0 ? pageWidth - firstLineIndent : pageWidth;
+    while (wordWidths[i] > effectiveWidth) {
+      if (!hyphenateWordAtIndex(i, effectiveWidth, renderer, fontId, wordWidths, /*allowFallbackBreaks=*/true)) {
+        break;
       }
     }
   }
@@ -427,7 +426,8 @@ void ParsedText::applyParagraphIndent() {
   }
 }
 
-// Builds break indices while opportunistically splitting the word that would overflow the current line.
+// Builds break indices while opportunistically splitting the word that would overflow the current line
+// (inserted '-' only when hyphenationEnabled is true and the breakpoint requires it).
 std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& renderer, const int fontId,
                                                             const int pageWidth, std::vector<uint16_t>& wordWidths,
                                                             std::vector<bool>& continuesVec) {
@@ -469,7 +469,7 @@ std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& r
         continue;
       }
 
-      // Word would overflow — try to split based on hyphenation points
+      // Word would overflow — try to split at legal breakpoints
       const int availableWidth = effectivePageWidth - lineWidth - spacing;
       const bool allowFallbackBreaks = isFirstWord;  // Only for first word on line
 
@@ -513,8 +513,8 @@ std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& r
   return lineBreakIndices;
 }
 
-// Splits words[wordIndex] into prefix (adding a hyphen only when needed) and remainder when a legal breakpoint fits the
-// available width.
+// Splits words[wordIndex] into prefix and remainder when a legal breakpoint fits the available width.
+// Appends a visible '-' only when hyphenationEnabled is on and the breakpoint requires an inserted hyphen.
 bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availableWidth, const GfxRenderer& renderer,
                                       const int fontId, std::vector<uint16_t>& wordWidths,
                                       const bool allowFallbackBreaks) {
@@ -534,7 +534,7 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
 
   size_t chosenOffset = 0;
   int chosenWidth = -1;
-  bool chosenNeedsHyphen = true;
+  bool chosenInsertHyphen = false;
 
   // Iterate over each legal breakpoint and retain the widest prefix that still fits.
   for (const auto& info : breakInfos) {
@@ -543,26 +543,26 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
       continue;
     }
 
-    const bool needsHyphen = info.requiresInsertedHyphen;
-    const int prefixWidth = measureWordWidth(renderer, fontId, word.substr(0, offset), style, needsHyphen);
+    const bool insertHyphen = info.requiresInsertedHyphen && hyphenationEnabled;
+    const int prefixWidth = measureWordWidth(renderer, fontId, word.substr(0, offset), style, insertHyphen);
     if (prefixWidth > availableWidth || prefixWidth <= chosenWidth) {
       continue;  // Skip if too wide or not an improvement
     }
 
     chosenWidth = prefixWidth;
     chosenOffset = offset;
-    chosenNeedsHyphen = needsHyphen;
+    chosenInsertHyphen = insertHyphen;
   }
 
   if (chosenWidth < 0) {
-    // No hyphenation point produced a prefix that fits in the remaining space.
+    // No breakpoint produced a prefix that fits in the remaining space.
     return false;
   }
 
-  // Split the word at the selected breakpoint and append a hyphen if required.
+  // Split the word at the selected breakpoint and append a hyphen when enabled and required.
   std::string remainder = word.substr(chosenOffset);
   words[wordIndex].resize(chosenOffset);
-  if (chosenNeedsHyphen) {
+  if (chosenInsertHyphen) {
     words[wordIndex].push_back('-');
   }
 

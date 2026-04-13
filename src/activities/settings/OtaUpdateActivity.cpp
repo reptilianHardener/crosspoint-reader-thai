@@ -10,6 +10,12 @@
 #include "fontIds.h"
 #include "network/OtaUpdater.h"
 
+namespace {
+void otaInstallProgressNotify(void* ctx) {
+  static_cast<OtaUpdateActivity*>(ctx)->requestUpdate(true);
+}
+}  // namespace
+
 void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
   if (!success) {
     LOG_ERR("OTA", "WiFi connection failed, exiting");
@@ -30,6 +36,8 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
     LOG_DBG("OTA", "Update check failed: %d", res);
     {
       RenderLock lock(*this);
+      failureDetail = res;
+      lastFailureWasInstall = false;
       state = FAILED;
     }
     return;
@@ -87,7 +95,11 @@ void OtaUpdateActivity::render(RenderLock&&) {
   float updaterProgress = 0;
   if (state == UPDATE_IN_PROGRESS) {
     LOG_DBG("OTA", "Update progress: %d / %d", updater.getProcessedSize(), updater.getTotalSize());
-    updaterProgress = static_cast<float>(updater.getProcessedSize()) / static_cast<float>(updater.getTotalSize());
+    const auto total = updater.getTotalSize();
+    if (total > 0) {
+      updaterProgress =
+          static_cast<float>(updater.getProcessedSize()) / static_cast<float>(total);
+    }
     // Only update every 2% at the most
     if (static_cast<int>(updaterProgress * 50) == lastUpdaterPercentage / 2) {
       return;
@@ -128,6 +140,26 @@ void OtaUpdateActivity::render(RenderLock&&) {
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   } else if (state == FAILED) {
     renderer.drawCenteredText(UI_10_FONT_ID, top, tr(STR_UPDATE_FAILED), true, EpdFontFamily::BOLD);
+    const char* detail = tr(STR_OTA_ERR_GENERIC);
+    if (lastFailureWasInstall) {
+      switch (failureDetail) {
+        case OtaUpdater::HTTP_ERROR:
+          detail = tr(STR_OTA_ERR_DOWNLOAD);
+          break;
+        case OtaUpdater::OTA_DOWNLOAD_INCOMPLETE:
+          detail = tr(STR_OTA_ERR_INCOMPLETE);
+          break;
+        case OtaUpdater::OTA_IMAGE_VALIDATE_FAILED:
+          detail = tr(STR_OTA_ERR_INVALID_IMAGE);
+          break;
+        default:
+          detail = tr(STR_OTA_ERR_GENERIC);
+          break;
+      }
+    } else {
+      detail = tr(STR_OTA_ERR_CHECK);
+    }
+    renderer.drawCenteredText(UI_10_FONT_ID, top + height + metrics.verticalSpacing, detail);
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   } else if (state == FINISHED) {
@@ -149,15 +181,19 @@ void OtaUpdateActivity::loop() {
       LOG_DBG("OTA", "New update available, starting download...");
       {
         RenderLock lock(*this);
+        lastUpdaterPercentage = UNINITIALIZED_PERCENTAGE;
         state = UPDATE_IN_PROGRESS;
       }
       requestUpdateAndWait();
+      updater.setInstallProgressCallback(otaInstallProgressNotify, this);
       const auto res = updater.installUpdate();
 
       if (res != OtaUpdater::OK) {
         LOG_DBG("OTA", "Update failed: %d", res);
         {
           RenderLock lock(*this);
+          failureDetail = res;
+          lastFailureWasInstall = true;
           state = FAILED;
         }
         requestUpdate();

@@ -21,6 +21,8 @@ class OtaUpdateActivity : public Activity {
   State state = WIFI_SELECTION;
   unsigned int lastUpdaterPercentage = UNINITIALIZED_PERCENTAGE;
   OtaUpdater updater;
+  OtaUpdater::OtaUpdaterError failureDetail = OtaUpdater::OK;
+  bool lastFailureWasInstall = false;
 
   void onWifiSelectionComplete(bool success);
 

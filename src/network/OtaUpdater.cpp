@@ -3,9 +3,29 @@
 #include <ArduinoJson.h>
 #include <Logging.h>
 
+#include <cstring>
+
+#include "bootloader_common.h"
+#include "esp_flash_partitions.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
+#include "esp_ota_ops.h"
+#include "esp_partition.h"
 #include "esp_wifi.h"
+
+struct InstallCallbackClearer {
+  OtaUpdater* u;
+  explicit InstallCallbackClearer(OtaUpdater* self) : u(self) {}
+  ~InstallCallbackClearer() {
+    u->installProgressCallback = nullptr;
+    u->installProgressCallbackCtx = nullptr;
+  }
+};
+
+void OtaUpdater::setInstallProgressCallback(void (*cb)(void*), void* ctx) {
+  installProgressCallback = cb;
+  installProgressCallbackCtx = ctx;
+}
 
 namespace {
 constexpr char latestReleaseUrl[] = "https://api.github.com/repos/teerarattanapon/crosspoint-reader/releases/latest";
@@ -201,10 +221,13 @@ bool OtaUpdater::isUpdateNewer() const {
 const std::string& OtaUpdater::getLatestVersion() const { return latestVersion; }
 
 OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate() {
+  InstallCallbackClearer clearCallbacks(this);
+
   if (!isUpdateNewer()) {
     return UPDATE_OLDER_ERROR;
   }
 
+  processedSize = 0;
   esp_https_ota_handle_t ota_handle = NULL;
   esp_err_t esp_err;
   /* Signal for OtaUpdateActivity */
@@ -212,7 +235,8 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate() {
 
   esp_http_client_config_t client_config = {
       .url = otaUrl.c_str(),
-      .timeout_ms = 15000,
+      /* Large firmware over Wi-Fi may idle longer than 15s between reads. */
+      .timeout_ms = 120000,
       /* Default HTTP client buffer size 512 byte only
        * not sufficent to handle URL redirection cases or
        * parsing of large HTTP headers.
@@ -234,8 +258,21 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate() {
 
   esp_err = esp_https_ota_begin(&ota_config, &ota_handle);
   if (esp_err != ESP_OK) {
-    LOG_DBG("OTA", "HTTP OTA Begin Failed: %s", esp_err_to_name(esp_err));
+    LOG_ERR("OTA", "esp_https_ota_begin failed: %s", esp_err_to_name(esp_err));
     return INTERNAL_UPDATE_ERROR;
+  }
+
+  {
+    const int httpImageSize = esp_https_ota_get_image_size(ota_handle);
+    if (httpImageSize > 0) {
+      totalSize = static_cast<size_t>(httpImageSize);
+      LOG_DBG("OTA", "OTA total size from HTTP Content-Length: %u (GitHub API was %u)",
+              static_cast<unsigned>(totalSize), static_cast<unsigned>(otaSize));
+    } else {
+      totalSize = otaSize;
+      LOG_DBG("OTA", "OTA total size fallback to GitHub API: %u (http size %d)",
+              static_cast<unsigned>(totalSize), httpImageSize);
+    }
   }
 
   do {
@@ -243,6 +280,9 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate() {
     processedSize = esp_https_ota_get_image_len_read(ota_handle);
     /* Sent signal to  OtaUpdateActivity */
     render = true;
+    if (installProgressCallback) {
+      installProgressCallback(installProgressCallbackCtx);
+    }
     delay(100);  // TODO: should we replace this with something better?
   } while (esp_err == ESP_ERR_HTTPS_OTA_IN_PROGRESS);
 
@@ -250,23 +290,117 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate() {
   esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
 
   if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_https_ota_perform Failed: %s", esp_err_to_name(esp_err));
-    esp_https_ota_finish(ota_handle);
+    LOG_ERR("OTA", "esp_https_ota_perform Failed: %s (0x%x)", esp_err_to_name(esp_err),
+            static_cast<unsigned>(esp_err));
+    esp_https_ota_abort(ota_handle);
     return HTTP_ERROR;
   }
 
   if (!esp_https_ota_is_complete_data_received(ota_handle)) {
-    LOG_ERR("OTA", "esp_https_ota_is_complete_data_received Failed: %s", esp_err_to_name(esp_err));
-    esp_https_ota_finish(ota_handle);
+    LOG_ERR("OTA", "OTA incomplete: read %d bytes (full image not received per HTTP)",
+            esp_https_ota_get_image_len_read(ota_handle));
+    esp_https_ota_abort(ota_handle);
+    return OTA_DOWNLOAD_INCOMPLETE;
+  }
+
+  /*
+   * Workaround (same idea as crosspoint-halo2-custom): pioarduino 55.x / ESP-IDF5.5.x
+   * esp_https_ota_finish() -> esp_image_verify() can falsely return ESP_ERR_OTA_VALIDATE_FAILED
+   * (efuse block-revision misread). We verify the flashed image lightly, abort the HTTPS OTA
+   * handle without finish(), then update otadata so the bootloader boots the new slot.
+   */
+  const esp_partition_t* ota_part = esp_ota_get_next_update_partition(nullptr);
+  if (!ota_part) {
+    LOG_ERR("OTA", "No OTA partition found (0x%x)", static_cast<unsigned>(ESP_ERR_NOT_FOUND));
+    esp_https_ota_abort(ota_handle);
     return INTERNAL_UPDATE_ERROR;
   }
 
-  esp_err = esp_https_ota_finish(ota_handle);
+  {
+    uint8_t buf[48];
+    esp_err_t read_err = esp_partition_read(ota_part, 0, buf, sizeof(buf));
+    if (read_err != ESP_OK) {
+      LOG_ERR("OTA", "Partition read failed: %s (0x%x)", esp_err_to_name(read_err),
+              static_cast<unsigned>(read_err));
+      esp_https_ota_abort(ota_handle);
+      return OTA_IMAGE_VALIDATE_FAILED;
+    }
+    if (buf[0] != 0xE9) {
+      LOG_ERR("OTA", "Bad image magic: 0x%02X (expected 0xE9)", buf[0]);
+      esp_https_ota_abort(ota_handle);
+      return OTA_IMAGE_VALIDATE_FAILED;
+    }
+    uint32_t app_magic = 0;
+    memcpy(&app_magic, buf + 32, sizeof(app_magic));
+    if (app_magic != 0xABCD5432) {
+      LOG_ERR("OTA", "Bad app_desc magic: 0x%08lX (expected 0xABCD5432)", static_cast<unsigned long>(app_magic));
+      esp_https_ota_abort(ota_handle);
+      return OTA_IMAGE_VALIDATE_FAILED;
+    }
+  }
+
+  LOG_INF("OTA", "Firmware header OK, switching boot partition...");
+
+  esp_err = esp_https_ota_abort(ota_handle);
   if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_https_ota_finish Failed: %s", esp_err_to_name(esp_err));
+    LOG_ERR("OTA", "esp_https_ota_abort failed: %s (0x%x)", esp_err_to_name(esp_err),
+            static_cast<unsigned>(esp_err));
     return INTERNAL_UPDATE_ERROR;
   }
 
-  LOG_INF("OTA", "Update completed");
+  const esp_partition_t* otadata_part =
+      esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_OTA, nullptr);
+  if (!otadata_part) {
+    LOG_ERR("OTA", "otadata partition not found");
+    return INTERNAL_UPDATE_ERROR;
+  }
+
+  esp_ota_select_entry_t entry[2];
+  esp_partition_read(otadata_part, 0, &entry[0], sizeof(entry[0]));
+  esp_partition_read(otadata_part, 0x1000, &entry[1], sizeof(entry[1]));
+
+  const bool valid0 = bootloader_common_ota_select_valid(&entry[0]);
+  const bool valid1 = bootloader_common_ota_select_valid(&entry[1]);
+
+  uint32_t max_seq = 0;
+  if (valid0) max_seq = entry[0].ota_seq;
+  if (valid1 && entry[1].ota_seq > max_seq) max_seq = entry[1].ota_seq;
+
+  const int target_slot = static_cast<int>(ota_part->subtype - ESP_PARTITION_SUBTYPE_APP_OTA_0);
+  uint32_t new_seq = max_seq + 1;
+  if ((new_seq - 1) % 2 != static_cast<uint32_t>(target_slot)) {
+    new_seq++;
+  }
+
+  esp_ota_select_entry_t new_entry;
+  memset(&new_entry, 0xFF, sizeof(new_entry));
+  new_entry.ota_seq = new_seq;
+  new_entry.ota_state = ESP_OTA_IMG_UNDEFINED;
+  new_entry.crc = bootloader_common_ota_select_crc(&new_entry);
+
+  int write_sector;
+  if (!valid0) {
+    write_sector = 0;
+  } else if (!valid1) {
+    write_sector = 1;
+  } else {
+    write_sector = (entry[0].ota_seq <= entry[1].ota_seq) ? 0 : 1;
+  }
+
+  const uint32_t write_offset = static_cast<uint32_t>(write_sector) * 0x1000;
+  esp_err = esp_partition_erase_range(otadata_part, write_offset, 0x1000);
+  if (esp_err != ESP_OK) {
+    LOG_ERR("OTA", "otadata erase failed: %s (0x%x)", esp_err_to_name(esp_err), static_cast<unsigned>(esp_err));
+    return INTERNAL_UPDATE_ERROR;
+  }
+
+  esp_err = esp_partition_write(otadata_part, write_offset, &new_entry, sizeof(new_entry));
+  if (esp_err != ESP_OK) {
+    LOG_ERR("OTA", "otadata write failed: %s (0x%x)", esp_err_to_name(esp_err), static_cast<unsigned>(esp_err));
+    return INTERNAL_UPDATE_ERROR;
+  }
+
+  LOG_INF("OTA", "Update completed (ota_seq=%lu slot=%d sector=%d)", static_cast<unsigned long>(new_seq),
+          target_slot, write_sector);
   return OK;
 }

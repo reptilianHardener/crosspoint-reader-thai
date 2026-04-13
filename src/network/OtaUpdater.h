@@ -1,9 +1,10 @@
 #pragma once
 
-#include <functional>
 #include <string>
 
 class OtaUpdater {
+  friend struct InstallCallbackClearer;
+
   bool updateAvailable = false;
   std::string latestVersion;
   std::string otaUrl;
@@ -11,6 +12,8 @@ class OtaUpdater {
   size_t processedSize = 0;
   size_t totalSize = 0;
   bool render = false;
+  void (*installProgressCallback)(void*) = nullptr;
+  void* installProgressCallbackCtx = nullptr;
 
  public:
   enum OtaUpdaterError {
@@ -21,6 +24,10 @@ class OtaUpdater {
     UPDATE_OLDER_ERROR,
     INTERNAL_UPDATE_ERROR,
     OOM_ERROR,
+    /** Download ended before full image (per HTTP / OTA state). */
+    OTA_DOWNLOAD_INCOMPLETE,
+    /** Manual post-download image header check or otadata write failed (see OtaUpdater.cpp). */
+    OTA_IMAGE_VALIDATE_FAILED,
   };
 
   size_t getOtaSize() const { return otaSize; }
@@ -36,4 +43,5 @@ class OtaUpdater {
   const std::string& getLatestVersion() const;
   OtaUpdaterError checkForUpdate();
   OtaUpdaterError installUpdate();
+  void setInstallProgressCallback(void (*cb)(void*), void* ctx);
 };
