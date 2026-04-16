@@ -9,6 +9,7 @@
 
 #include "../../Epub.h"
 #include "../Page.h"
+#include "../ThaiSegmenter.h"
 #include "../converters/ImageDecoderFactory.h"
 #include "../converters/ImageToFramebufferDecoder.h"
 #include "../htmlEntities.h"
@@ -98,6 +99,20 @@ void ChapterHtmlSlimParser::updateEffectiveInlineStyle() {
   }
 }
 
+namespace {
+struct ThaiWordCtx {
+  ParsedText* block;
+  EpdFontFamily::Style style;
+  bool firstNextWordContinues;
+};
+
+void thaiWordCb(const char* word, int len, bool attachToPrevious, void* ctx) {
+  auto* c = static_cast<ThaiWordCtx*>(ctx);
+  const bool attach = attachToPrevious ? true : c->firstNextWordContinues;
+  c->block->addWord(std::string(word, static_cast<size_t>(len)), c->style, false, attach);
+}
+}  // namespace
+
 // flush the contents of partWordBuffer to currentTextBlock
 void ChapterHtmlSlimParser::flushPartWordBuffer() {
   // Determine font style from depth-based tracking and CSS effective style
@@ -119,7 +134,12 @@ void ChapterHtmlSlimParser::flushPartWordBuffer() {
 
   // flush the buffer
   partWordBuffer[partWordBufferIndex] = '\0';
-  currentTextBlock->addWord(partWordBuffer, fontStyle, false, nextWordContinues);
+  if (ThaiSegmenter::startsWithThai(partWordBuffer, partWordBufferIndex)) {
+    ThaiWordCtx ctx{currentTextBlock.get(), fontStyle, nextWordContinues};
+    THAI_SEGMENTER.segment(partWordBuffer, partWordBufferIndex, thaiWordCb, &ctx);
+  } else {
+    currentTextBlock->addWord(partWordBuffer, fontStyle, false, nextWordContinues);
+  }
   partWordBufferIndex = 0;
   nextWordContinues = false;
 }
