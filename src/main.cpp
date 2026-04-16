@@ -54,14 +54,6 @@ EpdFontFamily notosansthai18FontFamily(&notosansthai18RegularFont, &notosansthai
 EpdFont smallFont(&notosans_8_regular);
 EpdFontFamily smallFontFamily(&smallFont);
 
-EpdFont ui10RegularFont(&ubuntu_10_regular);
-EpdFont ui10BoldFont(&ubuntu_10_bold);
-EpdFontFamily ui10FontFamily(&ui10RegularFont, &ui10BoldFont);
-
-EpdFont ui12RegularFont(&ubuntu_12_regular);
-EpdFont ui12BoldFont(&ubuntu_12_bold);
-EpdFontFamily ui12FontFamily(&ui12RegularFont, &ui12BoldFont);
-
 // measurement of power button press duration calibration value
 unsigned long t1 = 0;
 unsigned long t2 = 0;
@@ -147,9 +139,12 @@ void setupDisplayAndFonts() {
   renderer.insertFont(NOTOSANSTHAI_14_FONT_ID, notosansthai14FontFamily);
   renderer.insertFont(NOTOSANSTHAI_16_FONT_ID, notosansthai16FontFamily);
   renderer.insertFont(NOTOSANSTHAI_18_FONT_ID, notosansthai18FontFamily);
-  renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
-  renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
-  renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
+  // UI font IDs mapped to NotoSansThai so all UI text (labels, titles, menus)
+  // renders Thai characters correctly. NotoSansThai was built with Latin fallback
+  // so ASCII/Latin UI text continues to render.
+  renderer.insertFont(UI_10_FONT_ID, notosansthai12FontFamily);
+  renderer.insertFont(UI_12_FONT_ID, notosansthai14FontFamily);
+  renderer.insertFont(SMALL_FONT_ID, notosansthai12FontFamily);
   LOG_DBG("MAIN", "Fonts setup");
 }
 
