@@ -830,19 +830,35 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
     if (self->partWordBufferIndex >= MAX_WORD_SIZE) {
       int safeLen = utf8SafeTruncateBuffer(self->partWordBuffer, self->partWordBufferIndex);
 
-      if (safeLen < self->partWordBufferIndex && safeLen > 0) {
-        // Incomplete UTF-8 sequence at the end — save it before flushing
-        int overflow = self->partWordBufferIndex - safeLen;
-        char saved[4];
-        for (int j = 0; j < overflow; j++) {
+      // Also back up past any trailing Thai combining marks (tone marks, above/below
+      // vowel signs) so we never flush a Thai base character without its diacritics.
+      // Each Thai codepoint is exactly 3 bytes (U+0E00-0E7F = 0xE0 0xB8/0xB9 xx).
+      while (safeLen >= 3) {
+        const auto tb0 = static_cast<uint8_t>(self->partWordBuffer[safeLen - 3]);
+        const auto tb1 = static_cast<uint8_t>(self->partWordBuffer[safeLen - 2]);
+        const auto tb2 = static_cast<uint8_t>(self->partWordBuffer[safeLen - 1]);
+        if (tb0 != 0xE0 || (tb1 != 0xB8 && tb1 != 0xB9) || (tb2 & 0xC0) != 0x80) break;
+        const uint32_t cp = (static_cast<uint32_t>(tb1 & 0x3F) << 6) | (tb2 & 0x3F);
+        if (!utf8IsCombiningMark(cp)) break;
+        safeLen -= 3;
+      }
+
+      const int overflow = self->partWordBufferIndex - safeLen;
+      if (overflow > 0 && safeLen > 0) {
+        // Save trailing bytes (incomplete codepoint or Thai combining marks) and
+        // carry them into the next buffer. Max: 2 Thai combining marks = 6 bytes.
+        char saved[8];
+        const int saveCount = (overflow < static_cast<int>(sizeof(saved))) ? overflow
+                                                                            : static_cast<int>(sizeof(saved));
+        for (int j = 0; j < saveCount; j++) {
           saved[j] = self->partWordBuffer[safeLen + j];
         }
         self->partWordBufferIndex = safeLen;
         self->flushPartWordBuffer();
-        for (int j = 0; j < overflow; j++) {
+        for (int j = 0; j < saveCount; j++) {
           self->partWordBuffer[j] = saved[j];
         }
-        self->partWordBufferIndex = overflow;
+        self->partWordBufferIndex = saveCount;
       } else {
         self->flushPartWordBuffer();
       }
