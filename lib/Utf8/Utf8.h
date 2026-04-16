@@ -20,5 +20,8 @@ inline bool utf8IsCombiningMark(const uint32_t cp) {
   return (cp >= 0x0300 && cp <= 0x036F)      // Combining Diacritical Marks
          || (cp >= 0x1DC0 && cp <= 0x1DFF)   // Combining Diacritical Marks Supplement
          || (cp >= 0x20D0 && cp <= 0x20FF)   // Combining Diacritical Marks for Symbols
-         || (cp >= 0xFE20 && cp <= 0xFE2F);  // Combining Half Marks
+         || (cp >= 0xFE20 && cp <= 0xFE2F)   // Combining Half Marks
+         || (cp == 0x0E31)                   // Thai: MAI HAN AKAT (above vowel)
+         || (cp >= 0x0E34 && cp <= 0x0E3A)   // Thai: above/below vowels (I, II, UE, UEE, U, UU, phinthu)
+         || (cp >= 0x0E47 && cp <= 0x0E4E);  // Thai: tone marks and diacritics
 }

@@ -67,7 +67,9 @@ bool isLatinLetter(const uint32_t cp) {
 
 bool isCyrillicLetter(const uint32_t cp) { return (cp >= 0x0400 && cp <= 0x052F); }
 
-bool isAlphabetic(const uint32_t cp) { return isLatinLetter(cp) || isCyrillicLetter(cp); }
+bool isThaiLetter(const uint32_t cp) { return (cp >= 0x0E01 && cp <= 0x0E3F); }
+
+bool isAlphabetic(const uint32_t cp) { return isLatinLetter(cp) || isCyrillicLetter(cp) || isThaiLetter(cp); }
 
 bool isPunctuation(const uint32_t cp) {
   switch (cp) {
