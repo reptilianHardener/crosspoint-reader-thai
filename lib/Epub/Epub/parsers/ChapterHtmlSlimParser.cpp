@@ -134,14 +134,18 @@ void ChapterHtmlSlimParser::flushPartWordBuffer() {
 
   // flush the buffer
   partWordBuffer[partWordBufferIndex] = '\0';
-  if (ThaiSegmenter::startsWithThai(partWordBuffer, partWordBufferIndex)) {
+  const bool wasThaiRun = ThaiSegmenter::startsWithThai(partWordBuffer, partWordBufferIndex);
+  if (wasThaiRun) {
     ThaiWordCtx ctx{currentTextBlock.get(), fontStyle, nextWordContinues};
     THAI_SEGMENTER.segment(partWordBuffer, partWordBufferIndex, thaiWordCb, &ctx);
   } else {
     currentTextBlock->addWord(partWordBuffer, fontStyle, false, nextWordContinues);
   }
   partWordBufferIndex = 0;
-  nextWordContinues = false;
+  // For Thai runs: signal that the next buffer chunk continues without a space.
+  // The whitespace handler (characterData) will override this to false if a real
+  // space follows, so this only affects forced mid-run flushes at MAX_WORD_SIZE.
+  nextWordContinues = wasThaiRun;
 }
 
 // start a new text block if needed
