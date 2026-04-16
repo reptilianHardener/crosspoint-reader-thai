@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 
 #include "Epub/css/CssStyle.h"
@@ -38,10 +39,11 @@ struct BlockStyle {
     return result;
   }
 
-  // Return a copy with the source's bottom margins/padding added to this style's.
+  // Return a copy with bottom margins/padding collapsed (max) with the source's.
+  // Uses CSS margin collapsing: adjacent parent-child margins resolve to the larger value.
   [[nodiscard]] BlockStyle addBottom(const BlockStyle& source) const {
     BlockStyle result = *this;
-    result.marginBottom = static_cast<int16_t>(marginBottom + source.marginBottom);
+    result.marginBottom = std::max(marginBottom, source.marginBottom);
     result.paddingBottom = static_cast<int16_t>(paddingBottom + source.paddingBottom);
     return result;
   }
@@ -70,8 +72,8 @@ struct BlockStyle {
         result.textAlignDefined = true;
       }
     } else {
-      result.marginTop = static_cast<int16_t>(child.marginTop + marginTop);
-      result.marginBottom = static_cast<int16_t>(child.marginBottom + marginBottom);
+      result.marginTop = std::max(child.marginTop, marginTop);
+      result.marginBottom = std::max(child.marginBottom, marginBottom);
       result.paddingTop = static_cast<int16_t>(child.paddingTop + paddingTop);
       result.paddingBottom = static_cast<int16_t>(child.paddingBottom + paddingBottom);
     }
