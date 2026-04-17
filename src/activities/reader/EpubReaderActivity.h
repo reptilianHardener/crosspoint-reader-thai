@@ -2,6 +2,8 @@
 #include <Epub.h>
 #include <Epub/FootnoteEntry.h>
 #include <Epub/Section.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include "EpubReaderMenuActivity.h"
 #include "activities/Activity.h"
@@ -27,6 +29,23 @@ class EpubReaderActivity final : public Activity {
   bool pendingScreenshot = false;
   bool skipNextButtonCheck = false;  // Skip button processing for one frame after subactivity exit
   bool automaticPageTurnActive = false;
+
+  struct SilentIndexState {
+    std::shared_ptr<Epub> epub;
+    int nextSpineIndex = 0;
+    int fontId = 0;
+    float lineCompression = 1.0f;
+    bool extraParagraphSpacing = false;
+    uint8_t paragraphAlignment = 0;
+    uint16_t viewportWidth = 0;
+    uint16_t viewportHeight = 0;
+    bool hyphenationEnabled = false;
+    bool embeddedStyle = false;
+    uint8_t imageRendering = 0;
+  };
+  SilentIndexState silentIndexState_;
+  TaskHandle_t silentIndexTaskHandle_ = nullptr;
+  static void silentIndexTrampoline(void* param);
 
   // Footnote support
   std::vector<FootnoteEntry> currentPageFootnotes;

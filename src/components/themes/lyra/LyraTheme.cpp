@@ -366,16 +366,16 @@ void LyraTheme::drawSideButtonHints(const GfxRenderer& renderer, const char* top
     if (topBtn != nullptr && topBtn[0] != '\0') {
       renderer.drawRoundedRect(buttonMargin, x3ButtonY, buttonWidth, buttonHeight, 1, cornerRadius, false, true, false,
                                true, true);
-      const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, topBtn);
-      renderer.drawTextRotated90CW(SMALL_FONT_ID, buttonMargin, x3ButtonY + (buttonHeight + textWidth) / 2, topBtn);
+      const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, topBtn);
+      renderer.drawTextRotated90CW(UI_10_FONT_ID, buttonMargin, x3ButtonY + (buttonHeight + textWidth) / 2, topBtn);
     }
 
     if (bottomBtn != nullptr && bottomBtn[0] != '\0') {
       const int rightX = screenWidth - buttonWidth;
       renderer.drawRoundedRect(rightX, x3ButtonY, buttonWidth, buttonHeight, 1, cornerRadius, true, false, true, false,
                                true);
-      const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, bottomBtn);
-      renderer.drawTextRotated90CW(SMALL_FONT_ID, rightX, x3ButtonY + (buttonHeight + textWidth) / 2, bottomBtn);
+      const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, bottomBtn);
+      renderer.drawTextRotated90CW(UI_10_FONT_ID, rightX, x3ButtonY + (buttonHeight + textWidth) / 2, bottomBtn);
     }
   } else {
     // X4 layout: Both buttons stacked on right side
@@ -395,8 +395,8 @@ void LyraTheme::drawSideButtonHints(const GfxRenderer& renderer, const char* top
     for (int i = 0; i < 2; i++) {
       if (labels[i] != nullptr && labels[i][0] != '\0') {
         const int y = topHintButtonY + (i * buttonHeight) + 5;
-        const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, labels[i]);
-        renderer.drawTextRotated90CW(SMALL_FONT_ID, x, y + (buttonHeight + textWidth) / 2, labels[i]);
+        const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, labels[i]);
+        renderer.drawTextRotated90CW(UI_10_FONT_ID, x, y + (buttonHeight + textWidth) / 2, labels[i]);
       }
     }
   }

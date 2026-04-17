@@ -97,6 +97,11 @@ void EpubReaderActivity::onExit() {
 
   APP_STATE.readerActivityLoadCount = 0;
   APP_STATE.saveToFile();
+  if (silentIndexTaskHandle_ != nullptr) {
+    vTaskDelete(silentIndexTaskHandle_);
+    silentIndexTaskHandle_ = nullptr;
+  }
+  silentIndexState_.epub.reset();
   section.reset();
   epub.reset();
 }
@@ -652,6 +657,19 @@ void EpubReaderActivity::render(RenderLock&& lock) {
   }
 }
 
+void EpubReaderActivity::silentIndexTrampoline(void* param) {
+  auto* self = static_cast<EpubReaderActivity*>(param);
+  const auto& s = self->silentIndexState_;
+  Section nextSection(s.epub, s.nextSpineIndex, self->renderer);
+  if (!nextSection.createSectionFile(s.fontId, s.lineCompression, s.extraParagraphSpacing, s.paragraphAlignment,
+                                     s.viewportWidth, s.viewportHeight, s.hyphenationEnabled, s.embeddedStyle,
+                                     s.imageRendering)) {
+    LOG_ERR("ERS", "Background indexing failed for chapter: %d", s.nextSpineIndex);
+  }
+  self->silentIndexTaskHandle_ = nullptr;
+  vTaskDelete(nullptr);
+}
+
 void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportWidth, const uint16_t viewportHeight) {
   if (!epub || !section || section->pageCount < 2) {
     return;
@@ -659,6 +677,11 @@ void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportW
 
   // Build the next chapter cache while the penultimate page is on screen.
   if (section->currentPage != section->pageCount - 2) {
+    return;
+  }
+
+  // Already running.
+  if (silentIndexTaskHandle_ != nullptr) {
     return;
   }
 
@@ -675,13 +698,19 @@ void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportW
     return;
   }
 
-  LOG_DBG("ERS", "Silently indexing next chapter: %d", nextSpineIndex);
-  if (!nextSection.createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
-                                     SETTINGS.extraParagraphSpacing, SETTINGS.paragraphAlignment, viewportWidth,
-                                     viewportHeight, SETTINGS.hyphenationEnabled, SETTINGS.embeddedStyle,
-                                     SETTINGS.imageRendering)) {
-    LOG_ERR("ERS", "Failed silent indexing for chapter: %d", nextSpineIndex);
-  }
+  LOG_DBG("ERS", "Spawning background indexing for chapter: %d", nextSpineIndex);
+  silentIndexState_.epub = epub;
+  silentIndexState_.nextSpineIndex = nextSpineIndex;
+  silentIndexState_.fontId = SETTINGS.getReaderFontId();
+  silentIndexState_.lineCompression = SETTINGS.getReaderLineCompression();
+  silentIndexState_.extraParagraphSpacing = SETTINGS.extraParagraphSpacing;
+  silentIndexState_.paragraphAlignment = SETTINGS.paragraphAlignment;
+  silentIndexState_.viewportWidth = viewportWidth;
+  silentIndexState_.viewportHeight = viewportHeight;
+  silentIndexState_.hyphenationEnabled = SETTINGS.hyphenationEnabled;
+  silentIndexState_.embeddedStyle = SETTINGS.embeddedStyle;
+  silentIndexState_.imageRendering = SETTINGS.imageRendering;
+  xTaskCreate(&silentIndexTrampoline, "SilentIndex", 4096, this, 1, &silentIndexTaskHandle_);
 }
 
 void EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageCount) {
