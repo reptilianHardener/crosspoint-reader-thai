@@ -251,7 +251,7 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
                                                  combiningGlyph->width);
       // Bug 1 fix: Thai tone marks (U+0E47–U+0E4B) sit right of center over the consonant
       if (cp >= 0x0E47 && cp <= 0x0E4B) {
-        combiningX += lastBaseWidth / 4;
+        combiningX += lastBaseWidth / 3;
       }
       renderCharImpl<TextRotation::None>(*this, renderMode, font, cp, combiningX, yPos - raiseBy, black, style);
       // Update stacking cursor: if this is an above-base mark, record its effective top
@@ -1102,7 +1102,7 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
       int combiningY = combiningMark::centerOverRotated90CW(lastBaseY, lastBaseLeft, lastBaseWidth,
                                                             combiningGlyph->left, combiningGlyph->width);
       if (cp >= 0x0E47 && cp <= 0x0E4B) {
-        combiningY -= lastBaseWidth / 4;  // rotated: right-shift maps to Y-decrease
+        combiningY -= lastBaseWidth / 3;  // rotated: right-shift maps to Y-decrease
       }
       renderCharImpl<TextRotation::Rotated90CW>(*this, renderMode, font, cp, combiningX, combiningY, black, style);
       if (combiningGlyph->top - combiningGlyph->height > 0) {

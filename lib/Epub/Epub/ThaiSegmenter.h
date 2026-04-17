@@ -50,6 +50,12 @@ class ThaiSegmenter {
     uint8_t key[KEY_LEN];
   };
 
+  // Each block in the SD file holds sdBlockSize_ null-terminated words.
+  // We cache the last-read block in sdBlockBuf_ so that all candidate-length
+  // lookups at the same text position (which always hit the same block) share
+  // one SD seek instead of up to 30.
+  static constexpr int SD_BLOCK_BUF_BYTES = 2048;
+
   bool initialized_ = false;
   bool sdAvailable_ = false;
   FsFile sdFile_;
@@ -57,6 +63,9 @@ class ThaiSegmenter {
   uint32_t sdBlockSize_ = 0;
   int sdNumBlocks_ = 0;
   CoarseEntry coarseIndex_[MAX_COARSE_ENTRIES];
+  int sdCachedBlock_ = -1;
+  uint32_t sdCachedBlockLen_ = 0;
+  char sdBlockBuf_[SD_BLOCK_BUF_BYTES];
 
   static ThaiSegmenter instance_;
 };

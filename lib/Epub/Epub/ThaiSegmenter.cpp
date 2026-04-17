@@ -63,7 +63,16 @@ bool ThaiSegmenter::lookupSd(const char* text, int wordLen) {
   }
   if (block < 0) return false;  // Query sorts before all blocks.
 
-  if (!sdFile_.seekSet(coarseIndex_[block].offset)) return false;
+  // Load the block into the in-memory cache if not already there.
+  // All candidate lengths at the same text position produce the same block
+  // index, so this reduces up to 30 SD seeks per position down to 1.
+  if (block != sdCachedBlock_) {
+    if (!sdFile_.seekSet(coarseIndex_[block].offset)) return false;
+    const int bytesRead = sdFile_.read(sdBlockBuf_, sizeof(sdBlockBuf_));
+    if (bytesRead <= 0) return false;
+    sdCachedBlockLen_ = static_cast<uint32_t>(bytesRead);
+    sdCachedBlock_ = block;
+  }
 
   // Determine how many words are in this block.
   const uint32_t blockStart = static_cast<uint32_t>(block) * sdBlockSize_;
@@ -72,20 +81,22 @@ bool ThaiSegmenter::lookupSd(const char* text, int wordLen) {
     wordsLeft = sdWordCount_ - blockStart;
   }
 
-  // Sequential scan: read null-terminated words and compare until past target.
+  // Sequential scan in RAM: parse null-terminated words from sdBlockBuf_.
+  const char* ptr = sdBlockBuf_;
+  const char* end = sdBlockBuf_ + sdCachedBlockLen_;
   char buf[128];
-  for (uint32_t i = 0; i < wordsLeft; i++) {
+  for (uint32_t i = 0; i < wordsLeft && ptr < end; i++) {
     int wlen = 0;
     bool overflow = false;
-    char c;
-    while (sdFile_.read(&c, 1) == 1) {
-      if (c == '\0') break;
+    while (ptr < end && *ptr != '\0') {
       if (wlen < static_cast<int>(sizeof(buf)) - 1) {
-        buf[wlen++] = c;
+        buf[wlen++] = *ptr;
       } else {
         overflow = true;
       }
+      ptr++;
     }
+    if (ptr < end) ptr++;  // skip null terminator
     buf[wlen] = '\0';
     if (overflow) continue;
 
