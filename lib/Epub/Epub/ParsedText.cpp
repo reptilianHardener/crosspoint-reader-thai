@@ -13,6 +13,14 @@
 
 constexpr int MAX_COST = std::numeric_limits<int>::max();
 
+// Returns true if the word starts with a Thai UTF-8 codepoint (U+0E00–U+0E7F).
+// Thai text uses continuation tokens with no space, but line breaks ARE allowed at
+// word boundaries — unlike non-breaking space groups where both must stay together.
+static bool isThaiWord(const std::string& w) {
+  return w.size() >= 3 && static_cast<uint8_t>(w[0]) == 0xE0 &&
+         (static_cast<uint8_t>(w[1]) == 0xB8 || static_cast<uint8_t>(w[1]) == 0xB9);
+}
+
 namespace {
 
 // Soft hyphen byte pattern used throughout EPUBs (UTF-8 for U+00AD).
@@ -197,9 +205,13 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
         break;
       }
 
-      // Cannot break after word j if the next word attaches to it (continuation group)
+      // Cannot break after word j if the next word attaches to it (continuation group),
+      // UNLESS both words are Thai — Thai has no inter-word spaces but line breaks are
+      // allowed at word boundaries (unlike non-breaking space groups).
       if (j + 1 < totalWordCount && continuesVec[j + 1]) {
-        continue;
+        if (!(isThaiWord(words[j]) && isThaiWord(words[j + 1]))) {
+          continue;
+        }
       }
 
       int cost;

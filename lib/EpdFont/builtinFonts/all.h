@@ -1,6 +1,8 @@
 #pragma once
 
 #include <builtinFonts/notosans_8_regular.h>
+#include <builtinFonts/notosansthai_10_bold.h>
+#include <builtinFonts/notosansthai_10_regular.h>
 #include <builtinFonts/notosansthai_12_bold.h>
 #include <builtinFonts/notosansthai_12_regular.h>
 #include <builtinFonts/notosansthai_14_bold.h>

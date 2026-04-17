@@ -34,6 +34,10 @@ FontDecompressor fontDecompressor;
 FontCacheManager fontCacheManager(renderer.getFontMap());
 
 // Fonts
+EpdFont notosansthai10RegularFont(&notosansthai_10_regular);
+EpdFont notosansthai10BoldFont(&notosansthai_10_bold);
+EpdFontFamily notosansthai10FontFamily(&notosansthai10RegularFont, &notosansthai10BoldFont,
+                                       &notosansthai10RegularFont, &notosansthai10BoldFont);
 EpdFont notosansthai12RegularFont(&notosansthai_12_regular);
 EpdFont notosansthai12BoldFont(&notosansthai_12_bold);
 EpdFontFamily notosansthai12FontFamily(&notosansthai12RegularFont, &notosansthai12BoldFont,
@@ -142,9 +146,9 @@ void setupDisplayAndFonts() {
   // UI font IDs mapped to NotoSansThai so all UI text (labels, titles, menus)
   // renders Thai characters correctly. NotoSansThai was built with Latin fallback
   // so ASCII/Latin UI text continues to render.
-  renderer.insertFont(UI_10_FONT_ID, notosansthai12FontFamily);
-  renderer.insertFont(UI_12_FONT_ID, notosansthai14FontFamily);
-  renderer.insertFont(SMALL_FONT_ID, notosansthai12FontFamily);
+  renderer.insertFont(UI_10_FONT_ID, notosansthai10FontFamily);
+  renderer.insertFont(UI_12_FONT_ID, notosansthai12FontFamily);
+  renderer.insertFont(SMALL_FONT_ID, notosansthai10FontFamily);
   LOG_DBG("MAIN", "Fonts setup");
 }
 
