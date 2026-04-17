@@ -219,6 +219,7 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
   int lastBaseLeft = 0;
   int lastBaseWidth = 0;
   int lastBaseTop = 0;
+  int lastAboveMarkTop = 0;  // tracks topmost above-base mark for Thai stacking
   int32_t prevAdvanceFP = 0;  // 12.4 fixed-point: prev glyph's advance + next kern for snap
 
   // cannot draw a NULL / empty string
@@ -244,10 +245,19 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
     if (utf8IsCombiningMark(cp)) {
       const EpdGlyph* combiningGlyph = font.getGlyph(cp, style);
       if (!combiningGlyph) continue;
-      const int raiseBy = combiningMark::raiseAboveBase(combiningGlyph->top, combiningGlyph->height, lastBaseTop);
-      const int combiningX = combiningMark::centerOver(lastBaseX, lastBaseLeft, lastBaseWidth, combiningGlyph->left,
-                                                       combiningGlyph->width);
+      // Bug 2 fix: stack above the topmost already-placed above-base mark, not just the base glyph
+      const int raiseBy = combiningMark::raiseAboveBase(combiningGlyph->top, combiningGlyph->height, lastAboveMarkTop);
+      int combiningX = combiningMark::centerOver(lastBaseX, lastBaseLeft, lastBaseWidth, combiningGlyph->left,
+                                                 combiningGlyph->width);
+      // Bug 1 fix: Thai tone marks (U+0E47–U+0E4B) sit right of center over the consonant
+      if (cp >= 0x0E47 && cp <= 0x0E4B) {
+        combiningX += lastBaseWidth / 4;
+      }
       renderCharImpl<TextRotation::None>(*this, renderMode, font, cp, combiningX, yPos - raiseBy, black, style);
+      // Update stacking cursor: if this is an above-base mark, record its effective top
+      if (combiningGlyph->top - combiningGlyph->height > 0) {
+        lastAboveMarkTop = combiningGlyph->top + raiseBy;
+      }
       continue;
     }
 
@@ -266,6 +276,7 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
     lastBaseLeft = glyph ? glyph->left : 0;
     lastBaseWidth = glyph ? glyph->width : 0;
     lastBaseTop = glyph ? glyph->top : 0;
+    lastAboveMarkTop = lastBaseTop;  // reset stacking cursor for new base glyph
     prevAdvanceFP = glyph ? glyph->advanceX : 0;  // 12.4 fixed-point
 
     renderCharImpl<TextRotation::None>(*this, renderMode, font, cp, lastBaseX, yPos, black, style);
@@ -1077,6 +1088,7 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
   int lastBaseLeft = 0;
   int lastBaseWidth = 0;
   int lastBaseTop = 0;
+  int lastAboveMarkTop = 0;  // tracks topmost above-base mark for Thai stacking
   int32_t prevAdvanceFP = 0;  // 12.4 fixed-point: prev glyph's advance + next kern for snap
 
   uint32_t cp;
@@ -1085,11 +1097,17 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
     if (utf8IsCombiningMark(cp)) {
       const EpdGlyph* combiningGlyph = font.getGlyph(cp, style);
       if (!combiningGlyph) continue;
-      const int raiseBy = combiningMark::raiseAboveBase(combiningGlyph->top, combiningGlyph->height, lastBaseTop);
+      const int raiseBy = combiningMark::raiseAboveBase(combiningGlyph->top, combiningGlyph->height, lastAboveMarkTop);
       const int combiningX = x - raiseBy;
-      const int combiningY = combiningMark::centerOverRotated90CW(lastBaseY, lastBaseLeft, lastBaseWidth,
-                                                                  combiningGlyph->left, combiningGlyph->width);
+      int combiningY = combiningMark::centerOverRotated90CW(lastBaseY, lastBaseLeft, lastBaseWidth,
+                                                            combiningGlyph->left, combiningGlyph->width);
+      if (cp >= 0x0E47 && cp <= 0x0E4B) {
+        combiningY -= lastBaseWidth / 4;  // rotated: right-shift maps to Y-decrease
+      }
       renderCharImpl<TextRotation::Rotated90CW>(*this, renderMode, font, cp, combiningX, combiningY, black, style);
+      if (combiningGlyph->top - combiningGlyph->height > 0) {
+        lastAboveMarkTop = combiningGlyph->top + raiseBy;
+      }
       continue;
     }
 
@@ -1107,6 +1125,7 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
     lastBaseLeft = glyph ? glyph->left : 0;
     lastBaseWidth = glyph ? glyph->width : 0;
     lastBaseTop = glyph ? glyph->top : 0;
+    lastAboveMarkTop = lastBaseTop;  // reset stacking cursor for new base glyph
     prevAdvanceFP = glyph ? glyph->advanceX : 0;  // 12.4 fixed-point
 
     renderCharImpl<TextRotation::Rotated90CW>(*this, renderMode, font, cp, x, lastBaseY, black, style);

@@ -148,7 +148,7 @@ void setupDisplayAndFonts() {
   // so ASCII/Latin UI text continues to render.
   renderer.insertFont(UI_10_FONT_ID, notosansthai10FontFamily);
   renderer.insertFont(UI_12_FONT_ID, notosansthai12FontFamily);
-  renderer.insertFont(SMALL_FONT_ID, notosansthai10FontFamily);
+  renderer.insertFont(SMALL_FONT_ID, smallFontFamily);  // 8pt Latin-only; used for ASCII battery %
   LOG_DBG("MAIN", "Fonts setup");
 }
 
