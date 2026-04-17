@@ -350,7 +350,12 @@ std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& r
 
     // Don't break before a continuation word (e.g., orphaned "?" after "question").
     // Backtrack to the start of the continuation group so the whole group moves to the next line.
+    // Exception: Thai-to-Thai boundaries are valid break points (no inter-word space, but line
+    // breaks are allowed), so stop backtracking when we reach one.
     while (currentIndex > lineStart + 1 && currentIndex < wordWidths.size() && continuesVec[currentIndex]) {
+      if (isThaiWord(words[currentIndex - 1]) && isThaiWord(words[currentIndex])) {
+        break;
+      }
       --currentIndex;
     }
 
