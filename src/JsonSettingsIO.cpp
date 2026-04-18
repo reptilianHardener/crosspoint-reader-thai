@@ -140,6 +140,8 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["frontButtonLeft"] = s.frontButtonLeft;
   doc["frontButtonRight"] = s.frontButtonRight;
 
+  doc["settingsSchemaVersion"] = 3;
+
   String json;
   serializeJson(doc, json);
   return Storage.writeFile(path, json);
@@ -153,6 +155,8 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     LOG_ERR("CPS", "JSON parse error: %s", error.c_str());
     return false;
   }
+
+  const uint32_t settingsSchemaVersion = doc["settingsSchemaVersion"] | 0;
 
   auto clamp = [](uint8_t val, uint8_t maxVal, uint8_t def) -> uint8_t { return val < maxVal ? val : def; };
 
@@ -194,7 +198,15 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       const uint8_t fieldDefault = s.*(info.valuePtr);  // struct-initializer default, read before we overwrite it
       uint8_t v = doc[info.key] | fieldDefault;
       if (info.type == SettingType::ENUM) {
-        v = clamp(v, (uint8_t)info.enumValues.size(), fieldDefault);
+        if (info.key && std::strcmp(info.key, "fontFamily") == 0) {
+          if (settingsSchemaVersion >= 3) {
+            v = clamp(v, (uint8_t)info.enumValues.size(), fieldDefault);
+          } else {
+            v = CrossPointSettings::normalizeFontFamilyStoredValue(v);
+          }
+        } else {
+          v = clamp(v, (uint8_t)info.enumValues.size(), fieldDefault);
+        }
       } else if (info.type == SettingType::TOGGLE) {
         v = clamp(v, (uint8_t)2, fieldDefault);
       } else if (info.type == SettingType::VALUE) {
@@ -218,6 +230,16 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.frontButtonRight =
       clamp(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_RIGHT);
   CrossPointSettings::validateFrontButtonMapping(s);
+
+  if (!doc["fontFamily"].isNull() && settingsSchemaVersion < 2) {
+    const uint8_t raw = static_cast<uint8_t>(doc["fontFamily"].as<unsigned int>());
+    s.fontFamily = CrossPointSettings::migrateFontFamilyFromLegacy(raw);
+    if (needsResave) *needsResave = true;
+  }
+
+  if (needsResave != nullptr && settingsSchemaVersion < 3) {
+    *needsResave = true;
+  }
 
   LOG_DBG("CPS", "Settings loaded from file");
 

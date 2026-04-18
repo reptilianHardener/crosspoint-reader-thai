@@ -91,8 +91,8 @@ class CrossPointSettings {
   // Swapped: Next, Previous
   enum SIDE_BUTTON_LAYOUT { PREV_NEXT = 0, NEXT_PREV = 1, SIDE_BUTTON_LAYOUT_COUNT };
 
-  // Font family options
-  enum FONT_FAMILY { BOOKERLY = 0, NOTOSANS = 1, OPENDYSLEXIC = 2, FONT_FAMILY_COUNT };
+  // Font family options (settings.json stores 0=Noto Sans, 1=Noto Serif Thai).
+  enum FONT_FAMILY { NOTOSANS = 0, NOTO_SERIF_THAI = 1, FONT_FAMILY_COUNT };
   // Font size options
   enum FONT_SIZE { SMALL = 0, MEDIUM = 1, LARGE = 2, EXTRA_LARGE = 3, FONT_SIZE_COUNT };
   enum LINE_COMPRESSION { TIGHT = 0, NORMAL = 1, WIDE = 2, LINE_COMPRESSION_COUNT };
@@ -169,7 +169,7 @@ class CrossPointSettings {
   uint8_t frontButtonLeft = FRONT_HW_LEFT;
   uint8_t frontButtonRight = FRONT_HW_RIGHT;
   // Reader font settings
-  uint8_t fontFamily = BOOKERLY;
+  uint8_t fontFamily = NOTOSANS;
   uint8_t fontSize = MEDIUM;
   uint8_t lineSpacing = NORMAL;
   uint8_t paragraphAlignment = JUSTIFIED;
@@ -217,6 +217,12 @@ class CrossPointSettings {
   bool loadFromFile();
 
   static void validateFrontButtonMapping(CrossPointSettings& settings);
+
+  /** Map stored fontFamily from schema v1 (0=Bookerly..4=Sarabun) to current enum. */
+  static uint8_t migrateFontFamilyFromLegacy(uint8_t stored);
+
+  /** Map v2 encoding (0=Noto, 1=OpenDyslexic removed, 2=Thai) to current 0/1 enum. */
+  static uint8_t normalizeFontFamilyStoredValue(uint8_t raw);
 
  private:
   bool loadFromBinaryFile();

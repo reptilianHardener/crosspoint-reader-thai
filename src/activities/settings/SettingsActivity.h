@@ -9,7 +9,7 @@
 #include "activities/Activity.h"
 #include "util/ButtonNavigator.h"
 
-enum class SettingType { TOGGLE, ENUM, ACTION, VALUE, STRING };
+enum class SettingType { TOGGLE, ENUM, ACTION, VALUE, STRING, INFO };
 
 enum class SettingAction {
   None,
@@ -50,6 +50,7 @@ struct SettingInfo {
   std::function<void(uint8_t)> valueSetter;
   std::function<std::string()> stringGetter;
   std::function<void(const std::string&)> stringSetter;
+  std::function<std::string()> infoGetter;
 
   SettingInfo& withObfuscated() {
     obfuscated = true;
@@ -134,6 +135,16 @@ struct SettingInfo {
     s.stringGetter = std::move(getter);
     s.stringSetter = std::move(setter);
     s.key = key;
+    s.category = category;
+    return s;
+  }
+
+  static SettingInfo Info(StrId nameId, std::function<std::string()> getter,
+                          StrId category = StrId::STR_NONE_OPT) {
+    SettingInfo s;
+    s.nameId = nameId;
+    s.type = SettingType::INFO;
+    s.infoGetter = std::move(getter);
     s.category = category;
     return s;
   }

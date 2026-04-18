@@ -2,9 +2,12 @@
 
 #include <I18n.h>
 
+#include <cstdio>
+#include <string>
 #include <vector>
 
 #include "CrossPointSettings.h"
+#include "Epub/hyphenation/ThaiWordBreaker.h"
 #include "KOReaderCredentialStore.h"
 #include "activities/settings/SettingsActivity.h"
 
@@ -38,8 +41,7 @@ inline const std::vector<SettingInfo>& getSettingsList() {
 
       // --- Reader ---
       SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-                        {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_OPEN_DYSLEXIC}, "fontFamily",
-                        StrId::STR_CAT_READER),
+                        {StrId::STR_NOTO_SANS, StrId::STR_NOTO_SERIF_THAI}, "fontFamily", StrId::STR_CAT_READER),
       SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                         {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE, StrId::STR_X_LARGE}, "fontSize",
                         StrId::STR_CAT_READER),
@@ -55,6 +57,18 @@ inline const std::vector<SettingInfo>& getSettingsList() {
                           StrId::STR_CAT_READER),
       SettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled, "hyphenationEnabled",
                           StrId::STR_CAT_READER),
+      SettingInfo::Info(
+          StrId::STR_THAI_USER_DICT,
+          [] {
+            if (!ThaiWordBreaker::hasUserDictionary()) {
+              return std::string(tr(STR_THAI_USER_DICT_BUILTIN_ONLY));
+            }
+            char buf[64];
+            snprintf(buf, sizeof(buf), tr(STR_THAI_USER_DICT_LOADED_FMT),
+                     static_cast<unsigned>(ThaiWordBreaker::getUserDictionaryWordCount()));
+            return std::string(buf);
+          },
+          StrId::STR_CAT_READER),
       SettingInfo::Enum(StrId::STR_ORIENTATION, &CrossPointSettings::orientation,
                         {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW, StrId::STR_INVERTED, StrId::STR_LANDSCAPE_CCW},
                         "orientation", StrId::STR_CAT_READER),

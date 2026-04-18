@@ -69,6 +69,30 @@ bool isCyrillicLetter(const uint32_t cp) { return (cp >= 0x0400 && cp <= 0x052F)
 
 bool isAlphabetic(const uint32_t cp) { return isLatinLetter(cp) || isCyrillicLetter(cp); }
 
+bool isThaiCharacter(const uint32_t cp) { return cp >= 0x0E00 && cp <= 0x0E7F; }
+
+bool isThaiConsonant(const uint32_t cp) { return cp >= 0x0E01 && cp <= 0x0E2E; }
+
+// Thai combining marks: above/below vowels, tone marks, and other diacritics
+// that MUST stay attached to their preceding base consonant.
+bool isThaiCombining(const uint32_t cp) {
+  return cp == 0x0E31 ||                    // Mai Han Akat (สระอั)
+         (cp >= 0x0E34 && cp <= 0x0E3A) ||  // Above/below vowels (อิ อี อึ อื อุ อู) + Phinthu
+         (cp >= 0x0E47 && cp <= 0x0E4E);    // Mai Taikhu, tone marks (่ ้ ๊ ๋), Thanthakhat, Nikhahit, Yamakkan
+}
+
+// Thai following vowels that visually attach to the right of a consonant.
+// Breaking before these would orphan the vowel on a new line (e.g. "ม" / "า").
+bool isThaiFollowingVowel(const uint32_t cp) {
+  return cp == 0x0E30 ||  // Sara A (สระอะ)
+         cp == 0x0E32 ||  // Sara AA (สระอา)
+         cp == 0x0E33;    // Sara AM (สระอำ)
+}
+
+// Thai leading vowels that appear before the consonant they modify.
+// Must stay with the following consonant (e.g. "เ" + "ก" = "เก").
+bool isThaiLeadingVowel(const uint32_t cp) { return cp >= 0x0E40 && cp <= 0x0E44; }
+
 bool isPunctuation(const uint32_t cp) {
   switch (cp) {
     case '-':
@@ -392,6 +416,14 @@ std::vector<CodepointInfo> collectCodepoints(const std::string& word) {
       if (composed != 0) {
         cps.back().value = composed;
         continue;  // skip pushing the combining mark itself
+      }
+
+      // Thai Sara Am composition: U+0E4D (Nikhahit) + U+0E32 (Sara AA) → U+0E33 (Sara Am).
+      // Some EPUB sources use the decomposed form; normalizing ensures correct
+      // dictionary matching and text measurement.
+      if (cps.back().value == 0x0E4D && cp == 0x0E32) {
+        cps.back().value = 0x0E33;
+        continue;
       }
     }
 

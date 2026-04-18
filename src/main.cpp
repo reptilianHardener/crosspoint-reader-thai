@@ -14,8 +14,11 @@
 #include <builtinFonts/all.h>
 
 #include <cstring>
+#include <string>
+#include <vector>
 
 #include "CrossPointSettings.h"
+#include "Epub/hyphenation/ThaiWordBreaker.h"
 #include "CrossPointState.h"
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
@@ -34,44 +37,13 @@ FontDecompressor fontDecompressor;
 FontCacheManager fontCacheManager(renderer.getFontMap());
 
 // Fonts
-EpdFont bookerly14RegularFont(&bookerly_14_regular);
-EpdFont bookerly14BoldFont(&bookerly_14_bold);
-EpdFont bookerly14ItalicFont(&bookerly_14_italic);
-EpdFont bookerly14BoldItalicFont(&bookerly_14_bolditalic);
-EpdFontFamily bookerly14FontFamily(&bookerly14RegularFont, &bookerly14BoldFont, &bookerly14ItalicFont,
-                                   &bookerly14BoldItalicFont);
-#ifndef OMIT_FONTS
-EpdFont bookerly12RegularFont(&bookerly_12_regular);
-EpdFont bookerly12BoldFont(&bookerly_12_bold);
-EpdFont bookerly12ItalicFont(&bookerly_12_italic);
-EpdFont bookerly12BoldItalicFont(&bookerly_12_bolditalic);
-EpdFontFamily bookerly12FontFamily(&bookerly12RegularFont, &bookerly12BoldFont, &bookerly12ItalicFont,
-                                   &bookerly12BoldItalicFont);
-EpdFont bookerly16RegularFont(&bookerly_16_regular);
-EpdFont bookerly16BoldFont(&bookerly_16_bold);
-EpdFont bookerly16ItalicFont(&bookerly_16_italic);
-EpdFont bookerly16BoldItalicFont(&bookerly_16_bolditalic);
-EpdFontFamily bookerly16FontFamily(&bookerly16RegularFont, &bookerly16BoldFont, &bookerly16ItalicFont,
-                                   &bookerly16BoldItalicFont);
-EpdFont bookerly18RegularFont(&bookerly_18_regular);
-EpdFont bookerly18BoldFont(&bookerly_18_bold);
-EpdFont bookerly18ItalicFont(&bookerly_18_italic);
-EpdFont bookerly18BoldItalicFont(&bookerly_18_bolditalic);
-EpdFontFamily bookerly18FontFamily(&bookerly18RegularFont, &bookerly18BoldFont, &bookerly18ItalicFont,
-                                   &bookerly18BoldItalicFont);
-
-EpdFont notosans12RegularFont(&notosans_12_regular);
-EpdFont notosans12BoldFont(&notosans_12_bold);
-EpdFont notosans12ItalicFont(&notosans_12_italic);
-EpdFont notosans12BoldItalicFont(&notosans_12_bolditalic);
-EpdFontFamily notosans12FontFamily(&notosans12RegularFont, &notosans12BoldFont, &notosans12ItalicFont,
-                                   &notosans12BoldItalicFont);
 EpdFont notosans14RegularFont(&notosans_14_regular);
 EpdFont notosans14BoldFont(&notosans_14_bold);
 EpdFont notosans14ItalicFont(&notosans_14_italic);
 EpdFont notosans14BoldItalicFont(&notosans_14_bolditalic);
 EpdFontFamily notosans14FontFamily(&notosans14RegularFont, &notosans14BoldFont, &notosans14ItalicFont,
                                    &notosans14BoldItalicFont);
+#ifndef OMIT_FONTS
 EpdFont notosans16RegularFont(&notosans_16_regular);
 EpdFont notosans16BoldFont(&notosans_16_bold);
 EpdFont notosans16ItalicFont(&notosans_16_italic);
@@ -85,30 +57,24 @@ EpdFont notosans18BoldItalicFont(&notosans_18_bolditalic);
 EpdFontFamily notosans18FontFamily(&notosans18RegularFont, &notosans18BoldFont, &notosans18ItalicFont,
                                    &notosans18BoldItalicFont);
 
-EpdFont opendyslexic8RegularFont(&opendyslexic_8_regular);
-EpdFont opendyslexic8BoldFont(&opendyslexic_8_bold);
-EpdFont opendyslexic8ItalicFont(&opendyslexic_8_italic);
-EpdFont opendyslexic8BoldItalicFont(&opendyslexic_8_bolditalic);
-EpdFontFamily opendyslexic8FontFamily(&opendyslexic8RegularFont, &opendyslexic8BoldFont, &opendyslexic8ItalicFont,
-                                      &opendyslexic8BoldItalicFont);
-EpdFont opendyslexic10RegularFont(&opendyslexic_10_regular);
-EpdFont opendyslexic10BoldFont(&opendyslexic_10_bold);
-EpdFont opendyslexic10ItalicFont(&opendyslexic_10_italic);
-EpdFont opendyslexic10BoldItalicFont(&opendyslexic_10_bolditalic);
-EpdFontFamily opendyslexic10FontFamily(&opendyslexic10RegularFont, &opendyslexic10BoldFont, &opendyslexic10ItalicFont,
-                                       &opendyslexic10BoldItalicFont);
-EpdFont opendyslexic12RegularFont(&opendyslexic_12_regular);
-EpdFont opendyslexic12BoldFont(&opendyslexic_12_bold);
-EpdFont opendyslexic12ItalicFont(&opendyslexic_12_italic);
-EpdFont opendyslexic12BoldItalicFont(&opendyslexic_12_bolditalic);
-EpdFontFamily opendyslexic12FontFamily(&opendyslexic12RegularFont, &opendyslexic12BoldFont, &opendyslexic12ItalicFont,
-                                       &opendyslexic12BoldItalicFont);
-EpdFont opendyslexic14RegularFont(&opendyslexic_14_regular);
-EpdFont opendyslexic14BoldFont(&opendyslexic_14_bold);
-EpdFont opendyslexic14ItalicFont(&opendyslexic_14_italic);
-EpdFont opendyslexic14BoldItalicFont(&opendyslexic_14_bolditalic);
-EpdFontFamily opendyslexic14FontFamily(&opendyslexic14RegularFont, &opendyslexic14BoldFont, &opendyslexic14ItalicFont,
-                                       &opendyslexic14BoldItalicFont);
+EpdFont notoserifthai14RegularFont(&notoserifthai_14_regular);
+EpdFont notoserifthai14BoldFont(&notoserifthai_14_bold);
+EpdFont notoserifthai14ItalicFont(&notoserifthai_14_italic);
+EpdFont notoserifthai14BoldItalicFont(&notoserifthai_14_bolditalic);
+EpdFontFamily notoserifthai14FontFamily(&notoserifthai14RegularFont, &notoserifthai14BoldFont,
+                                        &notoserifthai14ItalicFont, &notoserifthai14BoldItalicFont);
+EpdFont notoserifthai16RegularFont(&notoserifthai_16_regular);
+EpdFont notoserifthai16BoldFont(&notoserifthai_16_bold);
+EpdFont notoserifthai16ItalicFont(&notoserifthai_16_italic);
+EpdFont notoserifthai16BoldItalicFont(&notoserifthai_16_bolditalic);
+EpdFontFamily notoserifthai16FontFamily(&notoserifthai16RegularFont, &notoserifthai16BoldFont,
+                                        &notoserifthai16ItalicFont, &notoserifthai16BoldItalicFont);
+EpdFont notoserifthai18RegularFont(&notoserifthai_18_regular);
+EpdFont notoserifthai18BoldFont(&notoserifthai_18_bold);
+EpdFont notoserifthai18ItalicFont(&notoserifthai_18_italic);
+EpdFont notoserifthai18BoldItalicFont(&notoserifthai_18_bolditalic);
+EpdFontFamily notoserifthai18FontFamily(&notoserifthai18RegularFont, &notoserifthai18BoldFont,
+                                        &notoserifthai18ItalicFont, &notoserifthai18BoldItalicFont);
 #endif  // OMIT_FONTS
 
 EpdFont smallFont(&notosans_8_regular);
@@ -203,25 +169,66 @@ void setupDisplayAndFonts() {
   }
   fontCacheManager.setFontDecompressor(&fontDecompressor);
   renderer.setFontCacheManager(&fontCacheManager);
-  renderer.insertFont(BOOKERLY_14_FONT_ID, bookerly14FontFamily);
-#ifndef OMIT_FONTS
-  renderer.insertFont(BOOKERLY_12_FONT_ID, bookerly12FontFamily);
-  renderer.insertFont(BOOKERLY_16_FONT_ID, bookerly16FontFamily);
-  renderer.insertFont(BOOKERLY_18_FONT_ID, bookerly18FontFamily);
-
-  renderer.insertFont(NOTOSANS_12_FONT_ID, notosans12FontFamily);
   renderer.insertFont(NOTOSANS_14_FONT_ID, notosans14FontFamily);
+#ifndef OMIT_FONTS
   renderer.insertFont(NOTOSANS_16_FONT_ID, notosans16FontFamily);
   renderer.insertFont(NOTOSANS_18_FONT_ID, notosans18FontFamily);
-  renderer.insertFont(OPENDYSLEXIC_8_FONT_ID, opendyslexic8FontFamily);
-  renderer.insertFont(OPENDYSLEXIC_10_FONT_ID, opendyslexic10FontFamily);
-  renderer.insertFont(OPENDYSLEXIC_12_FONT_ID, opendyslexic12FontFamily);
-  renderer.insertFont(OPENDYSLEXIC_14_FONT_ID, opendyslexic14FontFamily);
+  renderer.insertFont(NOTOSERIFTHAI_14_FONT_ID, notoserifthai14FontFamily);
+  renderer.insertFont(NOTOSERIFTHAI_16_FONT_ID, notoserifthai16FontFamily);
+  renderer.insertFont(NOTOSERIFTHAI_18_FONT_ID, notoserifthai18FontFamily);
 #endif  // OMIT_FONTS
   renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
   LOG_DBG("MAIN", "Fonts setup");
+}
+
+// Optional user Thai words from SD: /crosspoint/thai_dict.txt (one word per line, # comments).
+static void loadThaiUserDictionary() {
+  static constexpr char DICT_PATH[] = "/crosspoint/thai_dict.txt";
+  static constexpr size_t MAX_BUF = 8192;
+
+  if (!Storage.exists(DICT_PATH)) {
+    return;
+  }
+
+  auto* buf = static_cast<char*>(malloc(MAX_BUF));
+  if (!buf) {
+    LOG_ERR("MAIN", "Failed to allocate buffer for Thai user dictionary");
+    return;
+  }
+
+  const size_t bytesRead = Storage.readFileToBuffer(DICT_PATH, buf, MAX_BUF);
+  if (bytesRead == 0) {
+    free(buf);
+    return;
+  }
+
+  std::vector<std::string> words;
+  words.reserve(64);
+
+  size_t lineStart = 0;
+  for (size_t i = 0; i <= bytesRead; ++i) {
+    if (i == bytesRead || buf[i] == '\n' || buf[i] == '\r') {
+      if (i > lineStart) {
+        size_t lineEnd = i;
+        while (lineEnd > lineStart && (buf[lineEnd - 1] == ' ' || buf[lineEnd - 1] == '\t')) {
+          --lineEnd;
+        }
+        if (lineEnd > lineStart && buf[lineStart] != '#') {
+          words.emplace_back(buf + lineStart, lineEnd - lineStart);
+        }
+      }
+      lineStart = i + 1;
+    }
+  }
+
+  free(buf);
+
+  if (!words.empty()) {
+    ThaiWordBreaker::setUserDictionary(words);
+    LOG_DBG("MAIN", "Thai user dictionary: %d words from %s", static_cast<int>(words.size()), DICT_PATH);
+  }
 }
 
 void setup() {
@@ -256,6 +263,7 @@ void setup() {
 
   SETTINGS.loadFromFile();
   I18N.loadSettings();
+  loadThaiUserDictionary();
   KOREADER_STORE.loadFromFile();
   UITheme::getInstance().reload();
   ButtonNavigator::setMappedInputManager(mappedInputManager);

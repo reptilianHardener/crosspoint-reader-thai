@@ -13,6 +13,29 @@
 // Initialize the static instance
 CrossPointSettings CrossPointSettings::instance;
 
+uint8_t CrossPointSettings::migrateFontFamilyFromLegacy(uint8_t stored) {
+  // Legacy v1: 0=Bookerly, 1=NotoSans, 2=OpenDyslexic, 3=NotoSerifThai, 4=Sarabun
+  switch (stored) {
+    case 0:
+    case 1:
+    case 2:
+      return NOTOSANS;
+    case 3:
+    case 4:
+      return NOTO_SERIF_THAI;
+    default:
+      return NOTOSANS;
+  }
+}
+
+uint8_t CrossPointSettings::normalizeFontFamilyStoredValue(uint8_t raw) {
+  // v2 JSON had 0=Noto, 1=OpenDyslexic, 2=Thai. OpenDyslexic removed — map to Noto.
+  if (raw == 2u) {
+    return NOTO_SERIF_THAI;
+  }
+  return NOTOSANS;
+}
+
 void readAndValidate(FsFile& file, uint8_t& member, const uint8_t maxValue) {
   uint8_t tempValue;
   serialization::readPod(file, tempValue);
@@ -149,7 +172,11 @@ bool CrossPointSettings::loadFromBinaryFile() {
     if (++settingsRead >= fileSettingsCount) break;
     readAndValidate(inputFile, sideButtonLayout, SIDE_BUTTON_LAYOUT_COUNT);
     if (++settingsRead >= fileSettingsCount) break;
-    readAndValidate(inputFile, fontFamily, FONT_FAMILY_COUNT);
+    {
+      uint8_t rawFontFamily = NOTOSANS;
+      serialization::readPod(inputFile, rawFontFamily);
+      fontFamily = migrateFontFamilyFromLegacy(rawFontFamily);
+    }
     if (++settingsRead >= fileSettingsCount) break;
     readAndValidate(inputFile, fontSize, FONT_SIZE_COUNT);
     if (++settingsRead >= fileSettingsCount) break;
@@ -225,18 +252,8 @@ bool CrossPointSettings::loadFromBinaryFile() {
 
 float CrossPointSettings::getReaderLineCompression() const {
   switch (fontFamily) {
-    case BOOKERLY:
-    default:
-      switch (lineSpacing) {
-        case TIGHT:
-          return 0.95f;
-        case NORMAL:
-        default:
-          return 1.0f;
-        case WIDE:
-          return 1.1f;
-      }
     case NOTOSANS:
+    default:
       switch (lineSpacing) {
         case TIGHT:
           return 0.90f;
@@ -246,7 +263,7 @@ float CrossPointSettings::getReaderLineCompression() const {
         case WIDE:
           return 1.0f;
       }
-    case OPENDYSLEXIC:
+    case NOTO_SERIF_THAI:
       switch (lineSpacing) {
         case TIGHT:
           return 0.90f;
@@ -293,23 +310,11 @@ int CrossPointSettings::getRefreshFrequency() const {
 
 int CrossPointSettings::getReaderFontId() const {
   switch (fontFamily) {
-    case BOOKERLY:
+    case NOTOSANS:
     default:
       switch (fontSize) {
         case SMALL:
-          return BOOKERLY_12_FONT_ID;
-        case MEDIUM:
-        default:
-          return BOOKERLY_14_FONT_ID;
-        case LARGE:
-          return BOOKERLY_16_FONT_ID;
-        case EXTRA_LARGE:
-          return BOOKERLY_18_FONT_ID;
-      }
-    case NOTOSANS:
-      switch (fontSize) {
-        case SMALL:
-          return NOTOSANS_12_FONT_ID;
+          // No 12pt in ROM; alias Small to Medium (14pt).
         case MEDIUM:
         default:
           return NOTOSANS_14_FONT_ID;
@@ -318,17 +323,16 @@ int CrossPointSettings::getReaderFontId() const {
         case EXTRA_LARGE:
           return NOTOSANS_18_FONT_ID;
       }
-    case OPENDYSLEXIC:
+    case NOTO_SERIF_THAI:
       switch (fontSize) {
         case SMALL:
-          return OPENDYSLEXIC_8_FONT_ID;
         case MEDIUM:
         default:
-          return OPENDYSLEXIC_10_FONT_ID;
+          return NOTOSERIFTHAI_14_FONT_ID;
         case LARGE:
-          return OPENDYSLEXIC_12_FONT_ID;
+          return NOTOSERIFTHAI_16_FONT_ID;
         case EXTRA_LARGE:
-          return OPENDYSLEXIC_14_FONT_ID;
+          return NOTOSERIFTHAI_18_FONT_ID;
       }
   }
 }
