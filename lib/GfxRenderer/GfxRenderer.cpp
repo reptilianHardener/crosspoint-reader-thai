@@ -74,6 +74,70 @@ static inline void rotateCoordinates(const GfxRenderer::Orientation orientation,
 
 enum class TextRotation { None, Rotated90CW };
 
+static inline int getCombiningAnchorX(const int32_t cursorXFP, const int lastBaseX, const int lastBaseAdvanceFP,
+                                      const uint32_t cp) {
+  if (utf8IsThaiCombiningMark(cp)) {
+    // Thai fonts often encode upper marks with zero advance and a negative left
+    // bearing, expecting placement from the post-base pen position.
+    return fp4::toPixel(cursorXFP);
+  }
+  return lastBaseX + fp4::toPixel(lastBaseAdvanceFP / 2);
+}
+
+static inline int getCombiningAnchorYRotated(const int32_t cursorYFP, const int lastBaseY, const int lastBaseAdvanceFP,
+                                             const uint32_t cp) {
+  if (utf8IsThaiCombiningMark(cp)) {
+    return fp4::toPixel(cursorYFP);
+  }
+  return lastBaseY - fp4::toPixel(lastBaseAdvanceFP / 2);
+}
+
+static inline bool fontHasThaiIntervals(const EpdFontData* fontData) {
+  for (uint32_t i = 0; i < fontData->intervalCount; i++) {
+    if (fontData->intervals[i].first <= 0x0E7F && fontData->intervals[i].last >= 0x0E00) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static inline bool fontNeedsThaiUpperRestacking(const EpdFontData* fontData) {
+  if (!fontData) {
+    return false;
+  }
+  return fontHasThaiIntervals(fontData);
+}
+
+static inline void applyThaiUpperStacking(const EpdFontData* fontData, const uint32_t cp, const EpdGlyph* glyph,
+                                          const int penY, int* raiseBy, int* stackedUpperMaxY, bool* hasStackedUpper) {
+  if (!fontNeedsThaiUpperRestacking(fontData)) {
+    return;
+  }
+
+  if (!glyph || !utf8IsThaiUpperCombiningMark(cp)) {
+    return;
+  }
+
+  int glyphMinY = penY - *raiseBy + glyph->top - glyph->height;
+  int glyphMaxY = penY - *raiseBy + glyph->top;
+
+  if (utf8IsThaiUpperLevelThreeMark(cp) && *hasStackedUpper) {
+    const int MIN_STACK_GAP_PX = std::max(1, static_cast<int>(fontData->advanceY) / 10);
+    const int desiredMinY = *stackedUpperMaxY + MIN_STACK_GAP_PX;
+    if (glyphMinY < desiredMinY) {
+      const int extraRaise = desiredMinY - glyphMinY;
+      *raiseBy += extraRaise;
+      glyphMinY += extraRaise;
+      glyphMaxY += extraRaise;
+    }
+  }
+
+  if (utf8IsThaiUpperLevelTwoMark(cp) || utf8IsThaiUpperLevelThreeMark(cp)) {
+    *stackedUpperMaxY = *hasStackedUpper ? std::max(*stackedUpperMaxY, glyphMaxY) : glyphMaxY;
+    *hasStackedUpper = true;
+  }
+}
+
 // Shared glyph rendering logic for normal and rotated text.
 // Coordinate mapping and cursor advance direction are selected at compile time via the template parameter.
 template <TextRotation rotation>
@@ -1075,6 +1139,58 @@ int GfxRenderer::getTextAdvanceX(const int fontId, const char* text, EpdFontFami
   widthPx += fp4::toPixel(prevAdvanceFP);  // final glyph's advance
   return widthPx;
 }
+
+int GfxRenderer::getTextFitWidth(const int fontId, const char* text, const EpdFontFamily::Style style) const {
+  if (text == nullptr || *text == '\0') {
+    return 0;
+  }
+
+  const auto fontIt = fontMap.find(fontId);
+  if (fontIt == fontMap.end()) {
+    LOG_ERR("GFX", "Font %d not found", fontId);
+    return 0;
+  }
+
+  const auto& font = fontIt->second;
+  int32_t cursorXFP = 0;  // 12.4 fixed-point accumulator
+  int lastBaseX = 0;
+  int lastBaseAdvanceFP = 0;
+  int maxRight = 0;
+  uint32_t prevCp = 0;
+  uint32_t cp;
+
+  while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&text)))) {
+    const bool isCombining = utf8IsCombiningMark(cp);
+    if (!isCombining) {
+      cp = font.applyLigatures(cp, text, style);
+      if (prevCp != 0) {
+        cursorXFP += font.getKerning(prevCp, cp, style);
+      }
+    }
+
+    const EpdGlyph* glyph = font.getGlyph(cp, style);
+    if (!glyph) {
+      if (!isCombining) {
+        prevCp = cp;
+      }
+      continue;
+    }
+
+    const int glyphBaseX = isCombining ? getCombiningAnchorX(cursorXFP, lastBaseX, lastBaseAdvanceFP, cp)
+                                       : fp4::toPixel(cursorXFP);
+    maxRight = std::max(maxRight, glyphBaseX + glyph->left + glyph->width);
+
+    if (!isCombining) {
+      lastBaseX = glyphBaseX;
+      lastBaseAdvanceFP = glyph->advanceX;
+      cursorXFP += glyph->advanceX;
+      prevCp = cp;
+    }
+  }
+
+  return std::max(fp4::toPixel(cursorXFP), maxRight);
+}
+
 
 int GfxRenderer::getFontAscenderSize(const int fontId) const {
   const auto fontIt = fontMap.find(fontId);
