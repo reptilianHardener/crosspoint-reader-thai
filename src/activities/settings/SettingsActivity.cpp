@@ -13,6 +13,7 @@
 #include "OtaUpdateActivity.h"
 #include "SettingsList.h"
 #include "StatusBarSettingsActivity.h"
+#include "ThaiDictionaryActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -53,6 +54,7 @@ void SettingsActivity::onEnter() {
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_LANGUAGE, SettingAction::Language));
   readerSettings.push_back(SettingInfo::Action(StrId::STR_CUSTOMISE_STATUS_BAR, SettingAction::CustomiseStatusBar));
+  readerSettings.push_back(SettingInfo::Action(StrId::STR_THAI_DICTIONARY, SettingAction::ThaiDictionary));
 
   // Reset selection to first category
   selectedCategoryIndex = 0;
@@ -186,11 +188,24 @@ void SettingsActivity::toggleCurrentSetting() {
       case SettingAction::ClearCache:
         startActivityForResult(std::make_unique<ClearCacheActivity>(renderer, mappedInput), resultHandler);
         break;
+      case SettingAction::RefreshRecentBooks:
+        startActivityForResult(
+            std::make_unique<ClearCacheActivity>(renderer, mappedInput, ClearCacheActivity::Mode::RefreshRecents),
+            resultHandler);
+        break;
+      case SettingAction::ClearRecentBooks:
+        startActivityForResult(
+            std::make_unique<ClearCacheActivity>(renderer, mappedInput, ClearCacheActivity::Mode::ClearRecents),
+            resultHandler);
+        break;
       case SettingAction::CheckForUpdates:
         startActivityForResult(std::make_unique<OtaUpdateActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::Language:
         startActivityForResult(std::make_unique<LanguageSelectActivity>(renderer, mappedInput), resultHandler);
+        break;
+      case SettingAction::ThaiDictionary:
+        startActivityForResult(std::make_unique<ThaiDictionaryActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::None:
         // Do nothing
