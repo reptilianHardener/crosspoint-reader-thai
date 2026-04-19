@@ -200,6 +200,11 @@ void OtaUpdateActivity::loop() {
     return;
   }
 
+  if (state == FINISHED) {
+    delay(3000);
+    state = SHUTTING_DOWN;
+  }
+
   if (state == SHUTTING_DOWN) {
     ESP.restart();
   }

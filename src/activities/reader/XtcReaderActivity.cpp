@@ -293,6 +293,11 @@ void XtcReaderActivity::renderPage() {
       }
     }
 
+    // Dark mode: invert framebuffer (white text on black background)
+    if (SETTINGS.readerDarkMode) {
+      renderer.invertScreen();
+    }
+
     ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
 
     // Pass 2: LSB buffer - mark DARK gray only (XTH value 1)
@@ -367,6 +372,11 @@ void XtcReaderActivity::renderPage() {
     renderStatusBarOverlay(StatusBarOverlayPosition::Top);
   } else {
     renderStatusBarOverlay(StatusBarOverlayPosition::Bottom);
+  }
+
+  // Dark mode: invert framebuffer (white text on black background)
+  if (SETTINGS.readerDarkMode) {
+    renderer.invertScreen();
   }
 
   ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
