@@ -15,8 +15,10 @@
 
 #include <cstring>
 
+#include "BleTimeSync.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "Epub/hyphenation/ThaiWordBreaker.h"
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
 #include "RecentBooksStore.h"
@@ -34,93 +36,96 @@ FontDecompressor fontDecompressor;
 FontCacheManager fontCacheManager(renderer.getFontMap());
 
 // Fonts
-EpdFont bookerly14RegularFont(&bookerly_14_regular);
-EpdFont bookerly14BoldFont(&bookerly_14_bold);
-EpdFont bookerly14ItalicFont(&bookerly_14_italic);
-EpdFont bookerly14BoldItalicFont(&bookerly_14_bolditalic);
-EpdFontFamily bookerly14FontFamily(&bookerly14RegularFont, &bookerly14BoldFont, &bookerly14ItalicFont,
-                                   &bookerly14BoldItalicFont);
-#ifndef OMIT_FONTS
-EpdFont bookerly12RegularFont(&bookerly_12_regular);
-EpdFont bookerly12BoldFont(&bookerly_12_bold);
-EpdFont bookerly12ItalicFont(&bookerly_12_italic);
-EpdFont bookerly12BoldItalicFont(&bookerly_12_bolditalic);
-EpdFontFamily bookerly12FontFamily(&bookerly12RegularFont, &bookerly12BoldFont, &bookerly12ItalicFont,
-                                   &bookerly12BoldItalicFont);
-EpdFont bookerly16RegularFont(&bookerly_16_regular);
-EpdFont bookerly16BoldFont(&bookerly_16_bold);
-EpdFont bookerly16ItalicFont(&bookerly_16_italic);
-EpdFont bookerly16BoldItalicFont(&bookerly_16_bolditalic);
-EpdFontFamily bookerly16FontFamily(&bookerly16RegularFont, &bookerly16BoldFont, &bookerly16ItalicFont,
-                                   &bookerly16BoldItalicFont);
-EpdFont bookerly18RegularFont(&bookerly_18_regular);
-EpdFont bookerly18BoldFont(&bookerly_18_bold);
-EpdFont bookerly18ItalicFont(&bookerly_18_italic);
-EpdFont bookerly18BoldItalicFont(&bookerly_18_bolditalic);
-EpdFontFamily bookerly18FontFamily(&bookerly18RegularFont, &bookerly18BoldFont, &bookerly18ItalicFont,
-                                   &bookerly18BoldItalicFont);
-
-EpdFont notosans12RegularFont(&notosans_12_regular);
-EpdFont notosans12BoldFont(&notosans_12_bold);
-EpdFont notosans12ItalicFont(&notosans_12_italic);
-EpdFont notosans12BoldItalicFont(&notosans_12_bolditalic);
-EpdFontFamily notosans12FontFamily(&notosans12RegularFont, &notosans12BoldFont, &notosans12ItalicFont,
-                                   &notosans12BoldItalicFont);
-EpdFont notosans14RegularFont(&notosans_14_regular);
-EpdFont notosans14BoldFont(&notosans_14_bold);
-EpdFont notosans14ItalicFont(&notosans_14_italic);
-EpdFont notosans14BoldItalicFont(&notosans_14_bolditalic);
-EpdFontFamily notosans14FontFamily(&notosans14RegularFont, &notosans14BoldFont, &notosans14ItalicFont,
-                                   &notosans14BoldItalicFont);
-EpdFont notosans16RegularFont(&notosans_16_regular);
-EpdFont notosans16BoldFont(&notosans_16_bold);
-EpdFont notosans16ItalicFont(&notosans_16_italic);
-EpdFont notosans16BoldItalicFont(&notosans_16_bolditalic);
-EpdFontFamily notosans16FontFamily(&notosans16RegularFont, &notosans16BoldFont, &notosans16ItalicFont,
-                                   &notosans16BoldItalicFont);
-EpdFont notosans18RegularFont(&notosans_18_regular);
-EpdFont notosans18BoldFont(&notosans_18_bold);
-EpdFont notosans18ItalicFont(&notosans_18_italic);
-EpdFont notosans18BoldItalicFont(&notosans_18_bolditalic);
-EpdFontFamily notosans18FontFamily(&notosans18RegularFont, &notosans18BoldFont, &notosans18ItalicFont,
-                                   &notosans18BoldItalicFont);
-
-EpdFont opendyslexic8RegularFont(&opendyslexic_8_regular);
-EpdFont opendyslexic8BoldFont(&opendyslexic_8_bold);
-EpdFont opendyslexic8ItalicFont(&opendyslexic_8_italic);
-EpdFont opendyslexic8BoldItalicFont(&opendyslexic_8_bolditalic);
-EpdFontFamily opendyslexic8FontFamily(&opendyslexic8RegularFont, &opendyslexic8BoldFont, &opendyslexic8ItalicFont,
-                                      &opendyslexic8BoldItalicFont);
-EpdFont opendyslexic10RegularFont(&opendyslexic_10_regular);
-EpdFont opendyslexic10BoldFont(&opendyslexic_10_bold);
-EpdFont opendyslexic10ItalicFont(&opendyslexic_10_italic);
-EpdFont opendyslexic10BoldItalicFont(&opendyslexic_10_bolditalic);
-EpdFontFamily opendyslexic10FontFamily(&opendyslexic10RegularFont, &opendyslexic10BoldFont, &opendyslexic10ItalicFont,
-                                       &opendyslexic10BoldItalicFont);
-EpdFont opendyslexic12RegularFont(&opendyslexic_12_regular);
-EpdFont opendyslexic12BoldFont(&opendyslexic_12_bold);
-EpdFont opendyslexic12ItalicFont(&opendyslexic_12_italic);
-EpdFont opendyslexic12BoldItalicFont(&opendyslexic_12_bolditalic);
-EpdFontFamily opendyslexic12FontFamily(&opendyslexic12RegularFont, &opendyslexic12BoldFont, &opendyslexic12ItalicFont,
-                                       &opendyslexic12BoldItalicFont);
-EpdFont opendyslexic14RegularFont(&opendyslexic_14_regular);
-EpdFont opendyslexic14BoldFont(&opendyslexic_14_bold);
-EpdFont opendyslexic14ItalicFont(&opendyslexic_14_italic);
-EpdFont opendyslexic14BoldItalicFont(&opendyslexic_14_bolditalic);
-EpdFontFamily opendyslexic14FontFamily(&opendyslexic14RegularFont, &opendyslexic14BoldFont, &opendyslexic14ItalicFont,
-                                       &opendyslexic14BoldItalicFont);
-#endif  // OMIT_FONTS
-
-EpdFont smallFont(&notosans_8_regular);
+EpdFont smallFont(&baijamjuree_8_regular);
 EpdFontFamily smallFontFamily(&smallFont);
 
-EpdFont ui10RegularFont(&ubuntu_10_regular);
-EpdFont ui10BoldFont(&ubuntu_10_bold);
-EpdFontFamily ui10FontFamily(&ui10RegularFont, &ui10BoldFont);
+EpdFont ui10RegularFont(&baijamjuree_10_regular);
+EpdFontFamily ui10FontFamily(&ui10RegularFont);  // faux bold via renderer
 
-EpdFont ui12RegularFont(&ubuntu_12_regular);
-EpdFont ui12BoldFont(&ubuntu_12_bold);
+EpdFont ui12RegularFont(&baijamjuree_12_regular);
+EpdFont ui12BoldFont(&baijamjuree_12_bold);
 EpdFontFamily ui12FontFamily(&ui12RegularFont, &ui12BoldFont);
+
+EpdFont cjk8RegularFont(&notosanssc_8_regular);
+EpdFontFamily cjk8FontFamily(&cjk8RegularFont);
+
+EpdFont cjk10RegularFont(&notosanssc_10_regular);
+EpdFont cjk10BoldFont(&notosanssc_10_bold);
+EpdFontFamily cjk10FontFamily(&cjk10RegularFont, &cjk10BoldFont);
+
+EpdFont cjk12RegularFont(&notosanssc_12_regular);
+EpdFont cjk12BoldFont(&notosanssc_12_bold);
+EpdFontFamily cjk12FontFamily(&cjk12RegularFont, &cjk12BoldFont);
+
+#ifndef OMIT_FONTS
+// Bai Jamjuree (Thai + Latin sans-serif — reader font + UI number display + Thai UI fallback)
+EpdFont baijamjuree8RegularFont(&baijamjuree_8_regular);
+EpdFontFamily baijamjuree8FontFamily(&baijamjuree8RegularFont);
+EpdFont baijamjuree10RegularFont(&baijamjuree_10_regular);
+EpdFontFamily baijamjuree10FontFamily(&baijamjuree10RegularFont);
+EpdFont baijamjuree12RegularFont(&baijamjuree_12_regular);
+EpdFont baijamjuree12BoldFont(&baijamjuree_12_bold);
+EpdFontFamily baijamjuree12FontFamily(&baijamjuree12RegularFont, &baijamjuree12BoldFont);
+EpdFont baijamjuree14RegularFont(&baijamjuree_14_regular);
+EpdFont baijamjuree14BoldFont(&baijamjuree_14_bold);
+EpdFontFamily baijamjuree14FontFamily(&baijamjuree14RegularFont, &baijamjuree14BoldFont);
+EpdFont baijamjuree16RegularFont(&baijamjuree_16_regular);
+EpdFont baijamjuree16BoldFont(&baijamjuree_16_bold);
+EpdFontFamily baijamjuree16FontFamily(&baijamjuree16RegularFont, &baijamjuree16BoldFont);
+EpdFont baijamjuree18RegularFont(&baijamjuree_18_regular);
+EpdFont baijamjuree18BoldFont(&baijamjuree_18_bold);
+EpdFontFamily baijamjuree18FontFamily(&baijamjuree18RegularFont, &baijamjuree18BoldFont);
+EpdFont baijamjuree20RegularFont(&baijamjuree_20_regular);
+EpdFont baijamjuree20BoldFont(&baijamjuree_20_bold);
+EpdFontFamily baijamjuree20FontFamily(&baijamjuree20RegularFont, &baijamjuree20BoldFont);
+EpdFont cloudloop36Font(&cloudloop_36_regular);
+EpdFontFamily cloudloop36FontFamily(&cloudloop36Font);  // UI number display (font-size selector)
+
+EpdFont cloudloop12RegularFont(&cloudloop_12_regular);
+EpdFontFamily cloudloop12FontFamily(&cloudloop12RegularFont);
+EpdFont cloudloop14RegularFont(&cloudloop_14_regular);
+EpdFontFamily cloudloop14FontFamily(&cloudloop14RegularFont);
+EpdFont cloudloop16RegularFont(&cloudloop_16_regular);
+EpdFontFamily cloudloop16FontFamily(&cloudloop16RegularFont);
+EpdFont cloudloop18RegularFont(&cloudloop_18_regular);
+EpdFontFamily cloudloop18FontFamily(&cloudloop18RegularFont);
+EpdFont cloudloop20RegularFont(&cloudloop_20_regular);
+EpdFontFamily cloudloop20FontFamily(&cloudloop20RegularFont);
+
+// Bookerly (Latin serif — fallback to Literata for Thai)
+EpdFont bookerly12RegularFont(&bookerly_12_regular);
+EpdFont bookerly12BoldFont(&bookerly_12_bold);
+EpdFontFamily bookerly12FontFamily(&bookerly12RegularFont, &bookerly12BoldFont);
+EpdFont bookerly14RegularFont(&bookerly_14_regular);
+EpdFont bookerly14BoldFont(&bookerly_14_bold);
+EpdFontFamily bookerly14FontFamily(&bookerly14RegularFont, &bookerly14BoldFont);
+EpdFont bookerly16RegularFont(&bookerly_16_regular);
+EpdFont bookerly16BoldFont(&bookerly_16_bold);
+EpdFontFamily bookerly16FontFamily(&bookerly16RegularFont, &bookerly16BoldFont);
+EpdFont bookerly18RegularFont(&bookerly_18_regular);
+EpdFont bookerly18BoldFont(&bookerly_18_bold);
+EpdFontFamily bookerly18FontFamily(&bookerly18RegularFont, &bookerly18BoldFont);
+EpdFont bookerly20RegularFont(&bookerly_20_regular);
+EpdFont bookerly20BoldFont(&bookerly_20_bold);
+EpdFontFamily bookerly20FontFamily(&bookerly20RegularFont, &bookerly20BoldFont);
+
+// Noto Serif (serif + Thai — auto-selected when Bookerly + Thai book)
+EpdFont notoserif12RegularFont(&notoserif_12_regular);
+EpdFont notoserif12BoldFont(&notoserif_12_bold);
+EpdFontFamily notoserif12FontFamily(&notoserif12RegularFont, &notoserif12BoldFont);
+EpdFont notoserif14RegularFont(&notoserif_14_regular);
+EpdFont notoserif14BoldFont(&notoserif_14_bold);
+EpdFontFamily notoserif14FontFamily(&notoserif14RegularFont, &notoserif14BoldFont);
+EpdFont notoserif16RegularFont(&notoserif_16_regular);
+EpdFont notoserif16BoldFont(&notoserif_16_bold);
+EpdFontFamily notoserif16FontFamily(&notoserif16RegularFont, &notoserif16BoldFont);
+EpdFont notoserif18RegularFont(&notoserif_18_regular);
+EpdFont notoserif18BoldFont(&notoserif_18_bold);
+EpdFontFamily notoserif18FontFamily(&notoserif18RegularFont, &notoserif18BoldFont);
+EpdFont notoserif20RegularFont(&notoserif_20_regular);
+EpdFont notoserif20BoldFont(&notoserif_20_bold);
+EpdFontFamily notoserif20FontFamily(&notoserif20RegularFont, &notoserif20BoldFont);
+#endif  // OMIT_FONTS
 
 // measurement of power button press duration calibration value
 unsigned long t1 = 0;
@@ -129,12 +134,6 @@ unsigned long t2 = 0;
 // Verify power button press duration on wake-up from deep sleep
 // Pre-condition: isWakeupByPowerButton() == true
 void verifyPowerButtonDuration() {
-  if (SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) {
-    // Fast path for short press
-    // Needed because inputManager.isPressed() may take up to ~500ms to return the correct state
-    return;
-  }
-
   // Give the user up to 1000ms to start holding the power button, and must hold for SETTINGS.getPowerButtonDuration()
   const auto start = millis();
   bool abort = false;
@@ -191,6 +190,60 @@ void enterDeepSleep() {
   powerManager.startDeepSleep(gpio);
 }
 
+// Load user-supplied Thai dictionary words from SD card (/crosspoint/thai_dict.txt).
+// Each line should contain one Thai word. Lines starting with '#' are comments.
+// Maximum 200 words to stay within ESP32-C3 memory constraints.
+void loadThaiUserDictionary() {
+  static constexpr char DICT_PATH[] = "/crosspoint/thai_dict.txt";
+  static constexpr size_t MAX_BUF = 8192;  // 8 KB max file size
+
+  if (!Storage.exists(DICT_PATH)) {
+    return;
+  }
+
+  // Stack buffer would be too large (> 256 bytes), so use heap allocation.
+  auto* buf = static_cast<char*>(malloc(MAX_BUF));
+  if (!buf) {
+    LOG_ERR("MAIN", "Failed to allocate buffer for Thai user dictionary");
+    return;
+  }
+
+  const size_t bytesRead = Storage.readFileToBuffer(DICT_PATH, buf, MAX_BUF);
+  if (bytesRead == 0) {
+    free(buf);
+    return;
+  }
+
+  std::vector<std::string> words;
+  words.reserve(64);
+
+  // Parse line by line
+  size_t lineStart = 0;
+  for (size_t i = 0; i <= bytesRead; ++i) {
+    if (i == bytesRead || buf[i] == '\n' || buf[i] == '\r') {
+      if (i > lineStart) {
+        // Trim trailing whitespace
+        size_t lineEnd = i;
+        while (lineEnd > lineStart && (buf[lineEnd - 1] == ' ' || buf[lineEnd - 1] == '\t')) {
+          --lineEnd;
+        }
+        if (lineEnd > lineStart && buf[lineStart] != '#') {
+          words.emplace_back(buf + lineStart, lineEnd - lineStart);
+        }
+      }
+      lineStart = i + 1;
+    }
+  }
+
+  free(buf);
+  buf = nullptr;
+
+  if (!words.empty()) {
+    ThaiWordBreaker::setUserDictionary(words);
+    LOG_DBG("MAIN", "Thai user dictionary: %d words from %s", static_cast<int>(words.size()), DICT_PATH);
+  }
+}
+
 void setupDisplayAndFonts() {
   display.begin();
   renderer.begin();
@@ -203,24 +256,47 @@ void setupDisplayAndFonts() {
   }
   fontCacheManager.setFontDecompressor(&fontDecompressor);
   renderer.setFontCacheManager(&fontCacheManager);
-  renderer.insertFont(BOOKERLY_14_FONT_ID, bookerly14FontFamily);
 #ifndef OMIT_FONTS
+  // Bai Jamjuree (reader + UI number display)
+  renderer.insertFont(BAIJAMJUREE_12_FONT_ID, baijamjuree12FontFamily);
+  renderer.insertFont(BAIJAMJUREE_14_FONT_ID, baijamjuree14FontFamily);
+  renderer.insertFont(BAIJAMJUREE_16_FONT_ID, baijamjuree16FontFamily);
+  renderer.insertFont(BAIJAMJUREE_18_FONT_ID, baijamjuree18FontFamily);
+  renderer.insertFont(BAIJAMJUREE_20_FONT_ID, baijamjuree20FontFamily);
+  renderer.insertFont(NOTOSANS_18_FONT_ID, baijamjuree18FontFamily);  // font-name display in reader menu
+  renderer.insertFont(NOTOSANS_36_FONT_ID, cloudloop36FontFamily);    // font-size display in reader menu
+  // CloudLoop
+  renderer.insertFont(CLOUDLOOP_12_FONT_ID, cloudloop12FontFamily);
+  renderer.insertFont(CLOUDLOOP_14_FONT_ID, cloudloop14FontFamily);
+  renderer.insertFont(CLOUDLOOP_16_FONT_ID, cloudloop16FontFamily);
+  renderer.insertFont(CLOUDLOOP_18_FONT_ID, cloudloop18FontFamily);
+  renderer.insertFont(CLOUDLOOP_20_FONT_ID, cloudloop20FontFamily);
+  // Bookerly
   renderer.insertFont(BOOKERLY_12_FONT_ID, bookerly12FontFamily);
+  renderer.insertFont(BOOKERLY_14_FONT_ID, bookerly14FontFamily);
   renderer.insertFont(BOOKERLY_16_FONT_ID, bookerly16FontFamily);
   renderer.insertFont(BOOKERLY_18_FONT_ID, bookerly18FontFamily);
-
-  renderer.insertFont(NOTOSANS_12_FONT_ID, notosans12FontFamily);
-  renderer.insertFont(NOTOSANS_14_FONT_ID, notosans14FontFamily);
-  renderer.insertFont(NOTOSANS_16_FONT_ID, notosans16FontFamily);
-  renderer.insertFont(NOTOSANS_18_FONT_ID, notosans18FontFamily);
-  renderer.insertFont(OPENDYSLEXIC_8_FONT_ID, opendyslexic8FontFamily);
-  renderer.insertFont(OPENDYSLEXIC_10_FONT_ID, opendyslexic10FontFamily);
-  renderer.insertFont(OPENDYSLEXIC_12_FONT_ID, opendyslexic12FontFamily);
-  renderer.insertFont(OPENDYSLEXIC_14_FONT_ID, opendyslexic14FontFamily);
+  renderer.insertFont(BOOKERLY_20_FONT_ID, bookerly20FontFamily);
+  // Noto Serif (serif + Thai — auto-selected when Bookerly + Thai book)
+  renderer.insertFont(NOTOSERIF_12_FONT_ID, notoserif12FontFamily);
+  renderer.insertFont(NOTOSERIF_14_FONT_ID, notoserif14FontFamily);
+  renderer.insertFont(NOTOSERIF_16_FONT_ID, notoserif16FontFamily);
+  renderer.insertFont(NOTOSERIF_18_FONT_ID, notoserif18FontFamily);
+  renderer.insertFont(NOTOSERIF_20_FONT_ID, notoserif20FontFamily);
+  // Noto Serif as fallback for Bookerly (provides Thai glyphs for mixed-language text)
+  renderer.setFallbackFont(BOOKERLY_12_FONT_ID, &notoserif12FontFamily);
+  renderer.setFallbackFont(BOOKERLY_14_FONT_ID, &notoserif14FontFamily);
+  renderer.setFallbackFont(BOOKERLY_16_FONT_ID, &notoserif16FontFamily);
+  renderer.setFallbackFont(BOOKERLY_18_FONT_ID, &notoserif18FontFamily);
+  renderer.setFallbackFont(BOOKERLY_20_FONT_ID, &notoserif20FontFamily);
 #endif  // OMIT_FONTS
   renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
+  renderer.setFallbackFont(SMALL_FONT_ID, &cjk8FontFamily);
+  renderer.setFallbackFont(UI_10_FONT_ID, &cjk10FontFamily);
+  renderer.setFallbackFont(UI_12_FONT_ID, &cjk12FontFamily);
+
   LOG_DBG("MAIN", "Fonts setup");
 }
 
@@ -260,6 +336,8 @@ void setup() {
   UITheme::getInstance().reload();
   ButtonNavigator::setMappedInputManager(mappedInputManager);
 
+  // Load optional Thai user dictionary from SD card (non-blocking, silently skips if absent)
+  loadThaiUserDictionary();
   const auto wakeupReason = gpio.getWakeupReason();
   switch (wakeupReason) {
     case HalGPIO::WakeupReason::PowerButton:
@@ -283,6 +361,16 @@ void setup() {
   LOG_DBG("MAIN", "Starting CrossPoint version " CROSSPOINT_VERSION);
 
   setupDisplayAndFonts();
+
+  // BLE time sync at boot — disabled until clock UI is ready
+  // To re-enable: uncomment the block below
+  // {
+  //   renderer.clearScreen();
+  //   renderer.drawCenteredText(UI_10_FONT_ID, renderer.getScreenHeight() / 2 - 10, "CROSSPOINT", true,
+  //   EpdFontFamily::BOLD); renderer.drawCenteredText(SMALL_FONT_ID, renderer.getScreenHeight() / 2 + 15, "Syncing
+  //   time via Bluetooth..."); renderer.displayBuffer(); const bool synced = BleTimeSync::sync(10000);
+  //   LOG_INF("MAIN", "BLE time sync: %s", synced ? "OK" : "timeout");
+  // }
 
   activityManager.goToBoot();
 

@@ -24,6 +24,7 @@ class CrossPointSettings {
     COVER = 3,
     BLANK = 4,
     COVER_CUSTOM = 5,
+    HALO2_COVER = 6,
     SLEEP_SCREEN_MODE_COUNT
   };
   enum SLEEP_SCREEN_COVER_MODE { FIT = 0, CROP = 1, SLEEP_SCREEN_COVER_MODE_COUNT };
@@ -92,9 +93,12 @@ class CrossPointSettings {
   enum SIDE_BUTTON_LAYOUT { PREV_NEXT = 0, NEXT_PREV = 1, SIDE_BUTTON_LAYOUT_COUNT };
 
   // Font family options
-  enum FONT_FAMILY { BOOKERLY = 0, NOTOSANS = 1, OPENDYSLEXIC = 2, FONT_FAMILY_COUNT };
-  // Font size options
-  enum FONT_SIZE { SMALL = 0, MEDIUM = 1, LARGE = 2, EXTRA_LARGE = 3, FONT_SIZE_COUNT };
+  enum FONT_FAMILY { BAIJAMJUREE = 0, CLOUDLOOP = 1, BOOKERLY = 2, FONT_FAMILY_COUNT };
+  // Reader font sizes are stored as actual point values.
+  enum FONT_SIZE : uint8_t { FONT_12 = 12, FONT_14 = 14, FONT_16 = 16, FONT_18 = 18, FONT_20 = 20 };
+  static constexpr uint8_t FONT_SIZE_MIN = FONT_12;
+  static constexpr uint8_t FONT_SIZE_MAX = FONT_20;
+  static constexpr uint8_t FONT_SIZE_STEP = 2;
   enum LINE_COMPRESSION { TIGHT = 0, NORMAL = 1, WIDE = 2, LINE_COMPRESSION_COUNT };
   enum PARAGRAPH_ALIGNMENT {
     JUSTIFIED = 0,
@@ -132,7 +136,8 @@ class CrossPointSettings {
   enum HIDE_BATTERY_PERCENTAGE { HIDE_NEVER = 0, HIDE_READER = 1, HIDE_ALWAYS = 2, HIDE_BATTERY_PERCENTAGE_COUNT };
 
   // UI Theme
-  enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2 };
+  enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2, MODERN = 3 };
+  enum PREVIEW_DIRECTION { PREVIEW_LEFT = 0, PREVIEW_RIGHT = 1, PREVIEW_DIRECTION_COUNT };
 
   // Image rendering in EPUB reader
   enum IMAGE_RENDERING { IMAGES_DISPLAY = 0, IMAGES_PLACEHOLDER = 1, IMAGES_SUPPRESS = 2, IMAGE_RENDERING_COUNT };
@@ -169,8 +174,8 @@ class CrossPointSettings {
   uint8_t frontButtonLeft = FRONT_HW_LEFT;
   uint8_t frontButtonRight = FRONT_HW_RIGHT;
   // Reader font settings
-  uint8_t fontFamily = BOOKERLY;
-  uint8_t fontSize = MEDIUM;
+  uint8_t fontFamily = BAIJAMJUREE;
+  uint8_t fontSize = FONT_14;
   uint8_t lineSpacing = NORMAL;
   uint8_t paragraphAlignment = JUSTIFIED;
   // Auto-sleep timeout setting (default 10 minutes)
@@ -191,6 +196,8 @@ class CrossPointSettings {
   uint8_t longPressChapterSkip = 1;
   // UI Theme
   uint8_t uiTheme = LYRA;
+  // Home carousel + dot direction
+  uint8_t previewDirection = PREVIEW_RIGHT;
   // Sunlight fading compensation
   uint8_t fadingFix = 0;
   // Use book's embedded CSS styles for EPUB rendering (1 = enabled, 0 = disabled)
@@ -199,16 +206,36 @@ class CrossPointSettings {
   uint8_t showHiddenFiles = 0;
   // Image rendering mode in EPUB reader
   uint8_t imageRendering = IMAGES_DISPLAY;
+  // Reader dark mode (inverted colors: white text on black background)
+  uint8_t readerDarkMode = 0;
+  // Force bold text in reader (0 = normal, 1 = bold)
+  uint8_t readerBoldText = 0;
+  // Reader menu background texture (0 = Dots, 1 = Dark)
+  uint8_t menuTexture = 0;
+  // Thai keyboard layout (0 = Alphabetical ก-ฮ, 1 = Kedmanee)
+  static constexpr uint8_t THAI_KB_ALPHABETICAL = 0;
+  static constexpr uint8_t THAI_KB_KEDMANEE = 1;
+  static constexpr uint8_t THAI_KB_COUNT = 2;
+  uint8_t thaiKeyboardLayout = THAI_KB_ALPHABETICAL;
 
   ~CrossPointSettings() = default;
 
   // Get singleton instance
   static CrossPointSettings& getInstance() { return instance; }
 
-  uint16_t getPowerButtonDuration() const {
-    return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? 10 : 400;
-  }
+  uint16_t getPowerButtonDuration() const { return 400; }
   int getReaderFontId() const;
+
+  /// Returns the Thai-capable fallback font ID (NotoSans) for the current font size
+  int getThaiFallbackFontId() const;
+
+  /// Returns the effective reader font ID, auto-switching Bookerly → Literata
+  /// when the book's language is Thai (since Bookerly lacks Thai glyphs).
+  int getReaderFontIdForLanguage(const std::string& language) const;
+
+  /// Like getReaderFontIdForLanguage but also detects Thai from the book title
+  /// (handles EPUBs with incorrect/missing language tags).
+  int getReaderFontIdForThaiContent(const std::string& language, const std::string& title) const;
 
   // If count_only is true, returns the number of settings items that would be written.
   uint8_t writeSettings(FsFile& file, bool count_only = false) const;
