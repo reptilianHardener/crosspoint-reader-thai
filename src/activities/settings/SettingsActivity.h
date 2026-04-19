@@ -19,8 +19,11 @@ enum class SettingAction {
   OPDSBrowser,
   Network,
   ClearCache,
+  RefreshRecentBooks,
+  ClearRecentBooks,
   CheckForUpdates,
   Language,
+  ThaiDictionary,
 };
 
 struct SettingInfo {

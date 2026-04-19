@@ -19,7 +19,7 @@ class Page;
 class GfxRenderer;
 class Epub;
 
-#define MAX_WORD_SIZE 200
+#define MAX_WORD_SIZE 1024
 
 class ChapterHtmlSlimParser {
   std::shared_ptr<Epub> epub;
@@ -37,6 +37,8 @@ class ChapterHtmlSlimParser {
   char partWordBuffer[MAX_WORD_SIZE + 1] = {};
   int partWordBufferIndex = 0;
   bool nextWordContinues = false;  // true when next flushed word attaches to previous (inline element boundary)
+  bool spaceBeforeZWS = false;    // true when a U+0020 space was seen since the last non-space character;
+                                  // used to suppress a trailing ZWS that is redundant after a real space.
   std::unique_ptr<ParsedText> currentTextBlock = nullptr;
   std::unique_ptr<Page> currentPage = nullptr;
   int16_t currentPageNextY = 0;
@@ -49,6 +51,7 @@ class ChapterHtmlSlimParser {
   bool hyphenationEnabled;
   const CssParser* cssParser;
   bool embeddedStyle;
+  bool forceBold;  // Force all text to bold when enabled
   uint8_t imageRendering;
   std::string contentBase;
   std::string imageBasePath;
@@ -102,7 +105,8 @@ class ChapterHtmlSlimParser {
                                  const std::function<void(std::unique_ptr<Page>, uint16_t)>& completePageFn,
                                  const bool embeddedStyle, const std::string& contentBase,
                                  const std::string& imageBasePath, const uint8_t imageRendering = 0,
-                                 const std::function<void()>& popupFn = nullptr, const CssParser* cssParser = nullptr)
+                                 const std::function<void()>& popupFn = nullptr, const CssParser* cssParser = nullptr,
+                                 const bool forceBold = false)
 
       : epub(epub),
         filepath(filepath),
@@ -118,6 +122,7 @@ class ChapterHtmlSlimParser {
         popupFn(popupFn),
         cssParser(cssParser),
         embeddedStyle(embeddedStyle),
+        forceBold(forceBold),
         imageRendering(imageRendering),
         contentBase(contentBase),
         imageBasePath(imageBasePath) {}
