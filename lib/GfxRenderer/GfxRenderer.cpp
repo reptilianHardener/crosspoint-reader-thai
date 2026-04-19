@@ -348,6 +348,17 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
   debugTextSample_.assign(text);
 #endif
 
+#ifdef CROSSPOINT_EMULATED
+  const int expectedFitWidth = getTextFitWidth(fontId, text, style);
+  debugTextBoundsActive_ = true;
+  debugTextBoundsMinX_ = std::numeric_limits<int>::max();
+  debugTextBoundsMaxX_ = std::numeric_limits<int>::min();
+  debugTextBoundsMinY_ = std::numeric_limits<int>::max();
+  debugTextBoundsMaxY_ = std::numeric_limits<int>::min();
+  debugTextExpectedRight_ = x + expectedFitWidth;
+  debugTextSample_.assign(text);
+#endif
+
   // cannot draw a NULL / empty string
   if (text == nullptr || *text == '\0') {
 #ifdef CROSSPOINT_EMULATED
@@ -1340,6 +1351,68 @@ int GfxRenderer::getTextAdvanceX(const int fontId, const char* text, EpdFontFami
   }
   widthPx += fp4::toPixel(prevAdvanceFP);  // final glyph's advance
   return widthPx;
+}
+
+int GfxRenderer::getTextFitWidth(const int fontId, const char* text, EpdFontFamily::Style style) const {
+  if (text == nullptr || *text == '\0') {
+    return 0;
+  }
+
+  const auto fontIt = fontMap.find(fontId);
+  if (fontIt == fontMap.end()) {
+    LOG_ERR("GFX", "Font %d not found", fontId);
+    return 0;
+  }
+
+  const auto& font = fontIt->second;
+  const EpdFontFamily* fallbackFont = resolveFallbackFont(*this, fontId, font);
+  const EpdFontFamily* secondaryFallbackFont = getSecondaryFallbackFont(fontId);
+  int32_t cursorXFP = 0;  // 12.4 fixed-point accumulator
+  int lastBaseX = 0;
+  int lastBaseAdvanceFP = 0;
+  int maxRight = 0;
+  uint32_t prevCp = 0;
+  uint32_t cp;
+
+  while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&text)))) {
+    const bool isCombining = utf8IsCombiningMark(cp);
+    if (!isCombining) {
+      cp = font.applyLigatures(cp, text, style);
+      if (prevCp != 0) {
+        cursorXFP += font.getKerning(prevCp, cp, style);
+      }
+    }
+
+    const EpdGlyph* glyph = font.hasNativeGlyph(cp, style) ? font.getGlyph(cp, style) : nullptr;
+    if (!glyph && fallbackFont) {
+      glyph = fallbackFont->getGlyph(cp, style);
+    }
+    if (!glyph && secondaryFallbackFont) {
+      glyph = secondaryFallbackFont->getGlyph(cp, style);
+    }
+    if (!glyph) {
+      glyph = font.getGlyph(cp, style);  // Fall back to replacement glyph
+    }
+    if (!glyph) {
+      if (!isCombining) {
+        prevCp = cp;
+      }
+      continue;
+    }
+
+    const int glyphBaseX = isCombining ? getCombiningAnchorX(cursorXFP, lastBaseX, lastBaseAdvanceFP, cp)
+                                       : fp4::toPixel(cursorXFP);
+    maxRight = std::max(maxRight, glyphBaseX + glyph->left + glyph->width);
+
+    if (!isCombining) {
+      lastBaseX = glyphBaseX;
+      lastBaseAdvanceFP = glyph->advanceX;
+      cursorXFP += glyph->advanceX;
+      prevCp = cp;
+    }
+  }
+
+  return std::max(fp4::toPixel(cursorXFP), maxRight);
 }
 
 int GfxRenderer::getTextFitWidth(const int fontId, const char* text, EpdFontFamily::Style style) const {
