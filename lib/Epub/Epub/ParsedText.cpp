@@ -627,8 +627,8 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
     // Count gaps: each word after the first creates a gap, unless it's a continuation
     if (wordIdx > 0) {
       const auto globalIdx = lastBreakAt + wordIdx;
-      const int gap = boundaryAdvance(renderer, fontId, words[globalIdx - 1], words[globalIdx], wordStyles[globalIdx - 1],
-                                      continuesVec[globalIdx]);
+      const int gap = boundaryAdvance(renderer, fontId, words[globalIdx - 1], words[globalIdx],
+                                      wordStyles[globalIdx - 1], continuesVec[globalIdx]);
       totalNaturalGaps += gap;
       if (countsAsVisibleGap(words[globalIdx - 1], words[globalIdx], continuesVec[globalIdx])) {
         actualGapCount++;

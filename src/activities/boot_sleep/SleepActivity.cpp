@@ -1,8 +1,5 @@
 #include "SleepActivity.h"
 
-#include <algorithm>
-#include <cstdio>
-
 #include <Epub.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
@@ -11,6 +8,9 @@
 #include <RecentBooksStore.h>
 #include <Txt.h>
 #include <Xtc.h>
+
+#include <algorithm>
+#include <cstdio>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"

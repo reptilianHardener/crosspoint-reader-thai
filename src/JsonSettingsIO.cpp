@@ -89,8 +89,7 @@ uint8_t normalizeFontSize(const uint8_t sizeValue) {
 
   const uint8_t delta = sizeValue - CrossPointSettings::FONT_SIZE_MIN;
   const uint8_t roundedSteps = static_cast<uint8_t>((delta + 1) / CrossPointSettings::FONT_SIZE_STEP);
-  return static_cast<uint8_t>(CrossPointSettings::FONT_SIZE_MIN +
-                              roundedSteps * CrossPointSettings::FONT_SIZE_STEP);
+  return static_cast<uint8_t>(CrossPointSettings::FONT_SIZE_MIN + roundedSteps * CrossPointSettings::FONT_SIZE_STEP);
 }
 
 // ---- CrossPointState ----
@@ -196,7 +195,8 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   if (doc["statusBarChapterPageCount"].isNull()) {
     applyLegacyStatusBarSettings(s);
   }
-  const bool legacyFontEncoding = !doc["fontSize"].isNull() && (doc["fontSize"].as<int>() < CrossPointSettings::FONT_SIZE_MIN);
+  const bool legacyFontEncoding =
+      !doc["fontSize"].isNull() && (doc["fontSize"].as<int>() < CrossPointSettings::FONT_SIZE_MIN);
 
   for (const auto& info : getSettingsList()) {
     if (!info.key) continue;
@@ -266,14 +266,12 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   }
 
   // Orientation — managed by reader menu, not in SettingsList.
-  s.orientation =
-      clamp(doc["orientation"] | (uint8_t)CrossPointSettings::PORTRAIT, CrossPointSettings::ORIENTATION_COUNT,
-            CrossPointSettings::PORTRAIT);
+  s.orientation = clamp(doc["orientation"] | (uint8_t)CrossPointSettings::PORTRAIT,
+                        CrossPointSettings::ORIENTATION_COUNT, CrossPointSettings::PORTRAIT);
 
   // Thai keyboard layout — managed by ThaiDictionaryActivity, not in SettingsList.
-  s.thaiKeyboardLayout =
-      clamp(doc["thaiKeyboardLayout"] | (uint8_t)CrossPointSettings::THAI_KB_ALPHABETICAL,
-            CrossPointSettings::THAI_KB_COUNT, CrossPointSettings::THAI_KB_ALPHABETICAL);
+  s.thaiKeyboardLayout = clamp(doc["thaiKeyboardLayout"] | (uint8_t)CrossPointSettings::THAI_KB_ALPHABETICAL,
+                               CrossPointSettings::THAI_KB_COUNT, CrossPointSettings::THAI_KB_ALPHABETICAL);
 
   // Front button remap — managed by RemapFrontButtons sub-activity, not in SettingsList.
   using S = CrossPointSettings;

@@ -2,8 +2,8 @@
 #pragma once
 
 // UI fonts (backed by Bai Jamjuree; IDs kept stable for UI rendering)
-#define NOTOSANS_18_FONT_ID (-67350552)   // used by EpubReaderMenuActivity font-name display
-#define NOTOSANS_36_FONT_ID (-1494688505) // used by EpubReaderMenuActivity font-size display
+#define NOTOSANS_18_FONT_ID (-67350552)    // used by EpubReaderMenuActivity font-name display
+#define NOTOSANS_36_FONT_ID (-1494688505)  // used by EpubReaderMenuActivity font-size display
 #define UI_10_FONT_ID (-644519114)
 #define UI_12_FONT_ID (-113558108)
 #define SMALL_FONT_ID (-1272763354)

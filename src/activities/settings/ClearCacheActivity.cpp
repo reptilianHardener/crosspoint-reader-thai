@@ -53,8 +53,7 @@ void ClearCacheActivity::render(RenderLock&&) {
       renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 30, tr(STR_CLEAR_CACHE_WARNING_4), true);
     }
 
-    const char* confirmLabel =
-        (mode == Mode::RefreshRecents) ? tr(STR_REFRESH) : tr(STR_CLEAR_BUTTON);
+    const char* confirmLabel = (mode == Mode::RefreshRecents) ? tr(STR_REFRESH) : tr(STR_CLEAR_BUTTON);
     const auto labels = mappedInput.mapLabels(tr(STR_CANCEL), confirmLabel, "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     renderer.displayBuffer();

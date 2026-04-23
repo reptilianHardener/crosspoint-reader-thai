@@ -53,8 +53,7 @@ uint8_t normalizeFontSize(const uint8_t sizeValue) {
 
   const uint8_t delta = sizeValue - CrossPointSettings::FONT_SIZE_MIN;
   const uint8_t roundedSteps = static_cast<uint8_t>((delta + 1) / CrossPointSettings::FONT_SIZE_STEP);
-  return static_cast<uint8_t>(CrossPointSettings::FONT_SIZE_MIN +
-                              roundedSteps * CrossPointSettings::FONT_SIZE_STEP);
+  return static_cast<uint8_t>(CrossPointSettings::FONT_SIZE_MIN + roundedSteps * CrossPointSettings::FONT_SIZE_STEP);
 }
 
 // Convert legacy front button layout into explicit logical->hardware mapping.
@@ -328,27 +327,45 @@ int CrossPointSettings::getReaderFontId() const {
     case BAIJAMJUREE:
     default:
       switch (normalizeFontSize(fontSize)) {
-        case FONT_12: return BAIJAMJUREE_12_FONT_ID;
-        case FONT_14: return BAIJAMJUREE_14_FONT_ID;
-        case FONT_16: return BAIJAMJUREE_16_FONT_ID;
-        case FONT_18: return BAIJAMJUREE_18_FONT_ID;
-        case FONT_20: default: return BAIJAMJUREE_20_FONT_ID;
+        case FONT_12:
+          return BAIJAMJUREE_12_FONT_ID;
+        case FONT_14:
+          return BAIJAMJUREE_14_FONT_ID;
+        case FONT_16:
+          return BAIJAMJUREE_16_FONT_ID;
+        case FONT_18:
+          return BAIJAMJUREE_18_FONT_ID;
+        case FONT_20:
+        default:
+          return BAIJAMJUREE_20_FONT_ID;
       }
     case CLOUDLOOP:
       switch (normalizeFontSize(fontSize)) {
-        case FONT_12: return CLOUDLOOP_12_FONT_ID;
-        case FONT_14: return CLOUDLOOP_14_FONT_ID;
-        case FONT_16: return CLOUDLOOP_16_FONT_ID;
-        case FONT_18: return CLOUDLOOP_18_FONT_ID;
-        case FONT_20: default: return CLOUDLOOP_20_FONT_ID;
+        case FONT_12:
+          return CLOUDLOOP_12_FONT_ID;
+        case FONT_14:
+          return CLOUDLOOP_14_FONT_ID;
+        case FONT_16:
+          return CLOUDLOOP_16_FONT_ID;
+        case FONT_18:
+          return CLOUDLOOP_18_FONT_ID;
+        case FONT_20:
+        default:
+          return CLOUDLOOP_20_FONT_ID;
       }
     case BOOKERLY:
       switch (normalizeFontSize(fontSize)) {
-        case FONT_12: return BOOKERLY_12_FONT_ID;
-        case FONT_14: return BOOKERLY_14_FONT_ID;
-        case FONT_16: return BOOKERLY_16_FONT_ID;
-        case FONT_18: return BOOKERLY_18_FONT_ID;
-        case FONT_20: default: return BOOKERLY_20_FONT_ID;
+        case FONT_12:
+          return BOOKERLY_12_FONT_ID;
+        case FONT_14:
+          return BOOKERLY_14_FONT_ID;
+        case FONT_16:
+          return BOOKERLY_16_FONT_ID;
+        case FONT_18:
+          return BOOKERLY_18_FONT_ID;
+        case FONT_20:
+        default:
+          return BOOKERLY_20_FONT_ID;
       }
   }
 }
@@ -356,7 +373,8 @@ int CrossPointSettings::getReaderFontId() const {
 static bool isThaiLanguage(const std::string& language) {
   if (language.empty()) return false;
   // Match "th", "tha", "th-TH", "th-*" etc.
-  return language == "th" || language == "tha" || (language.size() >= 3 && language[0] == 't' && language[1] == 'h' && language[2] == '-');
+  return language == "th" || language == "tha" ||
+         (language.size() >= 3 && language[0] == 't' && language[1] == 'h' && language[2] == '-');
 }
 
 static bool containsThaiChars(const std::string& text) {
@@ -367,10 +385,14 @@ static bool containsThaiChars(const std::string& text) {
       return true;  // Thai block: U+0E00-U+0E7F = UTF-8 0xE0 0xB8/0xB9 xx
     }
     // Skip UTF-8 multibyte sequences
-    if (*p < 0x80) p += 1;
-    else if (*p < 0xE0) p += 2;
-    else if (*p < 0xF0) p += 3;
-    else p += 4;
+    if (*p < 0x80)
+      p += 1;
+    else if (*p < 0xE0)
+      p += 2;
+    else if (*p < 0xF0)
+      p += 3;
+    else
+      p += 4;
   }
   return false;
 }
@@ -378,11 +400,17 @@ static bool containsThaiChars(const std::string& text) {
 int CrossPointSettings::getThaiFallbackFontId() const {
   // Use Noto Serif (serif Latin + Thai via NotoSansThaiLooped font stack)
   switch (normalizeFontSize(fontSize)) {
-    case FONT_12: return NOTOSERIF_12_FONT_ID;
-    case FONT_14: return NOTOSERIF_14_FONT_ID;
-    case FONT_16: return NOTOSERIF_16_FONT_ID;
-    case FONT_18: return NOTOSERIF_18_FONT_ID;
-    case FONT_20: default: return NOTOSERIF_20_FONT_ID;
+    case FONT_12:
+      return NOTOSERIF_12_FONT_ID;
+    case FONT_14:
+      return NOTOSERIF_14_FONT_ID;
+    case FONT_16:
+      return NOTOSERIF_16_FONT_ID;
+    case FONT_18:
+      return NOTOSERIF_18_FONT_ID;
+    case FONT_20:
+    default:
+      return NOTOSERIF_20_FONT_ID;
   }
 }
 

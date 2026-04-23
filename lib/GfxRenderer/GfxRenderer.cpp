@@ -116,8 +116,7 @@ static inline bool fontNeedsThaiUpperRestacking(const EpdFontData* fontData) {
 }
 
 static inline void applyThaiUpperStacking(const EpdFontData* fontData, const uint32_t cp, const EpdGlyph* glyph,
-                                          const int penY, int* raiseBy, int* stackedUpperMaxY,
-                                          bool* hasStackedUpper) {
+                                          const int penY, int* raiseBy, int* stackedUpperMaxY, bool* hasStackedUpper) {
   if (!fontNeedsThaiUpperRestacking(fontData)) {
     return;
   }
@@ -1380,8 +1379,8 @@ int GfxRenderer::getTextFitWidth(const int fontId, const char* text, EpdFontFami
       continue;
     }
 
-    const int glyphBaseX = isCombining ? getCombiningAnchorX(cursorXFP, lastBaseX, lastBaseAdvanceFP, cp)
-                                       : fp4::toPixel(cursorXFP);
+    const int glyphBaseX =
+        isCombining ? getCombiningAnchorX(cursorXFP, lastBaseX, lastBaseAdvanceFP, cp) : fp4::toPixel(cursorXFP);
     maxRight = std::max(maxRight, glyphBaseX + glyph->left + glyph->width);
 
     if (!isCombining) {

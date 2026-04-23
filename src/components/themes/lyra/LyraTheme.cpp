@@ -226,8 +226,8 @@ void LyraTheme::drawTabBar(const GfxRenderer& renderer, Rect rect, const std::ve
 
     if (tab.selected) {
       if (selected) {
-        renderer.fillRoundedRect(currentX, rect.y + pillInsetTop, pillWidth, rect.height - pillInsetTop - pillInsetBottom,
-                                 cornerRadius, Color::Black);
+        renderer.fillRoundedRect(currentX, rect.y + pillInsetTop, pillWidth,
+                                 rect.height - pillInsetTop - pillInsetBottom, cornerRadius, Color::Black);
       } else {
         renderer.fillRectDither(currentX, rect.y, pillWidth, rect.height - 3, Color::LightGray);
         renderer.drawLine(currentX, rect.y + rect.height - 3, currentX + pillWidth, rect.y + rect.height - 3, 2, true);
@@ -318,8 +318,8 @@ void LyraTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
       UIIcon icon = rowIcon(i);
       const uint8_t* iconBitmap = iconForName(icon, iconSize);
       if (iconBitmap != nullptr) {
-        renderer.drawIcon(iconBitmap, rect.x + LyraMetrics::values.contentSidePadding + hPaddingInSelection,
-                          iconY, iconSize, iconSize);
+        renderer.drawIcon(iconBitmap, rect.x + LyraMetrics::values.contentSidePadding + hPaddingInSelection, iconY,
+                          iconSize, iconSize);
       }
     }
 

@@ -30,9 +30,10 @@ inline const std::vector<SettingInfo>& getSettingsList() {
           StrId::STR_REFRESH_FREQ, &CrossPointSettings::refreshFrequency,
           {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10, StrId::STR_PAGES_15, StrId::STR_PAGES_30},
           "refreshFrequency", StrId::STR_CAT_DISPLAY),
-      SettingInfo::Enum(StrId::STR_UI_THEME, &CrossPointSettings::uiTheme,
-                        {StrId::STR_THEME_CLASSIC, StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_EXTENDED, StrId::STR_THEME_MODERN}, "uiTheme",
-                        StrId::STR_CAT_DISPLAY),
+      SettingInfo::Enum(
+          StrId::STR_UI_THEME, &CrossPointSettings::uiTheme,
+          {StrId::STR_THEME_CLASSIC, StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_EXTENDED, StrId::STR_THEME_MODERN},
+          "uiTheme", StrId::STR_CAT_DISPLAY),
       SettingInfo::Enum(StrId::STR_PREVIEWS, &CrossPointSettings::previewDirection,
                         {StrId::STR_DIR_LEFT, StrId::STR_DIR_RIGHT}, "previewDirection", StrId::STR_CAT_DISPLAY),
       SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix, "fadingFix",
@@ -40,12 +41,12 @@ inline const std::vector<SettingInfo>& getSettingsList() {
 
       // --- Reader ---
       SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-                        {StrId::STR_BAI_JAMJUREE, StrId::STR_CLOUD_LOOP, StrId::STR_BOOKERLY},
-                        "fontFamily", StrId::STR_CAT_READER),
-      SettingInfo::Value(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
-                         {CrossPointSettings::FONT_SIZE_MIN, CrossPointSettings::FONT_SIZE_MAX,
-                          CrossPointSettings::FONT_SIZE_STEP},
-                         "fontSize", StrId::STR_CAT_READER),
+                        {StrId::STR_BAI_JAMJUREE, StrId::STR_CLOUD_LOOP, StrId::STR_BOOKERLY}, "fontFamily",
+                        StrId::STR_CAT_READER),
+      SettingInfo::Value(
+          StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
+          {CrossPointSettings::FONT_SIZE_MIN, CrossPointSettings::FONT_SIZE_MAX, CrossPointSettings::FONT_SIZE_STEP},
+          "fontSize", StrId::STR_CAT_READER),
       SettingInfo::Enum(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacing,
                         {StrId::STR_TIGHT, StrId::STR_NORMAL, StrId::STR_WIDE}, "lineSpacing", StrId::STR_CAT_READER),
       SettingInfo::Value(StrId::STR_SCREEN_MARGIN, &CrossPointSettings::screenMargin, {5, 40, 5}, "screenMargin",

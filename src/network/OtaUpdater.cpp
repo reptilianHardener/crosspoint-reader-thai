@@ -3,14 +3,13 @@
 #include <ArduinoJson.h>
 #include <Logging.h>
 
+#include "bootloader_common.h"
+#include "esp_flash_partitions.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
 #include "esp_wifi.h"
-
-#include "bootloader_common.h"
-#include "esp_flash_partitions.h"
 
 namespace {
 constexpr char latestReleaseUrl[] = "https://api.github.com/repos/kocha01/crosspoint-halo2-custom/releases/latest";

@@ -260,7 +260,7 @@ void HomeActivity::loop() {
       int menuSelectedIndex = selectorIndex - static_cast<int>(recentBooks.size());
       const int fileBrowserIdx = idx++;
       const int recentsIdx = idx++;
-      const int opdsLibraryIdx = hasOpdsUrl ? idx++ : -1;
+      const int opdsLibraryIdx = hasOpdsServers ? idx++ : -1;
       const int fileTransferIdx = idx++;
       const int settingsIdx = idx;
 
@@ -439,15 +439,15 @@ void HomeActivity::render(RenderLock&&) {
 
   const int menuY = metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing;
   const int menuHeight = pageHeight - menuY - metrics.verticalSpacing - metrics.buttonHintsHeight;
-  GUI.drawButtonMenu(renderer, Rect{0, menuY, pageWidth, menuHeight},
-                     static_cast<int>(menuItems.size()), selectorIndex - recentBooks.size(),
-                     [&menuItems](int index) { return std::string(menuItems[index]); },
-                     [&menuIcons](int index) { return menuIcons[index]; });
+  GUI.drawButtonMenu(
+      renderer, Rect{0, menuY, pageWidth, menuHeight}, static_cast<int>(menuItems.size()),
+      selectorIndex - recentBooks.size(), [&menuItems](int index) { return std::string(menuItems[index]); },
+      [&menuIcons](int index) { return menuIcons[index]; });
 
   const bool useModernHomeControls = SETTINGS.uiTheme == CrossPointSettings::MODERN;
-  const auto labels = mappedInput.mapLabels(tr(STR_BOOKS), tr(STR_SELECT),
-                                            useModernHomeControls ? tr(STR_DIR_LEFT) : tr(STR_DIR_UP),
-                                            useModernHomeControls ? tr(STR_DIR_RIGHT) : tr(STR_DIR_DOWN));
+  const auto labels =
+      mappedInput.mapLabels(tr(STR_BOOKS), tr(STR_SELECT), useModernHomeControls ? tr(STR_DIR_LEFT) : tr(STR_DIR_UP),
+                            useModernHomeControls ? tr(STR_DIR_RIGHT) : tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   if (useModernHomeControls) {
     GUI.drawSideButtonHints(renderer, tr(STR_DIR_UP), tr(STR_DIR_DOWN));

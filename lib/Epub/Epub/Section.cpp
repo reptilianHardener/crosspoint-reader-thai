@@ -13,8 +13,7 @@ namespace {
 constexpr uint8_t SECTION_FILE_VERSION = 28;
 constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(bool) + sizeof(uint8_t) +
                                  sizeof(uint16_t) + sizeof(uint16_t) + sizeof(uint16_t) + sizeof(bool) + sizeof(bool) +
-                                 sizeof(uint8_t) + sizeof(bool) + sizeof(uint8_t) + sizeof(uint32_t) +
-                                 sizeof(uint32_t);
+                                 sizeof(uint8_t) + sizeof(bool) + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t);
 }  // namespace
 
 uint32_t Section::onPageComplete(std::unique_ptr<Page> page) {
@@ -113,13 +112,7 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
         extraParagraphSpacing != fileExtraParagraphSpacing || paragraphAlignment != fileParagraphAlignment ||
         viewportWidth != fileViewportWidth || viewportHeight != fileViewportHeight ||
         hyphenationEnabled != fileHyphenationEnabled || embeddedStyle != fileEmbeddedStyle ||
-<<<<<<< HEAD
-        imageRendering != fileImageRendering) {
-      // Explicit close() required: member variable persists beyond function scope
-=======
-        imageRendering != fileImageRendering || forceBold != fileForceBold ||
-        userDictCount != fileUserDictCount) {
->>>>>>> f684bb2 (migrate halo)
+        imageRendering != fileImageRendering || forceBold != fileForceBold || userDictCount != fileUserDictCount) {
       file.close();
       LOG_ERR("SCT", "Deserialization failed: Parameters do not match");
       clearCache();
@@ -149,6 +142,11 @@ bool Section::clearCache() const {
   LOG_DBG("SCT", "Cache cleared successfully");
   return true;
 }
+
+struct PageLutEntry {
+  uint32_t fileOffset;
+  uint16_t paragraphIndex;
+};
 
 bool Section::createSectionFile(const int fontId, const float lineCompression, const bool extraParagraphSpacing,
                                 const uint8_t paragraphAlignment, const uint16_t viewportWidth,
@@ -205,13 +203,8 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
     return false;
   }
   writeSectionFileHeader(fontId, lineCompression, extraParagraphSpacing, paragraphAlignment, viewportWidth,
-<<<<<<< HEAD
-                         viewportHeight, hyphenationEnabled, embeddedStyle, imageRendering);
-  std::vector<PageLutEntry> lut = {};
-=======
                          viewportHeight, hyphenationEnabled, embeddedStyle, imageRendering, forceBold, userDictCount);
-  std::vector<uint32_t> lut = {};
->>>>>>> f684bb2 (migrate halo)
+  std::vector<PageLutEntry> lut = {};
 
   // Derive the content base directory and image cache path prefix for the parser
   size_t lastSlash = localPath.find_last_of('/');
@@ -231,15 +224,10 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   ChapterHtmlSlimParser visitor(
       epub, tmpHtmlPath, renderer, fontId, lineCompression, extraParagraphSpacing, paragraphAlignment, viewportWidth,
       viewportHeight, hyphenationEnabled,
-<<<<<<< HEAD
       [this, &lut](std::unique_ptr<Page> page, const uint16_t paragraphIndex) {
         lut.push_back({this->onPageComplete(std::move(page)), paragraphIndex});
       },
-      embeddedStyle, contentBase, imageBasePath, imageRendering, popupFn, cssParser);
-=======
-      [this, &lut](std::unique_ptr<Page> page) { lut.emplace_back(this->onPageComplete(std::move(page))); },
       embeddedStyle, contentBase, imageBasePath, imageRendering, popupFn, cssParser, forceBold);
->>>>>>> f684bb2 (migrate halo)
   Hyphenator::setPreferredLanguage(epub->getLanguage());
   success = visitor.parseAndBuildPages();
 

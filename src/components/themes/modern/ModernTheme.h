@@ -10,26 +10,26 @@ namespace ModernMetrics {
 constexpr ThemeMetrics values = {.batteryWidth = 16,
                                  .batteryHeight = 12,
                                  .topPadding = 5,
-                                 .batteryBarHeight = 28,   // Mockup: status-bar 14px CSS → 28
-                                 .headerHeight = 82,       // ~3mm more than before
-                                 .verticalSpacing = 14,    // Match visual spacing between list rows
-                                 .contentSidePadding = 28, // Mockup: 14px CSS → 28
+                                 .batteryBarHeight = 28,    // Mockup: status-bar 14px CSS → 28
+                                 .headerHeight = 82,        // ~3mm more than before
+                                 .verticalSpacing = 14,     // Match visual spacing between list rows
+                                 .contentSidePadding = 28,  // Mockup: 14px CSS → 28
                                  .listRowHeight = 52,
                                  .listWithSubtitleRowHeight = 68,
                                  .menuRowHeight = 72,
-                                 .menuSpacing = 10,        // Mockup: 5px CSS → 10
+                                 .menuSpacing = 10,  // Mockup: 5px CSS → 10
                                  .tabSpacing = 6,
                                  .tabBarHeight = 40,
                                  .scrollBarWidth = 3,
                                  .scrollBarRightOffset = 5,
-                                 .homeTopPadding = 28,     // Right after battery bar
-                                 .homeCoverHeight = 260,   // Mockup: center 130px CSS → 260
+                                 .homeTopPadding = 28,        // Right after battery bar
+                                 .homeCoverHeight = 260,      // Mockup: center 130px CSS → 260
                                  .homeSideCoverHeight = 200,  // Side covers: 70% detail (100×200)
                                  .homeFarCoverHeight = 150,   // Far covers: 50% detail (75×150)
-                                 .homeCoverTileHeight = 460,// Covers + title + author + progress + dots + divider
+                                 .homeCoverTileHeight = 460,  // Covers + title + author + progress + dots + divider
                                  .homeRecentBooksCount = 5,
-                                 .buttonHintsHeight = 30,  // Mockup: ~15px CSS → 30
-                                 .sideButtonHintsWidth = 24,// Mockup: ~12px CSS → 24 (narrower)
+                                 .buttonHintsHeight = 30,     // Mockup: ~15px CSS → 30
+                                 .sideButtonHintsWidth = 24,  // Mockup: ~12px CSS → 24 (narrower)
                                  .progressBarHeight = 16,
                                  .progressBarMarginTop = 1,
                                  .statusBarHorizontalMargin = 5,
@@ -39,7 +39,7 @@ constexpr ThemeMetrics values = {.batteryWidth = 16,
                                  .keyboardKeySpacing = 0,
                                  .keyboardBottomAligned = true,
                                  .keyboardCenteredText = true};
-}
+}  // namespace ModernMetrics
 
 class ModernTheme : public BaseTheme {
  public:

@@ -38,11 +38,7 @@ class EpubReaderMenuActivity final : public Activity {
   enum class Mode : uint8_t { QUICK, FULL_MENU };
 
   // Background texture styles
-  enum class Texture : uint8_t {
-    DOT_GRID = 0,
-    DARK,
-    TEXTURE_COUNT
-  };
+  enum class Texture : uint8_t { DOT_GRID = 0, DARK, TEXTURE_COUNT };
 
   explicit EpubReaderMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& title,
                                   const int currentPage, const int totalPages, const int bookProgressPercent,
@@ -89,9 +85,9 @@ class EpubReaderMenuActivity final : public Activity {
   int currentPage = 0;
   int totalPages = 0;
   int bookProgressPercent = 0;
-  int8_t activeArrow = 0;           // 0=none, 1=up pressed, -1=down pressed
-  unsigned long arrowPressTime = 0; // millis() when arrow was pressed
-  bool arrowResetPending = false;   // waiting to reset arrow to gray
+  int8_t activeArrow = 0;            // 0=none, 1=up pressed, -1=down pressed
+  unsigned long arrowPressTime = 0;  // millis() when arrow was pressed
+  bool arrowResetPending = false;    // waiting to reset arrow to gray
   Texture currentTexture = Texture::DOT_GRID;
   GfxRenderer::Orientation savedOrientation = GfxRenderer::Orientation::Portrait;
 };

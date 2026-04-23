@@ -9,8 +9,8 @@
 #include "MappedInputManager.h"
 #include "RecentBooksStore.h"
 #include "activities/util/ConfirmationActivity.h"
-#include "components/themes/modern/ModernTheme.h"
 #include "components/UITheme.h"
+#include "components/themes/modern/ModernTheme.h"
 #include "fontIds.h"
 
 namespace {
@@ -31,8 +31,9 @@ void drawPowerRemoveHint(const GfxRenderer& renderer, const ThemeMetrics& metric
   constexpr int downOffset = 19;
 
   const int halo2HintWidth = std::max(ModernMetrics::values.sideButtonHintsWidth + 10, 30);
-  const int hintWidth =
-      (SETTINGS.uiTheme == CrossPointSettings::MODERN) ? std::max(metrics.sideButtonHintsWidth + 10, 30) : halo2HintWidth;
+  const int hintWidth = (SETTINGS.uiTheme == CrossPointSettings::MODERN)
+                            ? std::max(metrics.sideButtonHintsWidth + 10, 30)
+                            : halo2HintWidth;
   const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, label);
   const int textHeight = renderer.getTextHeight(SMALL_FONT_ID);
   const int hintHeight = std::max(minHintHeight, textWidth + verticalPadding * 2);

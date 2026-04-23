@@ -13,8 +13,7 @@ static inline bool fontNeedsThaiUpperRestacking(const EpdFontData* fontData) {
 }
 
 static inline void applyThaiUpperStacking(const EpdFontData* fontData, const uint32_t cp, const EpdGlyph* glyph,
-                                          const int penY, int* raiseBy, int* stackedUpperMinY,
-                                          bool* hasStackedUpper) {
+                                          const int penY, int* raiseBy, int* stackedUpperMinY, bool* hasStackedUpper) {
   if (!fontNeedsThaiUpperRestacking(fontData)) {
     return;
   }
