@@ -7,10 +7,10 @@
 #include <Serialization.h>
 #include <Utf8.h>
 
-#include "Epub/hyphenation/HyphenationCommon.h"
-#include "Epub/hyphenation/ThaiWordBreaker.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "Epub/hyphenation/HyphenationCommon.h"
+#include "Epub/hyphenation/ThaiWordBreaker.h"
 #include "MappedInputManager.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
@@ -23,7 +23,8 @@ constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
 constexpr uint32_t CACHE_MAGIC = 0x54585449;  // "TXTI"
 constexpr uint8_t CACHE_VERSION = 3;          // Increment when cache format or wrap logic changes
 
-int measurePrefixWidth(const GfxRenderer& renderer, const int fontId, const std::string& text, const size_t byteOffset) {
+int measurePrefixWidth(const GfxRenderer& renderer, const int fontId, const std::string& text,
+                       const size_t byteOffset) {
   return renderer.getTextWidth(fontId, text.substr(0, byteOffset).c_str());
 }
 

@@ -167,8 +167,13 @@ void EpubReaderMenuActivity::loop() {
     if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
       ActivityResult result;
       result.isCancelled = true;
-      result.data = MenuResult{-1, pendingOrientation, selectedPageTurnOption, pendingFontFamily, pendingFontSize,
-                               pendingLineSpacing, pendingScreenMargin};
+      result.data = MenuResult{-1,
+                               pendingOrientation,
+                               selectedPageTurnOption,
+                               pendingFontFamily,
+                               pendingFontSize,
+                               pendingLineSpacing,
+                               pendingScreenMargin};
       setResult(std::move(result));
       finish();
       return;
@@ -218,7 +223,7 @@ void EpubReaderMenuActivity::loop() {
       }
       if (selectedAction == MenuAction::BACKGROUND_TEXTURE) {
         currentTexture = static_cast<Texture>((static_cast<uint8_t>(currentTexture) + 1) %
-                                               static_cast<uint8_t>(Texture::TEXTURE_COUNT));
+                                              static_cast<uint8_t>(Texture::TEXTURE_COUNT));
         SETTINGS.menuTexture = static_cast<uint8_t>(currentTexture);
         SETTINGS.saveToFile();
         requestUpdate();
@@ -255,7 +260,7 @@ void EpubReaderMenuActivity::render(RenderLock&&) {
   const int contentX = isLandscapeCw ? hintGutterWidth : 0;
   const int contentWidth = pageWidth - hintGutterWidth;
   const int hintGutterHeight = isPortraitInverted ? 50 : 0;
-  const int topY = hintGutterHeight + 60;  // +60px (~1.5cm) push content down
+  const int topY = hintGutterHeight + 60;                        // +60px (~1.5cm) push content down
   const int contentHeight = pageHeight - 40 - hintGutterHeight;  // 40 = button hints
 
   if (currentMode == Mode::QUICK) {
@@ -297,13 +302,13 @@ static void drawTexture(GfxRenderer const& r, int rx, int ry, int rw, int rh, Te
       r.fillRect(rx, ry, rw, rh, true);
       break;
     }
-    default: break;
+    default:
+      break;
   }
 }
 
 // ── Text with white stroke outline ──
-static void drawStrokedText(GfxRenderer const& r, int fontId, int tx, int ty,
-                            const char* text, int stroke = 2,
+static void drawStrokedText(GfxRenderer const& r, int fontId, int tx, int ty, const char* text, int stroke = 2,
                             EpdFontFamily::Style style = EpdFontFamily::BOLD) {
   // Draw white outline by rendering text offset in 8 directions
   for (int dx = -stroke; dx <= stroke; ++dx) {
@@ -338,8 +343,8 @@ void EpubReaderMenuActivity::renderQuickSettings(int x, int /*y*/, int w, int /*
   const int fontNameH = renderer.getTextHeight(NOTOSANS_18_FONT_ID);
   const int fontNameY = 151 - fontNameH / 2 - 10;  // +15px lower
   renderer.drawText(NOTOSANS_18_FONT_ID,
-                    x + (w - renderer.getTextWidth(NOTOSANS_18_FONT_ID, fontName, EpdFontFamily::BOLD)) / 2,
-                    fontNameY, fontName, true, EpdFontFamily::BOLD);
+                    x + (w - renderer.getTextWidth(NOTOSANS_18_FONT_ID, fontName, EpdFontFamily::BOLD)) / 2, fontNameY,
+                    fontName, true, EpdFontFamily::BOLD);
 
   // ── Thin separator between zones ──
   renderer.drawLine(x + 60, 250, x + w - 60, 250, true);
@@ -399,8 +404,7 @@ void EpubReaderMenuActivity::renderQuickSettings(int x, int /*y*/, int w, int /*
   renderer.drawRoundedRect(boxX, dmY, halfBoxW, dmH, 1, radius, true);
   const int dmMid = dmY + dmH / 2;
   // Label small
-  renderer.drawText(SMALL_FONT_ID,
-                    boxX + (halfBoxW - renderer.getTextWidth(SMALL_FONT_ID, "Dark Mode")) / 2,
+  renderer.drawText(SMALL_FONT_ID, boxX + (halfBoxW - renderer.getTextWidth(SMALL_FONT_ID, "Dark Mode")) / 2,
                     dmMid - 22, "Dark Mode", true);
   // Value bold
   const char* darkVal = SETTINGS.readerDarkMode ? I18N.get(StrId::STR_STATE_ON) : I18N.get(StrId::STR_STATE_OFF);
@@ -411,23 +415,21 @@ void EpubReaderMenuActivity::renderQuickSettings(int x, int /*y*/, int w, int /*
   // Dictionary box (right)
   const int orBoxX = boxX + halfBoxW + 10;
   renderer.drawRoundedRect(orBoxX, dmY, halfBoxW, dmH, 1, radius, true);
-  renderer.drawText(SMALL_FONT_ID,
-                    orBoxX + (halfBoxW - renderer.getTextWidth(SMALL_FONT_ID, "Dictionary")) / 2,
+  renderer.drawText(SMALL_FONT_ID, orBoxX + (halfBoxW - renderer.getTextWidth(SMALL_FONT_ID, "Dictionary")) / 2,
                     dmMid - 10, "Dictionary", true);
 
   // ══ Footer ══
   const char* moreHint = "More >";
-  renderer.drawText(SMALL_FONT_ID,
-                    x + (w - renderer.getTextWidth(SMALL_FONT_ID, moreHint)) / 2,
-                    dmY + dmH + 15, moreHint, true);
+  renderer.drawText(SMALL_FONT_ID, x + (w - renderer.getTextWidth(SMALL_FONT_ID, moreHint)) / 2, dmY + dmH + 15,
+                    moreHint, true);
 }
 
 // ══ Full Menu Screen (traditional list) ══
 void EpubReaderMenuActivity::renderFullMenu(int x, int y, int w, int h) const {
   // Title
   renderer.drawText(UI_12_FONT_ID,
-                    x + (w - renderer.getTextWidth(UI_12_FONT_ID, "More Settings", EpdFontFamily::BOLD)) / 2,
-                    y + 12, "More Settings", true, EpdFontFamily::BOLD);
+                    x + (w - renderer.getTextWidth(UI_12_FONT_ID, "More Settings", EpdFontFamily::BOLD)) / 2, y + 12,
+                    "More Settings", true, EpdFontFamily::BOLD);
 
   const int startY = y + 50;
   constexpr int lineHeight = 30;
@@ -440,9 +442,8 @@ void EpubReaderMenuActivity::renderFullMenu(int x, int y, int w, int h) const {
       renderer.fillRect(x, displayY, w - 1, lineHeight, true);
     }
 
-    const char* label = (fullMenuItems[i].action == MenuAction::BACKGROUND_TEXTURE)
-                             ? "Background"
-                             : I18N.get(fullMenuItems[i].labelId);
+    const char* label =
+        (fullMenuItems[i].action == MenuAction::BACKGROUND_TEXTURE) ? "Background" : I18N.get(fullMenuItems[i].labelId);
     renderer.drawText(UI_10_FONT_ID, x + 20, displayY, label, !isSelected);
 
     const char* value = getItemValue(fullMenuItems[i].action);

@@ -4,8 +4,8 @@
 
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
-#include "components/themes/modern/ModernTheme.h"
 #include "components/UITheme.h"
+#include "components/themes/modern/ModernTheme.h"
 #include "fontIds.h"
 
 namespace {
@@ -62,8 +62,7 @@ const char* const KeyboardEntryActivity::englishKeysShift[NUM_ROWS][KEYS_PER_ROW
     {"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "{", "}", "|"},
     {"A", "S", "D", "F", "G", "H", "J", "K", "L", ":", "\""},
     {"Z", "X", "C", "V", "B", "N", "M", "<", ">", "?"},
-    {}
-};
+    {}};
 
 const int KeyboardEntryActivity::englishRowLengths[NUM_ROWS] = {13, 13, 11, 10, 11};
 
@@ -73,41 +72,33 @@ const int KeyboardEntryActivity::englishRowLengths[NUM_ROWS] = {13, 13, 11, 10, 
 
 const char* const KeyboardEntryActivity::thaiKeysKed[NUM_ROWS][KEYS_PER_ROW] = {
     // Number row: _ ๅ / - ภ ถ ุ ึ ค ต จ ข ช
-    {"_", "\xe0\xb9\x85", "/", "-", "\xe0\xb8\xa0", "\xe0\xb8\x96", "\xe0\xb8\xb8",
-     "\xe0\xb8\xb6", "\xe0\xb8\x84", "\xe0\xb8\x95", "\xe0\xb8\x88", "\xe0\xb8\x82",
-     "\xe0\xb8\x8a"},
+    {"_", "\xe0\xb9\x85", "/", "-", "\xe0\xb8\xa0", "\xe0\xb8\x96", "\xe0\xb8\xb8", "\xe0\xb8\xb6", "\xe0\xb8\x84",
+     "\xe0\xb8\x95", "\xe0\xb8\x88", "\xe0\xb8\x82", "\xe0\xb8\x8a"},
     // Q row: ๆ ไ ำ พ ะ ั ี ร น ย บ ล ฃ
-    {"\xe0\xb9\x86", "\xe0\xb9\x84", "\xe0\xb8\xb3", "\xe0\xb8\x9e", "\xe0\xb8\xb0",
-     "\xe0\xb8\xb1", "\xe0\xb8\xb5", "\xe0\xb8\xa3", "\xe0\xb8\x99", "\xe0\xb8\xa2",
-     "\xe0\xb8\x9a", "\xe0\xb8\xa5", "\xe0\xb8\x83"},
+    {"\xe0\xb9\x86", "\xe0\xb9\x84", "\xe0\xb8\xb3", "\xe0\xb8\x9e", "\xe0\xb8\xb0", "\xe0\xb8\xb1", "\xe0\xb8\xb5",
+     "\xe0\xb8\xa3", "\xe0\xb8\x99", "\xe0\xb8\xa2", "\xe0\xb8\x9a", "\xe0\xb8\xa5", "\xe0\xb8\x83"},
     // A row: ฟ ห ก ด เ ้ ่ า ส ว ง
-    {"\xe0\xb8\x9f", "\xe0\xb8\xab", "\xe0\xb8\x81", "\xe0\xb8\x94", "\xe0\xb9\x80",
-     "\xe0\xb9\x89", "\xe0\xb9\x88", "\xe0\xb8\xb2", "\xe0\xb8\xaa", "\xe0\xb8\xa7",
-     "\xe0\xb8\x87"},
+    {"\xe0\xb8\x9f", "\xe0\xb8\xab", "\xe0\xb8\x81", "\xe0\xb8\x94", "\xe0\xb9\x80", "\xe0\xb9\x89", "\xe0\xb9\x88",
+     "\xe0\xb8\xb2", "\xe0\xb8\xaa", "\xe0\xb8\xa7", "\xe0\xb8\x87"},
     // Z row: ผ ป แ อ ิ ื ท ม ใ ฝ
-    {"\xe0\xb8\x9c", "\xe0\xb8\x9b", "\xe0\xb9\x81", "\xe0\xb8\xad", "\xe0\xb8\xb4",
-     "\xe0\xb8\xb7", "\xe0\xb8\x97", "\xe0\xb8\xa1", "\xe0\xb9\x83", "\xe0\xb8\x9d"},
-    {}
-};
+    {"\xe0\xb8\x9c", "\xe0\xb8\x9b", "\xe0\xb9\x81", "\xe0\xb8\xad", "\xe0\xb8\xb4", "\xe0\xb8\xb7", "\xe0\xb8\x97",
+     "\xe0\xb8\xa1", "\xe0\xb9\x83", "\xe0\xb8\x9d"},
+    {}};
 
 const char* const KeyboardEntryActivity::thaiKeysKedShift[NUM_ROWS][KEYS_PER_ROW] = {
     // Shift number row: % + ๑ ๒ ๓ ๔ ู ฿ ๕ ๖ ๗ ๘ ๙
-    {"%", "+", "\xe0\xb9\x91", "\xe0\xb9\x92", "\xe0\xb9\x93", "\xe0\xb9\x94",
-     "\xe0\xb8\xb9", "\xe0\xb8\xbf", "\xe0\xb9\x95", "\xe0\xb9\x96", "\xe0\xb9\x97",
-     "\xe0\xb9\x98", "\xe0\xb9\x99"},
+    {"%", "+", "\xe0\xb9\x91", "\xe0\xb9\x92", "\xe0\xb9\x93", "\xe0\xb9\x94", "\xe0\xb8\xb9", "\xe0\xb8\xbf",
+     "\xe0\xb9\x95", "\xe0\xb9\x96", "\xe0\xb9\x97", "\xe0\xb9\x98", "\xe0\xb9\x99"},
     // Shift Q row: ๐ " ฎ ฑ ธ ํ ๊ ณ ฯ ญ ฐ , ฅ
-    {"\xe0\xb9\x90", "\"", "\xe0\xb8\x8e", "\xe0\xb8\x91", "\xe0\xb8\x98",
-     "\xe0\xb9\x8d", "\xe0\xb9\x8a", "\xe0\xb8\x93", "\xe0\xb8\xaf", "\xe0\xb8\x8d",
-     "\xe0\xb8\x90", ",", "\xe0\xb8\x85"},
+    {"\xe0\xb9\x90", "\"", "\xe0\xb8\x8e", "\xe0\xb8\x91", "\xe0\xb8\x98", "\xe0\xb9\x8d", "\xe0\xb9\x8a",
+     "\xe0\xb8\x93", "\xe0\xb8\xaf", "\xe0\xb8\x8d", "\xe0\xb8\x90", ",", "\xe0\xb8\x85"},
     // Shift A row: ฤ ฆ ฏ โ ฌ ็ ๋ ษ ศ ซ .
-    {"\xe0\xb8\xa4", "\xe0\xb8\x86", "\xe0\xb8\x8f", "\xe0\xb9\x82", "\xe0\xb8\x8c",
-     "\xe0\xb9\x87", "\xe0\xb9\x8b", "\xe0\xb8\xa9", "\xe0\xb8\xa8", "\xe0\xb8\x8b",
-     "."},
+    {"\xe0\xb8\xa4", "\xe0\xb8\x86", "\xe0\xb8\x8f", "\xe0\xb9\x82", "\xe0\xb8\x8c", "\xe0\xb9\x87", "\xe0\xb9\x8b",
+     "\xe0\xb8\xa9", "\xe0\xb8\xa8", "\xe0\xb8\x8b", "."},
     // Shift Z row: ( ) ฉ ฮ ฺ ์ ? ฒ ฬ ฦ
-    {"(", ")", "\xe0\xb8\x89", "\xe0\xb8\xae", "\xe0\xb8\xba", "\xe0\xb9\x8c",
-     "?", "\xe0\xb8\x92", "\xe0\xb8\xac", "\xe0\xb8\xa6"},
-    {}
-};
+    {"(", ")", "\xe0\xb8\x89", "\xe0\xb8\xae", "\xe0\xb8\xba", "\xe0\xb9\x8c", "?", "\xe0\xb8\x92", "\xe0\xb8\xac",
+     "\xe0\xb8\xa6"},
+    {}};
 
 const int KeyboardEntryActivity::thaiRowLengths[NUM_ROWS] = {13, 13, 11, 10, 11};
 
@@ -290,8 +281,7 @@ void KeyboardEntryActivity::loop() {
     if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
       shiftState = shiftState ? 0 : 1;
       requestUpdate();
-    } else if (mappedInput.isPressed(MappedInputManager::Button::Back) &&
-               mappedInput.getHeldTime() >= LONG_PRESS_MS) {
+    } else if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= LONG_PRESS_MS) {
       onCancel();
     }
   } else {
@@ -381,8 +371,7 @@ void KeyboardEntryActivity::render(RenderLock&&) {
         currentX += spaceXWidth;
       } else {
         // English: shift key + space bar
-        const bool shiftSelected =
-            (selectedRow == SPECIAL_ROW && selectedCol >= SHIFT_COL && selectedCol < SPACE_COL);
+        const bool shiftSelected = (selectedRow == SPECIAL_ROW && selectedCol >= SHIFT_COL && selectedCol < SPACE_COL);
         const int shiftXWidth = (SPACE_COL - SHIFT_COL) * (keyWidth + keySpacing);
         GUI.drawKeyboardKey(renderer, Rect{currentX, rowY, shiftXWidth, keyHeight}, shiftString[shiftState],
                             shiftSelected);

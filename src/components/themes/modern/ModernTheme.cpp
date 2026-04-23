@@ -1,11 +1,11 @@
 #include "ModernTheme.h"
 
-#include <algorithm>
 #include <GfxRenderer.h>
 #include <HalPowerManager.h>
 #include <HalStorage.h>
 #include <I18n.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -209,8 +209,8 @@ void ModernTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const ch
     rightSpace += rightLabelWidth + hPaddingInSelection;
   }
 
-  auto truncatedLabel = renderer.truncatedText(UI_10_FONT_ID, label,
-                                               rect.width - ModernMetrics::values.contentSidePadding - rightSpace);
+  auto truncatedLabel =
+      renderer.truncatedText(UI_10_FONT_ID, label, rect.width - ModernMetrics::values.contentSidePadding - rightSpace);
   renderer.drawText(UI_10_FONT_ID, currentX, rect.y + 6, truncatedLabel.c_str(), true, EpdFontFamily::REGULAR);
   renderer.drawLine(rect.x, rect.y + rect.height - 1, rect.x + rect.width - 1, rect.y + rect.height - 1, true);
 }
@@ -235,17 +235,16 @@ void ModernTheme::drawTabBar(const GfxRenderer& renderer, Rect rect, const std::
     if (tab.selected) {
       if (selected) {
         // Focused + selected: Black pill
-        renderer.fillRoundedRect(currentX, rect.y + pillInsetTop, pillWidth, rect.height - pillInsetTop - pillInsetBottom,
-                                 cornerRadius, Color::Black);
+        renderer.fillRoundedRect(currentX, rect.y + pillInsetTop, pillWidth,
+                                 rect.height - pillInsetTop - pillInsetBottom, cornerRadius, Color::Black);
       } else {
         // Not focused but selected: Black pill
-        renderer.fillRoundedRect(currentX, rect.y + pillInsetTop, pillWidth, rect.height - pillInsetTop - pillInsetBottom,
-                                 cornerRadius, Color::Black);
+        renderer.fillRoundedRect(currentX, rect.y + pillInsetTop, pillWidth,
+                                 rect.height - pillInsetTop - pillInsetBottom, cornerRadius, Color::Black);
       }
     }
 
-    renderer.drawText(UI_10_FONT_ID, currentX + pillPadX, textY, tab.label, !tab.selected,
-                      EpdFontFamily::REGULAR);
+    renderer.drawText(UI_10_FONT_ID, currentX + pillPadX, textY, tab.label, !tab.selected, EpdFontFamily::REGULAR);
 
     currentX += pillWidth + ModernMetrics::values.tabSpacing;
   }
@@ -411,10 +410,10 @@ void ModernTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const
   const int screenWidth = renderer.getScreenWidth();
 
   // Mockup: .btn-hints { padding: 3px 8px; gap: 3px } → ×2 = 6px 16px, gap 6px
-  constexpr int hPad = 16;       // Mockup: 8px CSS → 16px
-  constexpr int vPad = 6;        // Mockup: 3px CSS → 6px
-  constexpr int btnGap = 6;      // Mockup: 3px CSS → 6px
-  constexpr int btnRadius = 6;   // Mockup: 3px CSS → 6px
+  constexpr int hPad = 16;      // Mockup: 8px CSS → 16px
+  constexpr int vPad = 6;       // Mockup: 3px CSS → 6px
+  constexpr int btnGap = 6;     // Mockup: 3px CSS → 6px
+  constexpr int btnRadius = 6;  // Mockup: 3px CSS → 6px
   constexpr int areaHeight = ModernMetrics::values.buttonHintsHeight;
   constexpr int smallBtnH = 15;
 
@@ -490,8 +489,8 @@ void ModernTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCou
   const int availablePerRow = (rect.height - (rows - 1) * rowGap) / rows;
   // Expand up to 1.5x the base menu row height to fill space without looking sparse
   constexpr int maxRowHeight = ModernMetrics::values.menuRowHeight * 3 / 2;
-  const int rowHeight = std::min(std::max(availablePerRow, static_cast<int>(ModernMetrics::values.menuRowHeight)),
-                                 maxRowHeight);
+  const int rowHeight =
+      std::min(std::max(availablePerRow, static_cast<int>(ModernMetrics::values.menuRowHeight)), maxRowHeight);
 
   // Center grid vertically within the available rect
   const int totalGridHeight = rows * rowHeight + (rows - 1) * rowGap;
@@ -689,12 +688,12 @@ void ModernTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const st
       constexpr int sideInset = 64;
       const int sideLeftAnchorX = rect.x + sideInset + sideCoverW / 2;
       const int sideRightAnchorX = rect.x + rect.width - sideInset - sideCoverW / 2;
-      drawCoverAt((centerIndex - 1 + bookCount) % bookCount, sideLeftAnchorX, sideY, sideCoverH, sideCoverW,
-                  sideCoverH, sideCoverSourceH, coverCardOutline);
+      drawCoverAt((centerIndex - 1 + bookCount) % bookCount, sideLeftAnchorX, sideY, sideCoverH, sideCoverW, sideCoverH,
+                  sideCoverSourceH, coverCardOutline);
       drawCoverAt((centerIndex + 1) % bookCount, sideRightAnchorX, sideY, sideCoverH, sideCoverW, sideCoverH,
                   sideCoverSourceH, coverCardOutline);
     }
-  } // end !bufferRestored
+  }  // end !bufferRestored
 
   // --- LAYER 3: CENTER cover (on top, with white border) ---
   {
@@ -820,8 +819,7 @@ void ModernTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const st
                                inverted ? Color::DarkGray : Color::LightGray);
       // Fill: White when selected (inverted), Black when normal
       const int fillWidth = std::max(barHeight, barMaxWidth * book.progressPercent / 100);
-      renderer.fillRoundedRect(barX, barY, fillWidth, barHeight, barHeight / 2,
-                               inverted ? Color::White : Color::Black);
+      renderer.fillRoundedRect(barX, barY, fillWidth, barHeight, barHeight / 2, inverted ? Color::White : Color::Black);
       const int pctTextWidth = renderer.getTextWidth(SMALL_FONT_ID, pctBuf);
       const int pctTextX = barX + barMaxWidth + percentGap + (maxPctWidth - pctTextWidth);
       const int pctTextY = barY + (barHeight - renderer.getLineHeight(SMALL_FONT_ID)) / 2;
@@ -838,8 +836,7 @@ void ModernTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const st
     const int dotY = rect.y + carouselH + dotsOffset;
     const int maxDots = std::min(bookCount, 7);
     const bool previewsRight = SETTINGS.previewDirection == CrossPointSettings::PREVIEW_RIGHT;
-    const int activeDotIndex =
-        previewsRight ? (maxDots - 1) - (centerIndex % maxDots) : (centerIndex % maxDots);
+    const int activeDotIndex = previewsRight ? (maxDots - 1) - (centerIndex % maxDots) : (centerIndex % maxDots);
     const int totalDotsWidth = (maxDots - 1) * (dotDiam + dotGap) + activeDotW;
     int dotX = rect.x + (rect.width - totalDotsWidth) / 2;
 

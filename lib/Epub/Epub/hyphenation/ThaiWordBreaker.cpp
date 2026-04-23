@@ -79,8 +79,7 @@ std::vector<bool> buildBoundaryFlags(const std::vector<CodepointInfo>& cps) {
     // Prevent breaking before a consonant followed by การันต์ (์).
     // Such consonants are silent finals belonging to the preceding syllable
     // (e.g. "ไพรซ์" must not split as "ไพร/ซ์").
-    if (boundaries[idx] && isThaiConsonant(cps[idx].value) && idx + 1 < cps.size() &&
-        cps[idx + 1].value == 0x0E4C) {
+    if (boundaries[idx] && isThaiConsonant(cps[idx].value) && idx + 1 < cps.size() && cps[idx + 1].value == 0x0E4C) {
       boundaries[idx] = false;
     }
   }
@@ -100,8 +99,7 @@ size_t nextBoundaryIndex(const std::vector<bool>& boundaries, const size_t from)
 // Check user dictionary words starting at position `start` in the codepoint array.
 // User dictionary words are stored as uint16_t codepoint sequences for compact matching.
 void collectUserDictMatchEnds(const std::vector<CodepointInfo>& cps, const size_t start,
-                              const std::vector<bool>& boundaries,
-                              const std::vector<std::vector<uint16_t>>& userDict,
+                              const std::vector<bool>& boundaries, const std::vector<std::vector<uint16_t>>& userDict,
                               std::vector<MatchEdge>& outMatches) {
   if (userDict.empty()) return;
 

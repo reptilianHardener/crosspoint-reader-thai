@@ -1,9 +1,8 @@
 #include "BleTimeSync.h"
 
+#include <Logging.h>
 #include <NimBLEDevice.h>
 #include <sys/time.h>
-
-#include <Logging.h>
 
 // Custom service & characteristic UUIDs
 static constexpr const char* TIME_SERVICE_UUID = "cfa8a100-7b98-4044-a656-580f213d8cf0";
