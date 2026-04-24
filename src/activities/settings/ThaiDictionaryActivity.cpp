@@ -4,6 +4,8 @@
 #include <I18n.h>
 #include <Logging.h>
 
+#include <algorithm>
+
 #include "Epub/hyphenation/ThaiWordBreaker.h"
 #include "MappedInputManager.h"
 #include "activities/util/KeyboardEntryActivity.h"
@@ -109,9 +111,7 @@ void ThaiDictionaryActivity::addWord() {
     if (kr.text.empty()) return;
 
     // Avoid duplicates
-    for (const auto& w : words) {
-      if (w == kr.text) return;
-    }
+    if (std::any_of(words.begin(), words.end(), [&](const auto& w) { return w == kr.text; })) return;
 
     words.push_back(kr.text);
     dirty = true;
