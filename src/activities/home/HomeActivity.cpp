@@ -455,6 +455,14 @@ void HomeActivity::render(RenderLock&&) {
 
   // Always use fast refresh for minimal flicker (1 flash only).
   renderer.displayBuffer();
+
+  if (!firstRenderDone) {
+    firstRenderDone = true;
+    requestUpdate();
+  } else if (!recentsLoaded && !recentsLoading) {
+    recentsLoading = true;
+    loadRecentCovers(metrics.homeCoverHeight);
+  }
 }
 
 void HomeActivity::onSelectBook(const std::string& path) { activityManager.goToReader(path); }
