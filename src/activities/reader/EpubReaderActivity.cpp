@@ -666,9 +666,6 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     LOG_DBG("ERS", "Loading file: %s, index: %d", filepath.c_str(), currentSpineIndex);
     section = std::unique_ptr<Section>(new Section(epub, currentSpineIndex, renderer));
 
-    const uint16_t viewportWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
-    const uint16_t viewportHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
-
     const bool forceBold = SETTINGS.readerBoldText != 0;
     const auto dictCount = static_cast<uint8_t>(ThaiWordBreaker::getUserDictWords().size());
     if (!section->loadSectionFile(getEffectiveFontId(), SETTINGS.getReaderLineCompression(),

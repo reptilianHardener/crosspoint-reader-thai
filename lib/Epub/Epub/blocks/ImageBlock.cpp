@@ -57,7 +57,7 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
 
   // Read and render row by row to minimize memory usage
   const int bytesPerRow = (cachedWidth + 3) / 4;  // 2 bits per pixel, 4 pixels per byte
-  uint8_t* rowBuffer = (uint8_t*)malloc(bytesPerRow);
+  uint8_t* rowBuffer = reinterpret_cast<uint8_t*>(malloc(bytesPerRow));
   if (!rowBuffer) {
     LOG_ERR("IMG", "Failed to allocate row buffer");
     return false;

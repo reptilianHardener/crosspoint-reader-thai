@@ -609,6 +609,7 @@ bool CssParser::loadFromStream(FsFile& source) {
 // Style resolution
 
 CssStyle CssParser::resolveStyle(const std::string& tagName, const std::string& classAttr) const {
+  // cppcheck-suppress variableScope
   static bool lowHeapWarningLogged = false;
   if (ESP.getFreeHeap() < MIN_FREE_HEAP_FOR_CSS) {
     if (!lowHeapWarningLogged) {
@@ -685,8 +686,8 @@ bool CssParser::saveToCache() const {
   file.write(CssParser::CSS_CACHE_VERSION);
 
   // Write rule count
-  const auto ruleCount = static_cast<uint16_t>(rulesBySelector_.size());
-  file.write(reinterpret_cast<const uint8_t*>(&ruleCount), sizeof(ruleCount));
+  const auto numRules = static_cast<uint16_t>(rulesBySelector_.size());
+  file.write(reinterpret_cast<const uint8_t*>(&numRules), sizeof(numRules));
 
   // Write each rule: selector string + CssStyle fields
   for (const auto& pair : rulesBySelector_) {
@@ -742,7 +743,7 @@ bool CssParser::saveToCache() const {
     file.write(reinterpret_cast<const uint8_t*>(&definedBits), sizeof(definedBits));
   }
 
-  LOG_DBG("CSS", "Saved %u rules to cache", ruleCount);
+  LOG_DBG("CSS", "Saved %u rules to cache", numRules);
   return true;
 }
 
@@ -771,13 +772,13 @@ bool CssParser::loadFromCache() {
   }
 
   // Read rule count
-  uint16_t ruleCount = 0;
-  if (file.read(&ruleCount, sizeof(ruleCount)) != sizeof(ruleCount)) {
+  uint16_t numRules = 0;
+  if (file.read(&numRules, sizeof(numRules)) != sizeof(numRules)) {
     return false;
   }
 
-  if (ruleCount > MAX_RULES) {
-    LOG_DBG("CSS", "Invalid cache rule count (%u > %zu)", ruleCount, MAX_RULES);
+  if (numRules > MAX_RULES) {
+    LOG_DBG("CSS", "Invalid cache rule count (%u > %zu)", numRules, MAX_RULES);
     rulesBySelector_.clear();
     return false;
   }
@@ -792,7 +793,7 @@ bool CssParser::loadFromCache() {
       4 * sizeof(uint8_t) + (CSS_LENGTH_FIELD_COUNT * CSS_LENGTH_BYTES) + sizeof(uint8_t) + sizeof(uint16_t);
 
   // Read each rule
-  for (uint16_t i = 0; i < ruleCount; ++i) {
+  for (uint16_t i = 0; i < numRules; ++i) {
     // Read selector string
     uint16_t selectorLen = 0;
     if (!hasRemainingBytes(sizeof(selectorLen))) {
@@ -906,6 +907,6 @@ bool CssParser::loadFromCache() {
     rulesBySelector_[selector] = style;
   }
 
-  LOG_DBG("CSS", "Loaded %u rules from cache", ruleCount);
+  LOG_DBG("CSS", "Loaded %u rules from cache", numRules);
   return true;
 }
