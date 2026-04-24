@@ -9,6 +9,7 @@
 #include "util/ButtonNavigator.h"
 
 enum class KeyboardLayout { English, Thai };
+enum class InputType { Text, Password, Url };
 
 /**
  * Reusable keyboard entry activity for text input.
@@ -19,13 +20,13 @@ class KeyboardEntryActivity : public Activity {
  public:
   explicit KeyboardEntryActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                  std::string title = "Enter Text", std::string initialText = "",
-                                 const size_t maxLength = 0, const bool isPassword = false,
+                                 const size_t maxLength = 0, InputType inputType = InputType::Text,
                                  const KeyboardLayout initialLayout = KeyboardLayout::English)
       : Activity("KeyboardEntry", renderer, mappedInput),
         title(std::move(title)),
         text(std::move(initialText)),
         maxLength(maxLength),
-        isPassword(isPassword),
+        isPassword(inputType == InputType::Password),
         layout(initialLayout) {}
 
   void onEnter() override;
