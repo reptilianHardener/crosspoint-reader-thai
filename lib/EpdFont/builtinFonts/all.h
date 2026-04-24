@@ -1,15 +1,5 @@
 #pragma once
 
-// CloudLoop
-#include <builtinFonts/cloudloop_8_regular.h>
-#include <builtinFonts/cloudloop_10_regular.h>
-#include <builtinFonts/cloudloop_12_regular.h>
-#include <builtinFonts/cloudloop_14_regular.h>
-#include <builtinFonts/cloudloop_16_regular.h>
-#include <builtinFonts/cloudloop_18_regular.h>
-#include <builtinFonts/cloudloop_20_regular.h>
-#include <builtinFonts/cloudloop_36_regular.h>
-
 // Bookerly (Latin serif)
 #include <builtinFonts/bookerly_12_regular.h>
 #include <builtinFonts/bookerly_12_bold.h>
@@ -22,35 +12,35 @@
 #include <builtinFonts/bookerly_20_regular.h>
 #include <builtinFonts/bookerly_20_bold.h>
 
-// Noto Serif (Latin serif + Thai via NotoSansThaiLooped font stack)
-#include <builtinFonts/notoserif_12_regular.h>
-#include <builtinFonts/notoserif_12_bold.h>
-#include <builtinFonts/notoserif_14_regular.h>
-#include <builtinFonts/notoserif_14_bold.h>
-#include <builtinFonts/notoserif_16_regular.h>
-#include <builtinFonts/notoserif_16_bold.h>
-#include <builtinFonts/notoserif_18_regular.h>
-#include <builtinFonts/notoserif_18_bold.h>
-#include <builtinFonts/notoserif_20_regular.h>
-#include <builtinFonts/notoserif_20_bold.h>
+// Noto Sans (Latin sans-serif reader font)
+#include <builtinFonts/notosans_12_regular.h>
+#include <builtinFonts/notosans_12_bold.h>
+#include <builtinFonts/notosans_14_regular.h>
+#include <builtinFonts/notosans_14_bold.h>
+#include <builtinFonts/notosans_16_regular.h>
+#include <builtinFonts/notosans_16_bold.h>
+#include <builtinFonts/notosans_18_regular.h>
+#include <builtinFonts/notosans_18_bold.h>
 
-// Noto Sans SC (CJK)
+// Noto Sans Thai Looped (Thai + Latin — reader font, UI, and Thai fallback for Bookerly/NotoSans)
+#include <builtinFonts/notosansthailooped_8_regular.h>
+#include <builtinFonts/notosansthailooped_10_regular.h>
+#include <builtinFonts/notosansthailooped_10_bold.h>
+#include <builtinFonts/notosansthailooped_12_regular.h>
+#include <builtinFonts/notosansthailooped_12_bold.h>
+#include <builtinFonts/notosansthailooped_14_regular.h>
+#include <builtinFonts/notosansthailooped_14_bold.h>
+#include <builtinFonts/notosansthailooped_16_regular.h>
+#include <builtinFonts/notosansthailooped_16_bold.h>
+#include <builtinFonts/notosansthailooped_18_regular.h>
+#include <builtinFonts/notosansthailooped_18_bold.h>
+#include <builtinFonts/notosansthailooped_20_regular.h>
+#include <builtinFonts/notosansthailooped_20_bold.h>
+#include <builtinFonts/notosansthailooped_36_bold.h>
+
+// Noto Sans SC (CJK — UI fallback for Chinese/Japanese/Korean characters)
 #include <builtinFonts/notosanssc_8_regular.h>
 #include <builtinFonts/notosanssc_10_regular.h>
 #include <builtinFonts/notosanssc_10_bold.h>
 #include <builtinFonts/notosanssc_12_regular.h>
 #include <builtinFonts/notosanssc_12_bold.h>
-
-// Bai Jamjuree (Thai + Latin sans-serif)
-#include <builtinFonts/baijamjuree_8_regular.h>
-#include <builtinFonts/baijamjuree_10_regular.h>
-#include <builtinFonts/baijamjuree_12_regular.h>
-#include <builtinFonts/baijamjuree_12_bold.h>
-#include <builtinFonts/baijamjuree_14_regular.h>
-#include <builtinFonts/baijamjuree_14_bold.h>
-#include <builtinFonts/baijamjuree_16_regular.h>
-#include <builtinFonts/baijamjuree_16_bold.h>
-#include <builtinFonts/baijamjuree_18_regular.h>
-#include <builtinFonts/baijamjuree_18_bold.h>
-#include <builtinFonts/baijamjuree_20_regular.h>
-#include <builtinFonts/baijamjuree_20_bold.h>

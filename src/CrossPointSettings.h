@@ -99,7 +99,7 @@ class CrossPointSettings {
   enum SIDE_BUTTON_LAYOUT { PREV_NEXT = 0, NEXT_PREV = 1, SIDE_BUTTON_LAYOUT_COUNT };
 
   // Font family options (built-in fonts only; SD card fonts use sdFontFamilyName)
-  enum FONT_FAMILY { BAIJAMJUREE = 0, CLOUDLOOP = 1, BOOKERLY = 2, FONT_FAMILY_COUNT };
+  enum FONT_FAMILY { BOOKERLY = 0, NOTOSANS = 1, NOTOSANS_THAI_LOOPED = 2, FONT_FAMILY_COUNT };
   static constexpr uint8_t BUILTIN_FONT_COUNT = FONT_FAMILY_COUNT;
   // Reader font sizes are stored as actual point values.
   enum FONT_SIZE : uint8_t { FONT_12 = 12, FONT_14 = 14, FONT_16 = 16, FONT_18 = 18, FONT_20 = 20 };
@@ -178,7 +178,7 @@ class CrossPointSettings {
   uint8_t extraParagraphSpacing = 1;
   uint8_t textAntiAliasing = 1;
   // Short power button click behaviour
-  uint8_t shortPwrBtn = IGNORE;
+  uint8_t shortPwrBtn = SLEEP;
   // EPUB reading orientation settings
   // 0 = portrait (default), 1 = landscape clockwise, 2 = inverted, 3 = landscape counter-clockwise
   uint8_t orientation = PORTRAIT;
@@ -192,7 +192,7 @@ class CrossPointSettings {
   uint8_t frontButtonLeft = FRONT_HW_LEFT;
   uint8_t frontButtonRight = FRONT_HW_RIGHT;
   // Reader font settings
-  uint8_t fontFamily = BAIJAMJUREE;
+  uint8_t fontFamily = BOOKERLY;
   uint8_t fontSize = FONT_14;
   uint8_t lineSpacing = NORMAL;
   uint8_t paragraphAlignment = JUSTIFIED;

@@ -66,7 +66,16 @@ void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
 }
 
 uint8_t migrateLegacyFontFamily(const uint8_t legacyValue) {
-  return legacyValue == 3 ? CrossPointSettings::CLOUDLOOP : CrossPointSettings::BAIJAMJUREE;
+  // Old enum: BAIJAMJUREE=0, CLOUDLOOP=1, BOOKERLY=2
+  // New enum: BOOKERLY=0, NOTOSANS=1, NOTOSANS_THAI_LOOPED=2
+  switch (legacyValue) {
+    case 1:
+      return CrossPointSettings::NOTOSANS;
+    case 2:
+      return CrossPointSettings::BOOKERLY;
+    default:
+      return CrossPointSettings::BOOKERLY;
+  }
 }
 
 uint8_t migrateLegacyFontSize(const uint8_t legacyValue) {
