@@ -143,7 +143,7 @@ bool BookMetadataCache::buildBookBin(const std::string& epubPath, const BookMeta
   for (int i = 0; i < spineCount; i++) {
     uint32_t pos = spineFile.position();
     static_cast<void>(readSpineEntry(spineFile));
-    serialization::writePod(bookFile, pos + lutOffset + lutSize);
+    serialization::writePod(bookFile, pos + computedLutOffset + lutSize);
   }
 
   // Loop through toc entries, writing LUT positions
@@ -151,7 +151,7 @@ bool BookMetadataCache::buildBookBin(const std::string& epubPath, const BookMeta
   for (int i = 0; i < tocCount; i++) {
     uint32_t pos = tocFile.position();
     static_cast<void>(readTocEntry(tocFile));
-    serialization::writePod(bookFile, pos + lutOffset + lutSize + static_cast<uint32_t>(spineFile.position()));
+    serialization::writePod(bookFile, pos + computedLutOffset + lutSize + static_cast<uint32_t>(spineFile.position()));
   }
 
   // LUTs complete
