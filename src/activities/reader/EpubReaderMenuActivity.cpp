@@ -461,14 +461,14 @@ const char* EpubReaderMenuActivity::getItemValue(MenuAction action) const {
     case MenuAction::FONT_FAMILY: {
       StrId label;
       switch (pendingFontFamily) {
-        case CrossPointSettings::CLOUDLOOP:
-          label = StrId::STR_CLOUD_LOOP;
-          break;
         case CrossPointSettings::BOOKERLY:
           label = StrId::STR_BOOKERLY;
           break;
-        default:  // BAIJAMJUREE
-          label = StrId::STR_BAI_JAMJUREE;
+        case CrossPointSettings::NOTOSANS:
+          label = StrId::STR_NOTO_SANS;
+          break;
+        default:
+          label = StrId::STR_NOTO_SANS_THAI_LOOPED;
           break;
       }
       return I18N.get(label);

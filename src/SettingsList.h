@@ -41,7 +41,7 @@ inline const std::vector<SettingInfo>& getSettingsList() {
 
       // --- Reader ---
       SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-                        {StrId::STR_BAI_JAMJUREE, StrId::STR_CLOUD_LOOP, StrId::STR_BOOKERLY}, "fontFamily",
+                        {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_NOTO_SANS_THAI_LOOPED}, "fontFamily",
                         StrId::STR_CAT_READER),
       SettingInfo::Value(
           StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
