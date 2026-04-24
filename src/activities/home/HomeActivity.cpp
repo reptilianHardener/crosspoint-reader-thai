@@ -69,7 +69,6 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
     thumbHeights[thumbCount++] = metrics.homeFarCoverHeight;
   }
 
-  bool anyGenerated = false;
   int progress = 0;
   for (RecentBook& book : recentBooks) {
     if (!book.coverBmpPath.empty()) {
@@ -105,8 +104,6 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
           if (!anySuccess) {
             RECENT_BOOKS.updateBook(book.path, book.title, book.author, "");
             book.coverBmpPath = "";
-          } else {
-            anyGenerated = true;
           }
         } else if (FsHelpers::hasXtcExtension(book.path)) {
           // Handle XTC file
@@ -126,8 +123,6 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
             if (!anySuccess) {
               RECENT_BOOKS.updateBook(book.path, book.title, book.author, "");
               book.coverBmpPath = "";
-            } else {
-              anyGenerated = true;
             }
           }
         }
@@ -168,7 +163,7 @@ void HomeActivity::onExit() {
 }
 
 bool HomeActivity::storeCoverBuffer() {
-  uint8_t* frameBuffer = renderer.getFrameBuffer();
+  const uint8_t* frameBuffer = renderer.getFrameBuffer();
   if (!frameBuffer) {
     return false;
   }
@@ -464,8 +459,6 @@ void HomeActivity::render(RenderLock&&) {
     loadRecentCovers(metrics.homeCoverHeight);
   }
 }
-
-void HomeActivity::onSelectBook(const std::string& path) { activityManager.goToReader(path); }
 
 void HomeActivity::onFileBrowserOpen() { activityManager.goToFileBrowser(); }
 

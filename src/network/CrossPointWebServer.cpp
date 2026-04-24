@@ -595,13 +595,13 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
     return;
   }
 
-  const HTTPUpload& upload = server->upload();
+  const HTTPUpload& httpUpload = server->upload();
 
-  if (upload.status == UPLOAD_FILE_START) {
+  if (httpUpload.status == UPLOAD_FILE_START) {
     // Reset watchdog - this is the critical 1% crash point
     esp_task_wdt_reset();
 
-    state.fileName = upload.filename;
+    state.fileName = httpUpload.filename;
     state.size = 0;
     state.success = false;
     state.error = "";
@@ -654,12 +654,12 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
     esp_task_wdt_reset();
 
     LOG_DBG("WEB", "[UPLOAD] File created successfully: %s", filePath.c_str());
-  } else if (upload.status == UPLOAD_FILE_WRITE) {
+  } else if (httpUpload.status == UPLOAD_FILE_WRITE) {
     if (state.file && state.error.isEmpty()) {
       // Buffer incoming data and flush when buffer is full
       // This reduces SD card write operations and improves throughput
-      const uint8_t* data = upload.buf;
-      size_t remaining = upload.currentSize;
+      const uint8_t* data = httpUpload.buf;
+      size_t remaining = httpUpload.currentSize;
 
       while (remaining > 0) {
         const size_t space = UploadState::UPLOAD_BUFFER_SIZE - state.bufferPos;
@@ -680,7 +680,7 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
         }
       }
 
-      state.size += upload.currentSize;
+      state.size += httpUpload.currentSize;
 
       // Log progress every 100KB
       if (state.size - lastLoggedSize >= 102400) {
@@ -691,7 +691,7 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
         lastLoggedSize = state.size;
       }
     }
-  } else if (upload.status == UPLOAD_FILE_END) {
+  } else if (httpUpload.status == UPLOAD_FILE_END) {
     if (state.file) {
       // Flush any remaining buffered data
       if (!flushUploadBuffer(state)) {
@@ -716,7 +716,7 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
         clearEpubCacheIfNeeded(filePath);
       }
     }
-  } else if (upload.status == UPLOAD_FILE_ABORTED) {
+  } else if (httpUpload.status == UPLOAD_FILE_ABORTED) {
     state.bufferPos = 0;  // Discard buffered data
     if (state.file) {
       state.file.close();
@@ -1398,7 +1398,7 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
 
     case WStype_TEXT: {
       // Parse control messages
-      String msg = String((char*)payload);
+      String msg = String(reinterpret_cast<char*>(payload));
       LOG_DBG("WS", "Text from client %u: %s", num, msg.c_str());
 
       if (msg.startsWith("START:")) {

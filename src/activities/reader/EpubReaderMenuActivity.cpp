@@ -329,7 +329,6 @@ static void drawStrokedText(GfxRenderer const& r, int fontId, int tx, int ty, co
 //   Front buttons (bottom) → Dark Mode / Orientation (Y=595 → Y=715)
 void EpubReaderMenuActivity::renderQuickSettings(int x, int /*y*/, int w, int /*h*/) const {
   const auto pageHeight = renderer.getScreenHeight();
-  constexpr int hintsH = 40;
   constexpr int pad = 20;
   constexpr int radius = 6;
   const int boxW = w - pad * 2;

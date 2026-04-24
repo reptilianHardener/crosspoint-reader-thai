@@ -25,7 +25,7 @@ std::string fallbackTitleFromPath(const std::string& path) {
   std::string title = slash == std::string::npos ? path : path.substr(slash + 1);
   auto dot = title.find_last_of('.');
   if (dot != std::string::npos) {
-    title = title.substr(0, dot);
+    title.resize(dot);
   }
   return title;
 }
@@ -231,14 +231,15 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap) const {
 }
 
 RecentBook SleepActivity::getCurrentSleepBookData() const {
-  for (const auto& book : RECENT_BOOKS.getBooks()) {
-    if (book.path == APP_STATE.openEpubPath) {
-      RecentBook result = book;
-      if (result.title.empty()) {
-        result.title = fallbackTitleFromPath(result.path);
-      }
-      return result;
+  const auto& books = RECENT_BOOKS.getBooks();
+  const auto it =
+      std::find_if(books.begin(), books.end(), [](const RecentBook& b) { return b.path == APP_STATE.openEpubPath; });
+  if (it != books.end()) {
+    RecentBook result = *it;
+    if (result.title.empty()) {
+      result.title = fallbackTitleFromPath(result.path);
     }
+    return result;
   }
 
   RecentBook result = RECENT_BOOKS.getDataFromBook(APP_STATE.openEpubPath);

@@ -41,11 +41,10 @@ const LanguageHyphenator* hyphenatorForLanguage(const std::string& langTag) {
   if (primary.empty()) return nullptr;
 
   // Normalize ISO 639-2 three-letter codes to two-letter equivalents.
-  for (const auto& mapping : kIso639Mappings) {
-    if (primary == mapping.iso639_2) {
-      primary = mapping.iso639_1;
-      break;
-    }
+  auto it = std::find_if(std::begin(kIso639Mappings), std::end(kIso639Mappings),
+                         [&primary](const auto& m) { return primary == m.iso639_2; });
+  if (it != std::end(kIso639Mappings)) {
+    primary = it->iso639_1;
   }
 
   return getLanguageHyphenatorForPrimaryTag(primary);
@@ -204,13 +203,8 @@ std::vector<Hyphenator::BreakInfo> Hyphenator::breakOffsets(const std::string& w
   const auto* hyphenator = cachedHyphenator_;
 
   // Detect apostrophe-like separators early; used by both branches below.
-  bool hasApostropheLikeSeparator = false;
-  for (const auto& cp : cps) {
-    if (isApostrophe(cp.value)) {
-      hasApostropheLikeSeparator = true;
-      break;
-    }
-  }
+  const bool hasApostropheLikeSeparator =
+      std::any_of(cps.begin(), cps.end(), [](const CodepointInfo& cp) { return isApostrophe(cp.value); });
 
   // Explicit hyphen markers (soft or hard) take precedence over language breaks.
   auto explicitBreakInfos = buildExplicitBreakInfos(cps);

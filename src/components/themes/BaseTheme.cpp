@@ -337,8 +337,6 @@ void BaseTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
 }
 
 void BaseTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const char* label, const char* rightLabel) const {
-  constexpr int underlineHeight = 2;  // Height of selection underline
-  constexpr int underlineGap = 4;     // Gap between text and underline
   constexpr int maxListValueWidth = 200;
 
   int currentX = rect.x + BaseMetrics::values.contentSidePadding;

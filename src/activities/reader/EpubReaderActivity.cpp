@@ -628,9 +628,6 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     LOG_DBG("ERS", "Loading file: %s, index: %d", filepath.c_str(), currentSpineIndex);
     section = std::unique_ptr<Section>(new Section(epub, currentSpineIndex, renderer));
 
-    const uint16_t viewportWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
-    const uint16_t viewportHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
-
     const bool forceBold = SETTINGS.readerBoldText != 0;
     const auto dictCount = static_cast<uint8_t>(ThaiWordBreaker::getUserDictWords().size());
     if (!section->loadSectionFile(getEffectiveFontId(), SETTINGS.getReaderLineCompression(),
@@ -783,6 +780,7 @@ void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportW
 }
 
 void EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageCount) {
+  if (!epub) return;
   FsFile f;
   if (Storage.openFileForWrite("ERS", epub->getCachePath() + "/progress.bin", f)) {
     uint8_t data[6];
@@ -796,7 +794,7 @@ void EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageC
     LOG_DBG("ERS", "Progress saved: Chapter %d, Page %d", spineIndex, currentPage);
 
     // Update reading progress percentage in recent books
-    if (epub && epub->getBookSize() > 0 && pageCount > 0) {
+    if (epub->getBookSize() > 0 && pageCount > 0) {
       const float chapterProgress = static_cast<float>(currentPage) / static_cast<float>(pageCount);
       const float pct = epub->calculateProgress(spineIndex, chapterProgress) * 100.0f;
       const uint8_t progressPercent = static_cast<uint8_t>(std::min(std::max(static_cast<int>(pct + 0.5f), 0), 100));

@@ -111,8 +111,6 @@ void KeyboardEntryActivity::onEnter() {
   requestUpdate();
 }
 
-void KeyboardEntryActivity::onExit() { Activity::onExit(); }
-
 // --- Key access ---
 
 const char* KeyboardEntryActivity::getKeyAt(const int row, const int col) const {

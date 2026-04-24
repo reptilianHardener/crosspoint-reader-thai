@@ -301,7 +301,8 @@ std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& rendere
 }
 
 std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, const int fontId, const int pageWidth,
-                                                  std::vector<uint16_t>& wordWidths, std::vector<bool>& continuesVec) {
+                                                  std::vector<uint16_t>& wordWidths,
+                                                  const std::vector<bool>& continuesVec) {
   if (words.empty()) {
     return {};
   }
@@ -384,8 +385,10 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
       ans[i] = forcedGroupEnd - 1;
       // Inherit cost from the first word after the forced group so subsequent words can still lay out normally.
       if (forcedGroupEnd < totalWordCount) {
+        // cppcheck-suppress unreadVariable
         dp[i] = dp[forcedGroupEnd];
       } else {
+        // cppcheck-suppress unreadVariable
         dp[i] = 0;
       }
     }
@@ -428,7 +431,7 @@ void ParsedText::applyParagraphIndent() {
 // Builds break indices while opportunistically splitting the word that would overflow the current line.
 std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& renderer, const int fontId,
                                                             const int pageWidth, std::vector<uint16_t>& wordWidths,
-                                                            std::vector<bool>& continuesVec) {
+                                                            const std::vector<bool>& continuesVec) {
   // Calculate first line indent (only for left/justified text).
   // Positive text-indent (paragraph indent) is suppressed when extraParagraphSpacing is on.
   // Negative text-indent (hanging indent, e.g. margin-left:3em; text-indent:-1em) always applies —
@@ -474,6 +477,7 @@ std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& r
       if (availableWidth > 0 &&
           hyphenateWordAtIndex(currentIndex, availableWidth, renderer, fontId, wordWidths, allowFallbackBreaks)) {
         // Prefix now fits; append it to this line and move to next line
+        // cppcheck-suppress unreadVariable
         lineWidth += spacing + wordWidths[currentIndex];
         ++currentIndex;
         break;
@@ -481,6 +485,7 @@ std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& r
 
       // Could not split: force at least one word per line to avoid infinite loop
       if (currentIndex == lineStart) {
+        // cppcheck-suppress unreadVariable
         lineWidth += candidateWidth;
         ++currentIndex;
       }

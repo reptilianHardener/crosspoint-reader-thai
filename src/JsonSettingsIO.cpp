@@ -123,10 +123,13 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
   const int actualCount = recentArr.isNull() ? 0
                                              : std::min(static_cast<int>(recentArr.size()),
                                                         static_cast<int>(CrossPointState::SLEEP_RECENT_COUNT));
+  // cppcheck-suppress badBitmaskCheck
   for (int i = 0; i < actualCount; i++) s.recentSleepImages[i] = recentArr[i] | static_cast<uint16_t>(0);
+  // cppcheck-suppress badBitmaskCheck
   s.recentSleepPos = doc["recentSleepPos"] | static_cast<uint8_t>(0);
   if (s.recentSleepPos >= CrossPointState::SLEEP_RECENT_COUNT)
     s.recentSleepPos = actualCount > 0 ? s.recentSleepPos % CrossPointState::SLEEP_RECENT_COUNT : 0;
+  // cppcheck-suppress badBitmaskCheck
   s.recentSleepFill = doc["recentSleepFill"] | static_cast<uint8_t>(0);
   s.recentSleepFill = static_cast<uint8_t>(std::min(static_cast<int>(s.recentSleepFill), actualCount));
   // Migrate legacy single-image field from old state.json (pre-recency-buffer).
@@ -135,7 +138,9 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
     const uint8_t legacy = doc["lastSleepImage"] | static_cast<uint8_t>(UINT8_MAX);
     if (legacy != UINT8_MAX) s.pushRecentSleep(static_cast<uint16_t>(legacy));
   }
+  // cppcheck-suppress badBitmaskCheck
   s.readerActivityLoadCount = doc["readerActivityLoadCount"] | static_cast<uint8_t>(0);
+  // cppcheck-suppress badBitmaskCheck
   s.lastSleepFromReader = doc["lastSleepFromReader"] | false;
   return true;
 }
@@ -151,7 +156,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
     if (!info.valuePtr && !info.stringOffset) continue;
 
     if (info.stringOffset) {
-      const char* strPtr = (const char*)&s + info.stringOffset;
+      const char* strPtr = reinterpret_cast<const char*>(&s) + info.stringOffset;
       if (info.obfuscated) {
         doc[std::string(info.key) + "_obf"] = obfuscation::obfuscateToBase64(strPtr);
       } else {
@@ -204,7 +209,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     if (!info.valuePtr && !info.stringOffset) continue;
 
     if (info.stringOffset) {
-      const char* strPtr = (const char*)&s + info.stringOffset;
+      const char* strPtr = reinterpret_cast<const char*>(&s) + info.stringOffset;
       const std::string fieldDefault = strPtr;  // current buffer = struct-initializer default
       std::string val;
       if (info.obfuscated) {
@@ -217,7 +222,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       } else {
         val = doc[info.key] | fieldDefault;
       }
-      char* destPtr = (char*)&s + info.stringOffset;
+      char* destPtr = reinterpret_cast<char*>(&s) + info.stringOffset;
       if (info.stringMaxLen == 0) {
         LOG_ERR("CPS", "Misconfigured SettingInfo: stringMaxLen is 0 for key '%s'", info.key);
         destPtr[0] = '\0';
@@ -270,6 +275,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
                         CrossPointSettings::ORIENTATION_COUNT, CrossPointSettings::PORTRAIT);
 
   // Thai keyboard layout — managed by ThaiDictionaryActivity, not in SettingsList.
+  // cppcheck-suppress badBitmaskCheck
   s.thaiKeyboardLayout = clamp(doc["thaiKeyboardLayout"] | (uint8_t)CrossPointSettings::THAI_KB_ALPHABETICAL,
                                CrossPointSettings::THAI_KB_COUNT, CrossPointSettings::THAI_KB_ALPHABETICAL);
 
@@ -321,6 +327,7 @@ bool JsonSettingsIO::loadKOReader(KOReaderCredentialStore& store, const char* js
     if (!store.password.empty() && needsResave) *needsResave = true;
   }
   store.serverUrl = doc["serverUrl"] | std::string("");
+  // cppcheck-suppress badBitmaskCheck
   uint8_t method = doc["matchMethod"] | (uint8_t)0;
   store.matchMethod = static_cast<DocumentMatchMethod>(method);
 
@@ -414,6 +421,7 @@ bool JsonSettingsIO::loadRecentBooks(RecentBooksStore& store, const char* json) 
     book.title = obj["title"] | std::string("");
     book.author = obj["author"] | std::string("");
     book.coverBmpPath = obj["coverBmpPath"] | std::string("");
+    // cppcheck-suppress badBitmaskCheck
     book.progressPercent = obj["progressPercent"] | 0;
     store.recentBooks.push_back(book);
   }
