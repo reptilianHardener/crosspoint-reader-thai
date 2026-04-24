@@ -334,7 +334,8 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
   int lastBaseLeft = 0;
   int lastBaseWidth = 0;
   int lastBaseTop = 0;
-  int32_t prevAdvanceFP = 0;  // 12.4 fixed-point: prev glyph's advance + next kern for snap
+  int32_t xPosFP = fp4::fromPixel(x);  // 12.4 fixed-point cursor position
+  int lastBaseAdvanceFP = 0;           // advance of last base glyph (for combining placement)
 
 #ifdef CROSSPOINT_EMULATED
   const int expectedFitWidth = getTextFitWidth(fontId, text, style);
@@ -476,6 +477,7 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
                                        yPos, black, style);
     if (glyph) {
       xPosFP += glyph->advanceX;  // 12.4 fixed-point advance
+      lastBaseAdvanceFP = glyph->advanceX;
     }
     prevCp = cp;
   }
@@ -1325,7 +1327,7 @@ int GfxRenderer::getTextAdvanceX(const int fontId, const char* text, EpdFontFami
     if (!glyph) {
       glyph = font.getGlyph(cp, style);  // Fall back to replacement glyph
     }
-    if (glyph) widthFP += glyph->advanceX;  // 12.4 fixed-point advance
+    if (glyph) prevAdvanceFP = glyph->advanceX;  // 12.4 fixed-point advance
     prevCp = cp;
   }
   widthPx += fp4::toPixel(prevAdvanceFP);  // final glyph's advance
@@ -1444,7 +1446,9 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
   int lastBaseLeft = 0;
   int lastBaseWidth = 0;
   int lastBaseTop = 0;
-  int32_t prevAdvanceFP = 0;  // 12.4 fixed-point: prev glyph's advance + next kern for snap
+  constexpr int MIN_COMBINING_GAP_PX = 1;
+  int32_t yPosFP = fp4::fromPixel(y);  // 12.4 fixed-point cursor position (decreasing for CW)
+  int lastBaseAdvanceFP = 0;           // advance of last base glyph (for combining placement)
 
   uint32_t cp;
   uint32_t prevCp = 0;
@@ -1474,11 +1478,8 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
 
     cp = font.applyLigatures(cp, text, style);
 
-    // Differential rounding: snap (previous advance + current kern) as one unit,
-    // subtracting for the rotated coordinate direction.
     if (prevCp != 0) {
-      const auto kernFP = font.getKerning(prevCp, cp, style);  // 4.4 fixed-point kern
-      lastBaseY -= fp4::toPixel(prevAdvanceFP + kernFP);       // snap 12.4 fixed-point to nearest pixel
+      yPosFP -= font.getKerning(prevCp, cp, style);  // apply kern to FP cursor
     }
 
     lastBaseY = fp4::toPixel(yPosFP);  // snap 12.4 fixed-point to nearest pixel
@@ -1496,7 +1497,7 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
     lastBaseLeft = glyph ? glyph->left : 0;
     lastBaseWidth = glyph ? glyph->width : 0;
     lastBaseTop = glyph ? glyph->top : 0;
-    prevAdvanceFP = glyph ? glyph->advanceX : 0;  // 12.4 fixed-point
+    lastBaseAdvanceFP = glyph ? glyph->advanceX : 0;
 
     renderCharImpl<TextRotation::Rotated90CW>(*this, renderMode, font, fallbackFont, secondaryFallbackFont, cp, x,
                                               lastBaseY, black, style);
