@@ -101,7 +101,7 @@ void ThaiDictionaryActivity::saveWords() {
 void ThaiDictionaryActivity::addWord() {
   if (words.size() >= MAX_WORDS) return;
 
-  auto keyboard = std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_ENTER_THAI_WORD), "", 0, false,
+  auto keyboard = std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_ENTER_THAI_WORD), "", 0, InputType::Text,
                                                           KeyboardLayout::Thai);
 
   startActivityForResult(std::move(keyboard), [this](const ActivityResult& result) {
