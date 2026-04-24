@@ -911,7 +911,8 @@ void ModernTheme::fillPopupProgress(const GfxRenderer& renderer, const Rect& lay
 // TextField — Material-style underline
 // ============================================================
 
-void ModernTheme::drawTextField(const GfxRenderer& renderer, Rect rect, const int textWidth) const {
+void ModernTheme::drawTextField(const GfxRenderer& renderer, Rect rect, const int textWidth, bool /*cursorMode*/,
+                                int /*contentStartX*/, int /*contentWidth*/) const {
   int lineY = rect.y + rect.height + renderer.getLineHeight(UI_12_FONT_ID) + ModernMetrics::values.verticalSpacing;
   int lineW = textWidth + hPaddingInSelection * 2;
   renderer.drawLine(rect.x + (rect.width - lineW) / 2, lineY, rect.x + (rect.width + lineW) / 2, lineY, 2);
@@ -921,8 +922,9 @@ void ModernTheme::drawTextField(const GfxRenderer& renderer, Rect rect, const in
 // Keyboard Key — Black pill selection
 // ============================================================
 
-void ModernTheme::drawKeyboardKey(const GfxRenderer& renderer, Rect rect, const char* label,
-                                  const bool isSelected) const {
+void ModernTheme::drawKeyboardKey(const GfxRenderer& renderer, Rect rect, const char* label, const bool isSelected,
+                                  const char* /*secondaryLabel*/, KeyboardKeyType /*keyType*/,
+                                  bool /*inactiveSelection*/) const {
   if (isSelected) {
     renderer.fillRoundedRect(rect.x, rect.y, rect.width, rect.height, cornerRadius, Color::Black);
   }

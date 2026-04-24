@@ -66,8 +66,11 @@ class ModernTheme : public BaseTheme {
                            std::function<bool()> storeCoverBuffer) const override;
   Rect drawPopup(const GfxRenderer& renderer, const char* message) const override;
   void fillPopupProgress(const GfxRenderer& renderer, const Rect& layout, const int progress) const override;
-  void drawTextField(const GfxRenderer& renderer, Rect rect, const int textWidth) const override;
-  void drawKeyboardKey(const GfxRenderer& renderer, Rect rect, const char* label, const bool isSelected) const override;
+  void drawTextField(const GfxRenderer& renderer, Rect rect, const int textWidth, bool cursorMode = false,
+                     int contentStartX = 0, int contentWidth = 0) const override;
+  void drawKeyboardKey(const GfxRenderer& renderer, Rect rect, const char* label, const bool isSelected,
+                       const char* secondaryLabel = nullptr, KeyboardKeyType keyType = KeyboardKeyType::Normal,
+                       bool inactiveSelection = false) const override;
 
  private:
   void drawEmptyRecents(const GfxRenderer& renderer, Rect rect) const;
