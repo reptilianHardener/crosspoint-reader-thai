@@ -1,7 +1,6 @@
 #pragma once
 #include <GfxRenderer.h>
 
-#include <cstdint>
 #include <functional>
 #include <string>
 #include <utility>
@@ -9,28 +8,28 @@
 #include "../Activity.h"
 #include "util/ButtonNavigator.h"
 
-struct KeyDef {
-  char primary;
-  char secondary;
-};
-
-enum class SpecialKeyType { Shift, Mode, Space, Del, Ok };
-
+enum class KeyboardLayout { English, Thai };
 enum class InputType { Text, Password, Url };
 
+/**
+ * Reusable keyboard entry activity for text input.
+ * Supports English (QWERTY) and Thai (frequency-ordered) layouts.
+ * Can be started from any activity that needs text entry via startActivityForResult()
+ */
 class KeyboardEntryActivity : public Activity {
  public:
   explicit KeyboardEntryActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                  std::string title = "Enter Text", std::string initialText = "",
-                                 const size_t maxLength = 0, InputType inputType = InputType::Text)
+                                 const size_t maxLength = 0, InputType inputType = InputType::Text,
+                                 const KeyboardLayout initialLayout = KeyboardLayout::English)
       : Activity("KeyboardEntry", renderer, mappedInput),
         title(std::move(title)),
         text(std::move(initialText)),
         maxLength(maxLength),
-        inputType(inputType) {}
+        isPassword(inputType == InputType::Password),
+        layout(initialLayout) {}
 
   void onEnter() override;
-  void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
 
@@ -38,189 +37,53 @@ class KeyboardEntryActivity : public Activity {
   std::string title;
   std::string text;
   size_t maxLength;
-  InputType inputType;
-  bool passwordVisible = false;
+  bool isPassword;
+  KeyboardLayout layout;
 
   ButtonNavigator buttonNavigator;
 
+  // Keyboard state
   int selectedRow = 0;
   int selectedCol = 0;
-  int shiftState = 0;
-  bool symMode = false;
-  bool confirmHeld = false;
-  bool confirmLongHandled = false;
+  int shiftState = 0;  // 0 = normal, 1 = shifted, 2 = shift lock
 
-  bool cursorMode = false;
-  bool togglePos = false;
-  size_t cursorPos = 0;
-  bool upHeld = false;
-  bool upLongHandled = false;
-  bool downHeld = false;
-  bool downLongHandled = false;
-  bool rightHeld = false;
-  bool rightLongHandled = false;
-  size_t savedCursorPos = 0;
-  size_t rightStartCursorPos = 0;
-
-  bool urlMode = false;
-  static constexpr int URL_SNIPPET_COUNT = 9;
-  static constexpr const char* const urlSnippets[URL_SNIPPET_COUNT] = {
-      "https://", "www.", ".com", "http://", "192.168.", ".org", "/opds", ":8080", ".net"};
-
-  int delPressCount = 0;
-  bool hintVisible = false;
-  unsigned long hintShowTime = 0;
-
+  // Handlers
   void onComplete(std::string text);
   void onCancel();
 
-  static constexpr uint16_t LONG_PRESS_MS = 500;
-  static constexpr uint16_t DEL_LONG_PRESS_MS = 1500;
+  // Layout constants
+  static constexpr int NUM_ROWS = 5;
+  static constexpr int KEYS_PER_ROW = 13;
 
-  static constexpr int COLS = 10;
-  static constexpr int ABC_ROWS = 4;
-  static constexpr int SYM_ROWS = 4;
-  static constexpr int BOTTOM_KEY_COUNT = 5;
+  // Special key positions (bottom row)
+  static constexpr int SPECIAL_ROW = 4;
+  static constexpr int SHIFT_COL = 0;
+  static constexpr int SPACE_COL = 2;
+  static constexpr int BACKSPACE_COL = 7;
+  static constexpr int DONE_COL = 9;
 
-  static constexpr KeyDef abcLayout[ABC_ROWS][COLS] = {
-      {{'1', '!'},
-       {'2', '@'},
-       {'3', '#'},
-       {'4', '$'},
-       {'5', '%'},
-       {'6', '^'},
-       {'7', '&'},
-       {'8', '*'},
-       {'9', '('},
-       {'0', ')'}},
-      {{'q', 'Q'},
-       {'w', 'W'},
-       {'e', 'E'},
-       {'r', 'R'},
-       {'t', 'T'},
-       {'y', 'Y'},
-       {'u', 'U'},
-       {'i', 'I'},
-       {'o', 'O'},
-       {'p', 'P'}},
-      {{'a', 'A'},
-       {'s', 'S'},
-       {'d', 'D'},
-       {'f', 'F'},
-       {'g', 'G'},
-       {'h', 'H'},
-       {'j', 'J'},
-       {'k', 'K'},
-       {'l', 'L'},
-       {'-', '_'}},
-      {{'z', 'Z'},
-       {'x', 'X'},
-       {'c', 'C'},
-       {'v', 'V'},
-       {'b', 'B'},
-       {'n', 'N'},
-       {'m', 'M'},
-       {'=', '+'},
-       {'.', '>'},
-       {',', '<'}},
-  };
+  // Layout data — each key is a null-terminated UTF-8 string.
+  // English layout
+  static const char* const englishKeys[NUM_ROWS][KEYS_PER_ROW];
+  static const char* const englishKeysShift[NUM_ROWS][KEYS_PER_ROW];
+  static const int englishRowLengths[NUM_ROWS];
 
-  static constexpr KeyDef urlLayout[ABC_ROWS][COLS] = {
-      {{'1', '!'},
-       {'2', '@'},
-       {'3', '#'},
-       {'4', '$'},
-       {'5', '%'},
-       {'6', '^'},
-       {'7', '&'},
-       {'8', '*'},
-       {'9', '('},
-       {'0', ')'}},
-      {{'q', 'Q'},
-       {'w', 'W'},
-       {'e', 'E'},
-       {'r', 'R'},
-       {'t', 'T'},
-       {'y', 'Y'},
-       {'u', 'U'},
-       {'i', 'I'},
-       {'o', 'O'},
-       {'p', 'P'}},
-      {{'a', 'A'},
-       {'s', 'S'},
-       {'d', 'D'},
-       {'f', 'F'},
-       {'g', 'G'},
-       {'h', 'H'},
-       {'j', 'J'},
-       {'k', 'K'},
-       {'l', 'L'},
-       {'-', '_'}},
-      {{'z', 'Z'},
-       {'x', 'X'},
-       {'c', 'C'},
-       {'v', 'V'},
-       {'b', 'B'},
-       {'n', 'N'},
-       {'m', 'M'},
-       {':', '+'},
-       {'.', '>'},
-       {'/', '<'}},
-  };
+  // Thai Kedmanee layout (standard Thai computer keyboard)
+  static const char* const thaiKeysKed[NUM_ROWS][KEYS_PER_ROW];
+  static const char* const thaiKeysKedShift[NUM_ROWS][KEYS_PER_ROW];
+  static const int thaiRowLengths[NUM_ROWS];
 
-  static constexpr KeyDef symLayout[SYM_ROWS][COLS] = {
-      {{'1', '\0'},
-       {'2', '\0'},
-       {'3', '\0'},
-       {'4', '\0'},
-       {'5', '\0'},
-       {'6', '\0'},
-       {'7', '\0'},
-       {'8', '\0'},
-       {'9', '\0'},
-       {'0', '\0'}},
-      {{'!', '\0'},
-       {'@', '\0'},
-       {'#', '\0'},
-       {'$', '\0'},
-       {'%', '\0'},
-       {'^', '\0'},
-       {'&', '\0'},
-       {'*', '\0'},
-       {'(', '\0'},
-       {')', '\0'}},
-      {{'-', '\0'},
-       {'_', '\0'},
-       {'=', '\0'},
-       {'+', '\0'},
-       {'[', '\0'},
-       {']', '\0'},
-       {'{', '\0'},
-       {'}', '\0'},
-       {';', '\0'},
-       {':', '\0'}},
-      {{'\'', '\0'},
-       {'"', '\0'},
-       {'/', '\0'},
-       {'\\', '\0'},
-       {'|', '\0'},
-       {'?', '\0'},
-       {'.', '\0'},
-       {',', '\0'},
-       {'~', '\0'},
-       {'`', '\0'}},
-  };
+  static const char* const shiftString[3];
 
-  static const char* const shiftString[2];
+  // Long-press threshold for Back button cancel (Thai keyboard)
+  static constexpr unsigned long LONG_PRESS_MS = 500;
 
-  int getContentRowCount() const;
-  int getContentColCount() const;
-  int getTotalRowCount() const;
-  bool isBottomRow(int row) const;
-  char getSelectedChar() const;
-  char getAlternativeChar() const;
+  // Key access for current layout
+  const char* getKeyAt(int row, int col) const;
+  int getRowLength(int row) const;
   bool handleKeyPress();
-  bool insertChar(char c);
-  void insertString(const std::string& str);
-  void mapColContentBottom(int& col, bool goingUp) const;
+
+  // UTF-8 aware text manipulation
+  void appendKey(const char* key);
+  void backspaceUtf8();
 };

@@ -7,6 +7,7 @@
 #include "HyphenationCommon.h"
 #include "LanguageHyphenator.h"
 #include "LanguageRegistry.h"
+#include "ThaiWordBreaker.h"
 
 const LanguageHyphenator* Hyphenator::cachedHyphenator_ = nullptr;
 
@@ -40,11 +41,10 @@ const LanguageHyphenator* hyphenatorForLanguage(const std::string& langTag) {
   if (primary.empty()) return nullptr;
 
   // Normalize ISO 639-2 three-letter codes to two-letter equivalents.
-  for (const auto& mapping : kIso639Mappings) {
-    if (primary == mapping.iso639_2) {
-      primary = mapping.iso639_1;
-      break;
-    }
+  auto it = std::find_if(std::begin(kIso639Mappings), std::end(kIso639Mappings),
+                         [&primary](const auto& m) { return primary == m.iso639_2; });
+  if (it != std::end(kIso639Mappings)) {
+    primary = it->iso639_1;
   }
 
   return getLanguageHyphenatorForPrimaryTag(primary);
@@ -83,7 +83,7 @@ std::vector<Hyphenator::BreakInfo> buildExplicitBreakInfos(const std::vector<Cod
 
 bool isSegmentSeparator(const uint32_t cp) { return isExplicitHyphen(cp) || isApostrophe(cp); }
 
-void appendSegmentPatternBreaks(const std::vector<CodepointInfo>& cps, const LanguageHyphenator& hyphenator,
+void appendSegmentPatternBreaks(const std::vector<CodepointInfo>& cps, const LanguageHyphenator* hyphenator,
                                 const bool includeFallback, std::vector<Hyphenator::BreakInfo>& outBreaks) {
   size_t segStart = 0;
 
@@ -95,23 +95,44 @@ void appendSegmentPatternBreaks(const std::vector<CodepointInfo>& cps, const Lan
     }
 
     if (i > segStart) {
-      std::vector<CodepointInfo> segment(cps.begin() + segStart, cps.begin() + i);
-      auto segIndexes = hyphenator.breakIndexes(segment);
-
-      if (includeFallback && segIndexes.empty()) {
-        const size_t minPrefix = hyphenator.minPrefix();
-        const size_t minSuffix = hyphenator.minSuffix();
-        for (size_t idx = minPrefix; idx + minSuffix <= segment.size(); ++idx) {
-          segIndexes.push_back(idx);
+      // Check if this segment contains Thai characters — if so, use dictionary-backed
+      // word boundaries without inserting hyphens.
+      bool segHasThai = false;
+      for (size_t j = segStart; j < i; ++j) {
+        if (isThaiCharacter(cps[j].value)) {
+          segHasThai = true;
+          break;
         }
       }
 
-      for (const size_t idx : segIndexes) {
-        assert(idx > 0 && idx < segment.size());
-        if (idx == 0 || idx >= segment.size()) continue;
-        const size_t cpIdx = segStart + idx;
-        if (cpIdx < cps.size()) {
-          outBreaks.push_back({cps[cpIdx].byteOffset, true});
+      if (segHasThai) {
+        std::vector<CodepointInfo> segment(cps.begin() + segStart, cps.begin() + i);
+        const auto thaiBreakIndexes = ThaiWordBreaker::breakIndexes(segment, includeFallback);
+        for (const size_t idx : thaiBreakIndexes) {
+          const size_t cpIdx = segStart + idx;
+          if (cpIdx < cps.size()) {
+            outBreaks.push_back({cps[cpIdx].byteOffset, false});
+          }
+        }
+      } else if (hyphenator) {
+        std::vector<CodepointInfo> segment(cps.begin() + segStart, cps.begin() + i);
+        auto segIndexes = hyphenator->breakIndexes(segment);
+
+        if (includeFallback && segIndexes.empty()) {
+          const size_t minPrefix = hyphenator->minPrefix();
+          const size_t minSuffix = hyphenator->minSuffix();
+          for (size_t idx = minPrefix; idx + minSuffix <= segment.size(); ++idx) {
+            segIndexes.push_back(idx);
+          }
+        }
+
+        for (const size_t idx : segIndexes) {
+          assert(idx > 0 && idx < segment.size());
+          if (idx == 0 || idx >= segment.size()) continue;
+          const size_t cpIdx = segStart + idx;
+          if (cpIdx < cps.size()) {
+            outBreaks.push_back({cps[cpIdx].byteOffset, true});
+          }
         }
       }
     }
@@ -182,13 +203,8 @@ std::vector<Hyphenator::BreakInfo> Hyphenator::breakOffsets(const std::string& w
   const auto* hyphenator = cachedHyphenator_;
 
   // Detect apostrophe-like separators early; used by both branches below.
-  bool hasApostropheLikeSeparator = false;
-  for (const auto& cp : cps) {
-    if (isApostrophe(cp.value)) {
-      hasApostropheLikeSeparator = true;
-      break;
-    }
-  }
+  const bool hasApostropheLikeSeparator =
+      std::any_of(cps.begin(), cps.end(), [](const CodepointInfo& cp) { return isApostrophe(cp.value); });
 
   // Explicit hyphen markers (soft or hard) take precedence over language breaks.
   auto explicitBreakInfos = buildExplicitBreakInfos(cps);
@@ -207,9 +223,7 @@ std::vector<Hyphenator::BreakInfo> Hyphenator::breakOffsets(const std::string& w
     //                                            @13 Satelliten|sys  (+hyphen)
     //                                            @16 Satellitensys|tems  (+hyphen)
     //   Result: 6 sorted break points; the line-breaker picks the widest prefix that fits.
-    if (hyphenator) {
-      appendSegmentPatternBreaks(cps, *hyphenator, /*includeFallback=*/false, explicitBreakInfos);
-    }
+    appendSegmentPatternBreaks(cps, hyphenator, /*includeFallback=*/false, explicitBreakInfos);
     // Also add apostrophe contraction breaks when present (e.g. "l'état-major"
     // has both an explicit hyphen and an apostrophe that can independently break).
     if (hasApostropheLikeSeparator) {
@@ -226,12 +240,33 @@ std::vector<Hyphenator::BreakInfo> Hyphenator::breakOffsets(const std::string& w
   // applied regardless of whether a language hyphenator is available.
   if (hasApostropheLikeSeparator) {
     std::vector<BreakInfo> segmentedBreaks;
-    if (hyphenator) {
-      appendSegmentPatternBreaks(cps, *hyphenator, includeFallback, segmentedBreaks);
-    }
+    appendSegmentPatternBreaks(cps, hyphenator, includeFallback, segmentedBreaks);
     appendApostropheContractionBreaks(cps, segmentedBreaks);
     sortAndDedupeBreakInfos(segmentedBreaks);
     return segmentedBreaks;
+  }
+
+  // Thai text: use dictionary-backed word boundaries without inserting hyphens.
+  // Unknown runs only expose intra-run cluster boundaries when includeFallback is enabled.
+  {
+    bool hasThai = false;
+    for (const auto& cp : cps) {
+      if (isThaiCharacter(cp.value)) {
+        hasThai = true;
+        break;
+      }
+    }
+    if (hasThai) {
+      std::vector<Hyphenator::BreakInfo> thaiBreaks;
+      const auto thaiBreakIndexes = ThaiWordBreaker::breakIndexes(cps, includeFallback);
+      thaiBreaks.reserve(thaiBreakIndexes.size());
+      for (const size_t idx : thaiBreakIndexes) {
+        if (idx > 0 && idx < cps.size()) {
+          thaiBreaks.push_back({cps[idx].byteOffset, false});
+        }
+      }
+      return thaiBreaks;
+    }
   }
 
   // Ask language hyphenator for legal break points.

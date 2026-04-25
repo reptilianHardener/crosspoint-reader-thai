@@ -12,6 +12,8 @@ struct Rect;
 class HomeActivity final : public Activity {
   ButtonNavigator buttonNavigator;
   int selectorIndex = 0;
+  int lastMenuCol = 0;    // Remember last menu column when switching between books and menu
+  int lastBookIndex = 0;  // Remember last selected book when switching to menu
   bool recentsLoading = false;
   bool recentsLoaded = false;
   bool firstRenderDone = false;
@@ -20,7 +22,6 @@ class HomeActivity final : public Activity {
   bool coverBufferStored = false;  // Track if cover buffer is stored
   uint8_t* coverBuffer = nullptr;  // HomeActivity's own buffer for cover image
   std::vector<RecentBook> recentBooks;
-  void onSelectBook(const std::string& path);
   void onFileBrowserOpen();
   void onRecentsOpen();
   void onSettingsOpen();

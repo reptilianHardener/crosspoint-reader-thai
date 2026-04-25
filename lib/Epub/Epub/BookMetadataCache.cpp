@@ -9,7 +9,7 @@
 #include "FsHelpers.h"
 
 namespace {
-constexpr uint8_t BOOK_CACHE_VERSION = 5;
+constexpr uint8_t BOOK_CACHE_VERSION = 6;
 constexpr char bookBinFile[] = "/book.bin";
 constexpr char tmpSpineBinFile[] = "/spine.bin.tmp";
 constexpr char tmpTocBinFile[] = "/toc.bin.tmp";
@@ -124,11 +124,11 @@ bool BookMetadataCache::buildBookBin(const std::string& epubPath, const BookMeta
                                 metadata.coverItemHref.size() + metadata.textReferenceHref.size() +
                                 sizeof(uint32_t) * 5;
   const uint32_t lutSize = sizeof(uint32_t) * spineCount + sizeof(uint32_t) * tocCount;
-  const uint32_t lutOffset = headerASize + metadataSize;
+  const uint32_t computedLutOffset = headerASize + metadataSize;
 
   // Header A
   serialization::writePod(bookFile, BOOK_CACHE_VERSION);
-  serialization::writePod(bookFile, lutOffset);
+  serialization::writePod(bookFile, computedLutOffset);
   serialization::writePod(bookFile, spineCount);
   serialization::writePod(bookFile, tocCount);
   // Metadata
@@ -142,16 +142,16 @@ bool BookMetadataCache::buildBookBin(const std::string& epubPath, const BookMeta
   spineFile.seek(0);
   for (int i = 0; i < spineCount; i++) {
     uint32_t pos = spineFile.position();
-    auto spineEntry = readSpineEntry(spineFile);
-    serialization::writePod(bookFile, pos + lutOffset + lutSize);
+    static_cast<void>(readSpineEntry(spineFile));
+    serialization::writePod(bookFile, pos + computedLutOffset + lutSize);
   }
 
   // Loop through toc entries, writing LUT positions
   tocFile.seek(0);
   for (int i = 0; i < tocCount; i++) {
     uint32_t pos = tocFile.position();
-    auto tocEntry = readTocEntry(tocFile);
-    serialization::writePod(bookFile, pos + lutOffset + lutSize + static_cast<uint32_t>(spineFile.position()));
+    static_cast<void>(readTocEntry(tocFile));
+    serialization::writePod(bookFile, pos + computedLutOffset + lutSize + static_cast<uint32_t>(spineFile.position()));
   }
 
   // LUTs complete

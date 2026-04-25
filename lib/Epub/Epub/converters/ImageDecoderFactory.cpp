@@ -2,6 +2,8 @@
 
 #include <Logging.h>
 
+#include <algorithm>
+#include <cctype>
 #include <memory>
 #include <string>
 
@@ -16,9 +18,8 @@ ImageToFramebufferDecoder* ImageDecoderFactory::getDecoder(const std::string& im
   size_t dotPos = ext.rfind('.');
   if (dotPos != std::string::npos) {
     ext = ext.substr(dotPos);
-    for (auto& c : ext) {
-      c = tolower(c);
-    }
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   } else {
     ext = "";
   }

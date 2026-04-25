@@ -235,6 +235,11 @@ void XtcReaderActivity::renderPage() {
       }
     }
 
+    // Dark mode: invert framebuffer (white text on black background)
+    if (SETTINGS.readerDarkMode) {
+      renderer.invertScreen();
+    }
+
     // Display BW with conditional refresh based on pagesUntilFullRefresh
     if (pagesUntilFullRefresh <= 1) {
       renderer.displayBuffer(HalDisplay::HALF_REFRESH);
@@ -313,6 +318,11 @@ void XtcReaderActivity::renderPage() {
   free(pageBuffer);
 
   // XTC pages already have status bar pre-rendered, no need to add our own
+
+  // Dark mode: invert framebuffer (white text on black background)
+  if (SETTINGS.readerDarkMode) {
+    renderer.invertScreen();
+  }
 
   // Display with appropriate refresh
   if (pagesUntilFullRefresh <= 1) {

@@ -34,7 +34,7 @@ struct PixelCache {
       LOG_ERR("IMG", "Cache buffer too large: %d bytes for %dx%d (limit %d)", bufferSize, w, h, MAX_CACHE_BYTES);
       return false;
     }
-    buffer = (uint8_t*)malloc(bufferSize);
+    buffer = reinterpret_cast<uint8_t*>(malloc(bufferSize));
     if (buffer) {
       memset(buffer, 0, bufferSize);
       LOG_DBG("IMG", "Allocated cache buffer: %d bytes for %dx%d", bufferSize, w, h);

@@ -65,6 +65,42 @@ void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
   }
 }
 
+uint8_t migrateLegacyFontFamily(const uint8_t legacyValue) {
+  // Old enum: BAIJAMJUREE=0, CLOUDLOOP=1, BOOKERLY=2
+  // New enum: BOOKERLY=0, NOTOSANS=1, NOTOSANS_THAI_LOOPED=2
+  switch (legacyValue) {
+    case 1:
+      return CrossPointSettings::NOTOSANS;
+    case 2:
+      return CrossPointSettings::BOOKERLY;
+    default:
+      return CrossPointSettings::BOOKERLY;
+  }
+}
+
+uint8_t migrateLegacyFontSize(const uint8_t legacyValue) {
+  switch (legacyValue) {
+    case 0:
+      return CrossPointSettings::FONT_12;
+    case 1:
+    default:
+      return CrossPointSettings::FONT_14;
+    case 2:
+      return CrossPointSettings::FONT_16;
+    case 3:
+      return CrossPointSettings::FONT_18;
+  }
+}
+
+uint8_t normalizeFontSize(const uint8_t sizeValue) {
+  if (sizeValue <= CrossPointSettings::FONT_SIZE_MIN) return CrossPointSettings::FONT_SIZE_MIN;
+  if (sizeValue >= CrossPointSettings::FONT_SIZE_MAX) return CrossPointSettings::FONT_SIZE_MAX;
+
+  const uint8_t delta = sizeValue - CrossPointSettings::FONT_SIZE_MIN;
+  const uint8_t roundedSteps = static_cast<uint8_t>((delta + 1) / CrossPointSettings::FONT_SIZE_STEP);
+  return static_cast<uint8_t>(CrossPointSettings::FONT_SIZE_MIN + roundedSteps * CrossPointSettings::FONT_SIZE_STEP);
+}
+
 // ---- CrossPointState ----
 
 bool JsonSettingsIO::saveState(const CrossPointState& s, const char* path) {
@@ -96,10 +132,13 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
   const int actualCount = recentArr.isNull() ? 0
                                              : std::min(static_cast<int>(recentArr.size()),
                                                         static_cast<int>(CrossPointState::SLEEP_RECENT_COUNT));
+  // cppcheck-suppress badBitmaskCheck
   for (int i = 0; i < actualCount; i++) s.recentSleepImages[i] = recentArr[i] | static_cast<uint16_t>(0);
+  // cppcheck-suppress badBitmaskCheck
   s.recentSleepPos = doc["recentSleepPos"] | static_cast<uint8_t>(0);
   if (s.recentSleepPos >= CrossPointState::SLEEP_RECENT_COUNT)
     s.recentSleepPos = actualCount > 0 ? s.recentSleepPos % CrossPointState::SLEEP_RECENT_COUNT : 0;
+  // cppcheck-suppress badBitmaskCheck
   s.recentSleepFill = doc["recentSleepFill"] | static_cast<uint8_t>(0);
   s.recentSleepFill = static_cast<uint8_t>(std::min(static_cast<int>(s.recentSleepFill), actualCount));
   // Migrate legacy single-image field from old state.json (pre-recency-buffer).
@@ -108,7 +147,9 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
     const uint8_t legacy = doc["lastSleepImage"] | static_cast<uint8_t>(UINT8_MAX);
     if (legacy != UINT8_MAX) s.pushRecentSleep(static_cast<uint16_t>(legacy));
   }
+  // cppcheck-suppress badBitmaskCheck
   s.readerActivityLoadCount = doc["readerActivityLoadCount"] | static_cast<uint8_t>(0);
+  // cppcheck-suppress badBitmaskCheck
   s.lastSleepFromReader = doc["lastSleepFromReader"] | false;
   return true;
 }
@@ -124,7 +165,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
     if (!info.valuePtr && !info.stringOffset) continue;
 
     if (info.stringOffset) {
-      const char* strPtr = (const char*)&s + info.stringOffset;
+      const char* strPtr = reinterpret_cast<const char*>(&s) + info.stringOffset;
       if (info.obfuscated) {
         doc[std::string(info.key) + "_obf"] = obfuscation::obfuscateToBase64(strPtr);
       } else {
@@ -134,6 +175,12 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
       doc[info.key] = s.*(info.valuePtr);
     }
   }
+
+  // Orientation — managed by reader menu, not in SettingsList.
+  doc["orientation"] = s.orientation;
+
+  // Thai keyboard layout — managed by ThaiDictionaryActivity, not in SettingsList.
+  doc["thaiKeyboardLayout"] = s.thaiKeyboardLayout;
 
   // Front button remap — managed by RemapFrontButtons sub-activity, not in SettingsList.
   doc["frontButtonBack"] = s.frontButtonBack;
@@ -162,6 +209,8 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   if (doc["statusBarChapterPageCount"].isNull()) {
     applyLegacyStatusBarSettings(s);
   }
+  const bool legacyFontEncoding =
+      !doc["fontSize"].isNull() && (doc["fontSize"].as<int>() < CrossPointSettings::FONT_SIZE_MIN);
 
   for (const auto& info : getSettingsList()) {
     if (!info.key) continue;
@@ -169,7 +218,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     if (!info.valuePtr && !info.stringOffset) continue;
 
     if (info.stringOffset) {
-      const char* strPtr = (const char*)&s + info.stringOffset;
+      const char* strPtr = reinterpret_cast<const char*>(&s) + info.stringOffset;
       const std::string fieldDefault = strPtr;  // current buffer = struct-initializer default
       std::string val;
       if (info.obfuscated) {
@@ -182,7 +231,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       } else {
         val = doc[info.key] | fieldDefault;
       }
-      char* destPtr = (char*)&s + info.stringOffset;
+      char* destPtr = reinterpret_cast<char*>(&s) + info.stringOffset;
       if (info.stringMaxLen == 0) {
         LOG_ERR("CPS", "Misconfigured SettingInfo: stringMaxLen is 0 for key '%s'", info.key);
         destPtr[0] = '\0';
@@ -194,6 +243,28 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     } else {
       const uint8_t fieldDefault = s.*(info.valuePtr);  // struct-initializer default, read before we overwrite it
       uint8_t v = doc[info.key] | fieldDefault;
+      if (info.valuePtr == &CrossPointSettings::fontFamily) {
+        if (legacyFontEncoding) {
+          v = migrateLegacyFontFamily(v);
+          if (needsResave) *needsResave = true;
+        } else {
+          v = clamp(v, (uint8_t)CrossPointSettings::FONT_FAMILY_COUNT, fieldDefault);
+        }
+        s.*(info.valuePtr) = v;
+        continue;
+      }
+      if (info.valuePtr == &CrossPointSettings::fontSize) {
+        if (legacyFontEncoding) {
+          v = migrateLegacyFontSize(v);
+          if (needsResave) *needsResave = true;
+        } else {
+          const uint8_t normalized = normalizeFontSize(v);
+          if (normalized != v && needsResave) *needsResave = true;
+          v = normalized;
+        }
+        s.*(info.valuePtr) = v;
+        continue;
+      }
       if (info.type == SettingType::ENUM) {
         v = clamp(v, (uint8_t)info.enumValues.size(), fieldDefault);
       } else if (info.type == SettingType::TOGGLE) {
@@ -207,6 +278,15 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       s.*(info.valuePtr) = v;
     }
   }
+
+  // Orientation — managed by reader menu, not in SettingsList.
+  s.orientation = clamp(doc["orientation"] | (uint8_t)CrossPointSettings::PORTRAIT,
+                        CrossPointSettings::ORIENTATION_COUNT, CrossPointSettings::PORTRAIT);
+
+  // Thai keyboard layout — managed by ThaiDictionaryActivity, not in SettingsList.
+  // cppcheck-suppress badBitmaskCheck
+  s.thaiKeyboardLayout = clamp(doc["thaiKeyboardLayout"] | (uint8_t)CrossPointSettings::THAI_KB_ALPHABETICAL,
+                               CrossPointSettings::THAI_KB_COUNT, CrossPointSettings::THAI_KB_ALPHABETICAL);
 
   // Front button remap — managed by RemapFrontButtons sub-activity, not in SettingsList.
   using S = CrossPointSettings;
@@ -256,6 +336,7 @@ bool JsonSettingsIO::loadKOReader(KOReaderCredentialStore& store, const char* js
     if (!store.password.empty() && needsResave) *needsResave = true;
   }
   store.serverUrl = doc["serverUrl"] | std::string("");
+  // cppcheck-suppress badBitmaskCheck
   uint8_t method = doc["matchMethod"] | (uint8_t)0;
   store.matchMethod = static_cast<DocumentMatchMethod>(method);
 
@@ -322,6 +403,9 @@ bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore& store, const char* 
     obj["title"] = book.title;
     obj["author"] = book.author;
     obj["coverBmpPath"] = book.coverBmpPath;
+    if (book.progressPercent > 0) {
+      obj["progressPercent"] = book.progressPercent;
+    }
   }
 
   String json;
@@ -346,6 +430,8 @@ bool JsonSettingsIO::loadRecentBooks(RecentBooksStore& store, const char* json) 
     book.title = obj["title"] | std::string("");
     book.author = obj["author"] | std::string("");
     book.coverBmpPath = obj["coverBmpPath"] | std::string("");
+    // cppcheck-suppress badBitmaskCheck
+    book.progressPercent = obj["progressPercent"] | 0;
     store.recentBooks.push_back(book);
   }
 

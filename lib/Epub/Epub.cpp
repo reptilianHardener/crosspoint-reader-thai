@@ -493,6 +493,7 @@ const std::string& Epub::getCachePath() const { return cachePath; }
 const std::string& Epub::getPath() const { return filepath; }
 
 const std::string& Epub::getTitle() const {
+  // cppcheck-suppress variableScope
   static std::string blank;
   if (!bookMetadataCache || !bookMetadataCache->isLoaded()) {
     return blank;
@@ -502,6 +503,7 @@ const std::string& Epub::getTitle() const {
 }
 
 const std::string& Epub::getAuthor() const {
+  // cppcheck-suppress variableScope
   static std::string blank;
   if (!bookMetadataCache || !bookMetadataCache->isLoaded()) {
     return blank;
@@ -511,6 +513,7 @@ const std::string& Epub::getAuthor() const {
 }
 
 const std::string& Epub::getLanguage() const {
+  // cppcheck-suppress variableScope
   static std::string blank;
   if (!bookMetadataCache || !bookMetadataCache->isLoaded()) {
     return blank;
@@ -866,7 +869,7 @@ int Epub::resolveHrefToSpineIndex(const std::string& href) const {
   // Extract filename (remove #anchor)
   std::string target = href;
   size_t hashPos = target.find('#');
-  if (hashPos != std::string::npos) target = target.substr(0, hashPos);
+  if (hashPos != std::string::npos) target.resize(hashPos);
 
   // Same-file reference (anchor-only)
   if (target.empty()) return -1;

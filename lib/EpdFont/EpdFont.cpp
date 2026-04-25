@@ -4,6 +4,44 @@
 
 #include <algorithm>
 
+static inline bool fontNeedsThaiUpperRestacking(const EpdFontData* fontData) {
+  if (!fontData) {
+    return false;
+  }
+
+  return fontData->intervalCount >= 48 && fontData->groupCount >= 10 && fontData->ligaturePairCount == 0;
+}
+
+static inline void applyThaiUpperStacking(const EpdFontData* fontData, const uint32_t cp, const EpdGlyph* glyph,
+                                          const int penY, int* raiseBy, int* stackedUpperMinY, bool* hasStackedUpper) {
+  if (!fontNeedsThaiUpperRestacking(fontData)) {
+    return;
+  }
+
+  if (!glyph || !utf8IsThaiUpperCombiningMark(cp)) {
+    return;
+  }
+
+  int glyphMinY = penY - *raiseBy + glyph->top - glyph->height;
+  int glyphMaxY = penY - *raiseBy + glyph->top;
+
+  if (utf8IsThaiUpperLevelThreeMark(cp) && *hasStackedUpper) {
+    constexpr int MIN_STACK_GAP_PX = 1;
+    const int desiredMaxY = *stackedUpperMinY - MIN_STACK_GAP_PX;
+    if (glyphMaxY > desiredMaxY) {
+      const int extraRaise = glyphMaxY - desiredMaxY;
+      *raiseBy += extraRaise;
+      glyphMinY -= extraRaise;
+      glyphMaxY -= extraRaise;
+    }
+  }
+
+  if (utf8IsThaiUpperLevelTwoMark(cp) || utf8IsThaiUpperLevelThreeMark(cp)) {
+    *stackedUpperMinY = *hasStackedUpper ? std::min(*stackedUpperMinY, glyphMinY) : glyphMinY;
+    *hasStackedUpper = true;
+  }
+}
+
 void EpdFont::getTextBounds(const char* string, const int startX, const int startY, int* minX, int* minY, int* maxX,
                             int* maxY) const {
   *minX = startX;
@@ -15,11 +53,13 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
     return;
   }
 
+  int32_t cursorXFP = fp4::fromPixel(startX);  // 12.4 fixed-point accumulator
   int lastBaseX = startX;
-  int lastBaseLeft = 0;
-  int lastBaseWidth = 0;
+  int lastBaseAdvanceFP = 0;  // 12.4 fixed-point
   int lastBaseTop = 0;
-  int32_t prevAdvanceFP = 0;  // 12.4 fixed-point: prev glyph's advance + next kern for snap
+  constexpr int MIN_COMBINING_GAP_PX = 1;
+  int stackedThaiUpperMinY = 0;
+  bool hasStackedThaiUpper = false;
   uint32_t cp;
   uint32_t prevCp = 0;
   while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&string)))) {
@@ -31,29 +71,29 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
 
     const EpdGlyph* glyph = getGlyph(cp);
     if (!glyph) {
-      // Keep cursor movement stable when a base glyph is missing, but don't attach subsequent
-      // combining marks to stale base metrics.
-      if (!isCombining) {
-        lastBaseX += fp4::toPixel(prevAdvanceFP);  // flush pending advance before resetting
-        prevCp = 0;
-        prevAdvanceFP = 0;
-        lastBaseLeft = 0;
-        lastBaseWidth = 0;
-        lastBaseTop = 0;
-      }
+      prevCp = 0;
       continue;
     }
 
-    const int raiseBy = isCombining ? combiningMark::raiseAboveBase(glyph->top, glyph->height, lastBaseTop) : 0;
-
-    if (!isCombining && prevCp != 0) {
-      const auto kernFP = getKerning(prevCp, cp);  // 4.4 fixed-point kern
-      lastBaseX += fp4::toPixel(prevAdvanceFP + kernFP);
+    int raiseBy = 0;
+    if (isCombining) {
+      if (!utf8IsThaiLowerCombiningMark(cp)) {
+        const int currentGap = glyph->top - glyph->height - lastBaseTop;
+        if (currentGap < MIN_COMBINING_GAP_PX) {
+          raiseBy = MIN_COMBINING_GAP_PX - currentGap;
+        }
+      }
+      applyThaiUpperStacking(data, cp, glyph, startY, &raiseBy, &stackedThaiUpperMinY, &hasStackedThaiUpper);
     }
 
+    if (!isCombining && prevCp != 0) {
+      cursorXFP += getKerning(prevCp, cp);  // 4.4 fixed-point kern
+    }
+
+    const int cursorXPixels = fp4::toPixel(cursorXFP);  // snap 12.4 fixed-point to nearest pixel
     const int glyphBaseX =
-        isCombining ? combiningMark::centerOver(lastBaseX, lastBaseLeft, lastBaseWidth, glyph->left, glyph->width)
-                    : lastBaseX;
+        isCombining ? (utf8IsThaiCombiningMark(cp) ? cursorXPixels : (lastBaseX + fp4::toPixel(lastBaseAdvanceFP / 2)))
+                    : cursorXPixels;
     const int glyphBaseY = startY - raiseBy;
 
     *minX = std::min(*minX, glyphBaseX + glyph->left);
@@ -62,10 +102,11 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
     *maxY = std::max(*maxY, glyphBaseY + glyph->top);
 
     if (!isCombining) {
-      lastBaseLeft = glyph->left;
-      lastBaseWidth = glyph->width;
+      lastBaseX = cursorXPixels;
+      lastBaseAdvanceFP = glyph->advanceX;  // 12.4 fixed-point
       lastBaseTop = glyph->top;
-      prevAdvanceFP = glyph->advanceX;  // 12.4 fixed-point
+      hasStackedThaiUpper = false;
+      cursorXFP += glyph->advanceX;  // 12.4 fixed-point advance
       prevCp = cp;
     }
   }
@@ -175,4 +216,22 @@ const EpdGlyph* EpdFont::getGlyph(const uint32_t cp) const {
     return getGlyph(REPLACEMENT_GLYPH);
   }
   return nullptr;
+}
+
+bool EpdFont::hasNativeGlyph(const uint32_t cp) const {
+  const int count = data->intervalCount;
+  if (count == 0) return false;
+
+  const EpdUnicodeInterval* intervals = data->intervals;
+  const auto* end = intervals + count;
+  const auto it = std::upper_bound(
+      intervals, end, cp, [](uint32_t value, const EpdUnicodeInterval& interval) { return value < interval.first; });
+
+  if (it != intervals) {
+    const auto& interval = *(it - 1);
+    if (cp <= interval.last) {
+      return true;
+    }
+  }
+  return false;
 }
