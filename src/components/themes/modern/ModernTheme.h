@@ -43,8 +43,8 @@ constexpr ThemeMetrics values = {.batteryWidth = 16,
 
 class ModernTheme : public BaseTheme {
  public:
-  void drawBatteryLeft(const GfxRenderer& renderer, Rect rect, bool showPercentage = true) const;
-  void drawBatteryRight(const GfxRenderer& renderer, Rect rect, bool showPercentage = true) const;
+  void drawBatteryLeft(const GfxRenderer& renderer, Rect rect, bool showPercentage = true) const override;
+  void drawBatteryRight(const GfxRenderer& renderer, Rect rect, bool showPercentage = true) const override;
   void drawHeader(const GfxRenderer& renderer, Rect rect, const char* title, const char* subtitle) const override;
   void drawSubHeader(const GfxRenderer& renderer, Rect rect, const char* label,
                      const char* rightLabel = nullptr) const override;
