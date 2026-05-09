@@ -73,5 +73,6 @@ class ModernTheme : public BaseTheme {
                        bool inactiveSelection = false) const override;
 
  private:
+  static void drawBatterySteppedFill(const GfxRenderer& renderer, int x, int y, int height, uint16_t percentage);
   void drawEmptyRecents(const GfxRenderer& renderer, Rect rect) const;
 };

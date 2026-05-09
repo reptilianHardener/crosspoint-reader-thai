@@ -107,33 +107,34 @@ void appendSegmentPatternBreaks(const std::vector<CodepointInfo>& cps, const Lan
         }
       }
 
-      if (segHasThai) {
+      if (segHasThai || hyphenator) {
         std::vector<CodepointInfo> segment(cps.begin() + segStart, cps.begin() + i);
-        const auto thaiBreakIndexes = ThaiWordBreaker::breakIndexes(segment, includeFallback);
-        for (const size_t idx : thaiBreakIndexes) {
-          const size_t cpIdx = segStart + idx;
-          if (cpIdx < cps.size()) {
-            outBreaks.push_back({cps[cpIdx].byteOffset, false});
+        if (segHasThai) {
+          const auto thaiBreakIndexes = ThaiWordBreaker::breakIndexes(segment, includeFallback);
+          for (const size_t idx : thaiBreakIndexes) {
+            const size_t cpIdx = segStart + idx;
+            if (cpIdx < cps.size()) {
+              outBreaks.push_back({cps[cpIdx].byteOffset, false});
+            }
           }
-        }
-      } else if (hyphenator) {
-        std::vector<CodepointInfo> segment(cps.begin() + segStart, cps.begin() + i);
-        auto segIndexes = hyphenator->breakIndexes(segment);
+        } else {
+          auto segIndexes = hyphenator->breakIndexes(segment);
 
-        if (includeFallback && segIndexes.empty()) {
-          const size_t minPrefix = hyphenator->minPrefix();
-          const size_t minSuffix = hyphenator->minSuffix();
-          for (size_t idx = minPrefix; idx + minSuffix <= segment.size(); ++idx) {
-            segIndexes.push_back(idx);
+          if (includeFallback && segIndexes.empty()) {
+            const size_t minPrefix = hyphenator->minPrefix();
+            const size_t minSuffix = hyphenator->minSuffix();
+            for (size_t idx = minPrefix; idx + minSuffix <= segment.size(); ++idx) {
+              segIndexes.push_back(idx);
+            }
           }
-        }
 
-        for (const size_t idx : segIndexes) {
-          assert(idx > 0 && idx < segment.size());
-          if (idx == 0 || idx >= segment.size()) continue;
-          const size_t cpIdx = segStart + idx;
-          if (cpIdx < cps.size()) {
-            outBreaks.push_back({cps[cpIdx].byteOffset, true});
+          for (const size_t idx : segIndexes) {
+            assert(idx > 0 && idx < segment.size());
+            if (idx == 0 || idx >= segment.size()) continue;
+            const size_t cpIdx = segStart + idx;
+            if (cpIdx < cps.size()) {
+              outBreaks.push_back({cps[cpIdx].byteOffset, true});
+            }
           }
         }
       }

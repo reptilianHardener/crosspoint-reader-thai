@@ -92,35 +92,27 @@ const uint8_t* iconForName(UIIcon icon, int size) {
 // Battery
 // ============================================================
 
+void ModernTheme::drawBatterySteppedFill(const GfxRenderer& renderer, int x, int y, int height, uint16_t percentage) {
+  if (percentage > 10) renderer.fillRect(x + 2, y + 2, 3, height - 4);
+  if (percentage > 40) renderer.fillRect(x + 6, y + 2, 3, height - 4);
+  if (percentage > 70) renderer.fillRect(x + 10, y + 2, 3, height - 4);
+}
+
 void ModernTheme::drawBatteryLeft(const GfxRenderer& renderer, Rect rect, const bool showPercentage) const {
   const uint16_t percentage = powerManager.getBatteryPercentage();
   const int y = rect.y + 6;
   const int battWidth = ModernMetrics::values.batteryWidth;
 
   if (showPercentage) {
-    const auto percentageText = std::to_string(percentage) + "%";
-    renderer.drawText(SMALL_FONT_ID, rect.x + batteryPercentSpacing + battWidth, rect.y, percentageText.c_str(), true,
+    char percentBuf[8];
+    snprintf(percentBuf, sizeof(percentBuf), "%u%%", percentage);
+    renderer.drawText(SMALL_FONT_ID, rect.x + batteryPercentSpacing + battWidth, rect.y, percentBuf, true,
                       EpdFontFamily::BOLD);
   }
 
   const int x = rect.x;
-  renderer.drawLine(x + 1, y, x + battWidth - 3, y);
-  renderer.drawLine(x + 1, y + rect.height - 1, x + battWidth - 3, y + rect.height - 1);
-  renderer.drawLine(x, y + 1, x, y + rect.height - 2);
-  renderer.drawLine(x + battWidth - 2, y + 1, x + battWidth - 2, y + rect.height - 2);
-  renderer.drawPixel(x + battWidth - 1, y + 3);
-  renderer.drawPixel(x + battWidth - 1, y + rect.height - 4);
-  renderer.drawLine(x + battWidth - 0, y + 4, x + battWidth - 0, y + rect.height - 5);
-
-  if (percentage > 10) {
-    renderer.fillRect(x + 2, y + 2, 3, rect.height - 4);
-  }
-  if (percentage > 40) {
-    renderer.fillRect(x + 6, y + 2, 3, rect.height - 4);
-  }
-  if (percentage > 70) {
-    renderer.fillRect(x + 10, y + 2, 3, rect.height - 4);
-  }
+  BaseTheme::drawBatteryOutline(renderer, x, y, battWidth, rect.height);
+  drawBatterySteppedFill(renderer, x, y, rect.height, percentage);
 }
 
 void ModernTheme::drawBatteryRight(const GfxRenderer& renderer, Rect rect, const bool showPercentage) const {
@@ -129,32 +121,18 @@ void ModernTheme::drawBatteryRight(const GfxRenderer& renderer, Rect rect, const
   const int battWidth = ModernMetrics::values.batteryWidth;
 
   if (showPercentage) {
-    const auto percentageText = std::to_string(percentage) + "%";
-    const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, percentageText.c_str(), EpdFontFamily::BOLD);
+    char percentBuf[8];
+    snprintf(percentBuf, sizeof(percentBuf), "%u%%", percentage);
+    const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, percentBuf, EpdFontFamily::BOLD);
     const auto textHeight = renderer.getTextHeight(SMALL_FONT_ID);
     renderer.fillRect(rect.x - textWidth - batteryPercentSpacing, rect.y, textWidth, textHeight, false);
-    renderer.drawText(SMALL_FONT_ID, rect.x - textWidth - batteryPercentSpacing, rect.y, percentageText.c_str(), true,
+    renderer.drawText(SMALL_FONT_ID, rect.x - textWidth - batteryPercentSpacing, rect.y, percentBuf, true,
                       EpdFontFamily::BOLD);
   }
 
   const int x = rect.x;
-  renderer.drawLine(x + 1, y, x + battWidth - 3, y);
-  renderer.drawLine(x + 1, y + rect.height - 1, x + battWidth - 3, y + rect.height - 1);
-  renderer.drawLine(x, y + 1, x, y + rect.height - 2);
-  renderer.drawLine(x + battWidth - 2, y + 1, x + battWidth - 2, y + rect.height - 2);
-  renderer.drawPixel(x + battWidth - 1, y + 3);
-  renderer.drawPixel(x + battWidth - 1, y + rect.height - 4);
-  renderer.drawLine(x + battWidth - 0, y + 4, x + battWidth - 0, y + rect.height - 5);
-
-  if (percentage > 10) {
-    renderer.fillRect(x + 2, y + 2, 3, rect.height - 4);
-  }
-  if (percentage > 40) {
-    renderer.fillRect(x + 6, y + 2, 3, rect.height - 4);
-  }
-  if (percentage > 70) {
-    renderer.fillRect(x + 10, y + 2, 3, rect.height - 4);
-  }
+  BaseTheme::drawBatteryOutline(renderer, x, y, battWidth, rect.height);
+  drawBatterySteppedFill(renderer, x, y, rect.height, percentage);
 }
 
 // ============================================================
@@ -792,10 +770,8 @@ void ModernTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const st
     const int pillY = infoStart + titleOffset - pillPadV;
     const int pillW = rect.width - pillPadH * 2;
     const int pillH = dotsOffset + 6 + pillPadV - titleOffset + pillPadV;
-    if (inverted) {
-      renderer.fillRoundedRect(rect.x + pillPadH, pillY, pillW, pillH, cornerRadius, Color::Black);
-    } else {
-      renderer.fillRoundedRect(rect.x + pillPadH, pillY, pillW, pillH, cornerRadius, Color::Black);
+    renderer.fillRoundedRect(rect.x + pillPadH, pillY, pillW, pillH, cornerRadius, Color::Black);
+    if (!inverted) {
       renderer.fillRoundedRect(rect.x + pillPadH + 2, pillY + 2, pillW - 4, pillH - 4, cornerRadius - 2, Color::White);
     }
 
