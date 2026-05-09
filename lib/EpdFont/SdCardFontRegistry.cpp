@@ -24,17 +24,10 @@ bool SdCardFontFamilyInfo::hasSize(uint8_t size) const {
 
 std::vector<uint8_t> SdCardFontFamilyInfo::availableSizes() const {
   std::vector<uint8_t> sizes;
-  for (const auto& f : files) {
-    bool found = false;
-    for (uint8_t s : sizes) {
-      if (s == f.pointSize) {
-        found = true;
-        break;
-      }
-    }
-    if (!found) sizes.push_back(f.pointSize);
-  }
+  sizes.reserve(files.size());
+  for (const auto& f : files) sizes.push_back(f.pointSize);
   std::sort(sizes.begin(), sizes.end());
+  sizes.erase(std::unique(sizes.begin(), sizes.end()), sizes.end());
   return sizes;
 }
 

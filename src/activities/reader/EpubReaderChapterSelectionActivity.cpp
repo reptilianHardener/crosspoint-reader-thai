@@ -41,8 +41,6 @@ void EpubReaderChapterSelectionActivity::onEnter() {
   requestUpdate();
 }
 
-void EpubReaderChapterSelectionActivity::onExit() { Activity::onExit(); }
-
 void EpubReaderChapterSelectionActivity::loop() {
   const int pageItems = getPageItems();
   const int totalItems = getTotalItems();

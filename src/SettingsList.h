@@ -94,9 +94,8 @@ inline SettingInfo buildFontFamilySetting(const SdCardFontRegistry* registry) {
 // Each entry has a key (for JSON API) and category (for grouping).
 // ACTION-type entries and entries without a key are device-only.
 //
-// The static list is constructed exactly once (master's optimization, #1086 +
-// #1636) so the per-entry SettingInfo cost is paid once. When an
-// SdCardFontRegistry is supplied AND has SD card fonts installed, the
+// The static list is constructed exactly once so the per-entry SettingInfo cost is paid once.
+// When an SdCardFontRegistry is supplied AND has SD card fonts installed, the
 // font-family entry is replaced in a per-call copy with a registry-aware
 // version. Callers without SD fonts pay only a vector copy.
 inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* registry = nullptr) {
@@ -105,7 +104,7 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
         // --- Display ---
         SettingInfo::Enum(StrId::STR_SLEEP_SCREEN, &CrossPointSettings::sleepScreen,
                           {StrId::STR_DARK, StrId::STR_LIGHT, StrId::STR_CUSTOM, StrId::STR_COVER, StrId::STR_NONE_OPT,
-                           StrId::STR_COVER_CUSTOM},
+                           StrId::STR_COVER_CUSTOM, StrId::STR_HALO_2_COVER},
                           "sleepScreen", StrId::STR_CAT_DISPLAY),
         SettingInfo::Enum(StrId::STR_SLEEP_COVER_MODE, &CrossPointSettings::sleepScreenCoverMode,
                           {StrId::STR_FIT, StrId::STR_CROP}, "sleepScreenCoverMode", StrId::STR_CAT_DISPLAY),
@@ -121,8 +120,10 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
             "refreshFrequency", StrId::STR_CAT_DISPLAY),
         SettingInfo::Enum(StrId::STR_UI_THEME, &CrossPointSettings::uiTheme,
                           {StrId::STR_THEME_CLASSIC, StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_EXTENDED,
-                           StrId::STR_THEME_ROUNDEDRAFF},
+                           StrId::STR_THEME_MODERN, StrId::STR_THEME_ROUNDEDRAFF},
                           "uiTheme", StrId::STR_CAT_DISPLAY),
+        SettingInfo::Enum(StrId::STR_PREVIEWS, &CrossPointSettings::previewDirection,
+                          {StrId::STR_DIR_LEFT, StrId::STR_DIR_RIGHT}, "previewDirection", StrId::STR_CAT_DISPLAY),
         SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix, "fadingFix",
                             StrId::STR_CAT_DISPLAY),
 
@@ -130,11 +131,12 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
         // Built-in font-family entry. Replaced per-call with a registry-aware
         // version when SD fonts are installed.
         SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-                          {StrId::STR_NOTO_SERIF, StrId::STR_NOTO_SANS, StrId::STR_OPEN_DYSLEXIC}, "fontFamily",
+                          {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_NOTO_SANS_THAI_LOOPED}, "fontFamily",
                           StrId::STR_CAT_READER),
-        SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
-                          {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE, StrId::STR_X_LARGE}, "fontSize",
-                          StrId::STR_CAT_READER),
+        SettingInfo::Value(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
+                           {CrossPointSettings::FONT_SIZE_MIN, CrossPointSettings::FONT_SIZE_MAX,
+                            CrossPointSettings::FONT_SIZE_STEP},
+                           "fontSize", StrId::STR_CAT_READER),
         SettingInfo::Enum(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacing,
                           {StrId::STR_TIGHT, StrId::STR_NORMAL, StrId::STR_WIDE}, "lineSpacing", StrId::STR_CAT_READER),
         SettingInfo::Value(StrId::STR_SCREEN_MARGIN, &CrossPointSettings::screenMargin, {5, 40, 5}, "screenMargin",

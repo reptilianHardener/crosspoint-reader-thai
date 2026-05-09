@@ -46,6 +46,8 @@ struct ThemeMetrics {
 
   int homeTopPadding;
   int homeCoverHeight;
+  int homeSideCoverHeight = 0;  // Side cover thumbnail height (0 = use homeCoverHeight)
+  int homeFarCoverHeight = 0;   // Far cover thumbnail height (0 = use homeCoverHeight)
   int homeCoverTileHeight;
   int homeRecentBooksCount;
   bool homeContinueReadingInMenu;
@@ -126,10 +128,10 @@ class BaseTheme {
 
   // Component drawing methods
   void drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t current, size_t total) const;
-  void drawBatteryLeft(const GfxRenderer& renderer, Rect rect,
-                       bool showPercentage = true) const;  // Left aligned (reader mode)
-  void drawBatteryRight(const GfxRenderer& renderer, Rect rect,
-                        bool showPercentage = true) const;  // Right aligned (UI headers)
+  virtual void drawBatteryLeft(const GfxRenderer& renderer, Rect rect,
+                               bool showPercentage = true) const;  // Left aligned (reader mode)
+  virtual void drawBatteryRight(const GfxRenderer& renderer, Rect rect,
+                                bool showPercentage = true) const;  // Right aligned (UI headers)
   virtual void fillBatteryIcon(const GfxRenderer& renderer, Rect rect, uint16_t percentage) const;
   virtual void drawButtonHints(GfxRenderer& renderer, const char* btn1, const char* btn2, const char* btn3,
                                const char* btn4) const;
@@ -154,8 +156,9 @@ class BaseTheme {
                               const std::function<UIIcon(int index)>& rowIcon) const;
   virtual Rect drawPopup(const GfxRenderer& renderer, const char* message) const;
   virtual void fillPopupProgress(const GfxRenderer& renderer, const Rect& layout, const int progress) const;
-  void drawStatusBar(GfxRenderer& renderer, const float bookProgress, const int currentPage, const int pageCount,
-                     std::string title, const int paddingBottom = 0, const int textYOffset = 0) const;
+  virtual void drawStatusBar(GfxRenderer& renderer, const float bookProgress, const int currentPage,
+                             const int pageCount, std::string title, const int paddingBottom = 0,
+                             const int textYOffset = 0) const;
   void drawHelpText(const GfxRenderer& renderer, Rect rect, const char* label) const;
   virtual void drawTextField(const GfxRenderer& renderer, Rect rect, const int textWidth, bool cursorMode = false,
                              int contentStartX = 0, int contentWidth = 0) const;

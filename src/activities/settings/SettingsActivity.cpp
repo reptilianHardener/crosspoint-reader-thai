@@ -17,6 +17,7 @@
 #include "SdFirmwareUpdateActivity.h"
 #include "SettingsList.h"
 #include "StatusBarSettingsActivity.h"
+#include "ThaiDictionaryActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -62,6 +63,7 @@ void SettingsActivity::rebuildSettingsLists() {
   readerSettings.insert(readerSettings.begin() + 1,
                         SettingInfo::Action(StrId::STR_DOWNLOAD_FONTS, SettingAction::DownloadFonts));
   readerSettings.push_back(SettingInfo::Action(StrId::STR_CUSTOMISE_STATUS_BAR, SettingAction::CustomiseStatusBar));
+  readerSettings.push_back(SettingInfo::Action(StrId::STR_THAI_DICTIONARY, SettingAction::ThaiDictionary));
 
   // Update currentSettings pointer and count for the active category
   switch (selectedCategoryIndex) {
@@ -229,6 +231,16 @@ void SettingsActivity::toggleCurrentSetting() {
       case SettingAction::ClearCache:
         startActivityForResult(std::make_unique<ClearCacheActivity>(renderer, mappedInput), resultHandler);
         break;
+      case SettingAction::RefreshRecentBooks:
+        startActivityForResult(
+            std::make_unique<ClearCacheActivity>(renderer, mappedInput, ClearCacheActivity::Mode::RefreshRecents),
+            resultHandler);
+        break;
+      case SettingAction::ClearRecentBooks:
+        startActivityForResult(
+            std::make_unique<ClearCacheActivity>(renderer, mappedInput, ClearCacheActivity::Mode::ClearRecents),
+            resultHandler);
+        break;
       case SettingAction::CheckForUpdates:
         startActivityForResult(std::make_unique<OtaUpdateActivity>(renderer, mappedInput), resultHandler);
         break;
@@ -244,6 +256,9 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       case SettingAction::Language:
         startActivityForResult(std::make_unique<LanguageSelectActivity>(renderer, mappedInput), resultHandler);
+        break;
+      case SettingAction::ThaiDictionary:
+        startActivityForResult(std::make_unique<ThaiDictionaryActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::None:
         // Do nothing
