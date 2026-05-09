@@ -485,17 +485,22 @@ void ModernTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCou
   const int rowGap = ModernMetrics::values.menuSpacing;
   const int colWidth = (totalWidth - colGap) / mainMenuColumns;
 
-  // Calculate number of rows and expand row height to fill available space (capped)
+  // HomeActivity passes a rect that extends past the screen bottom (its height formula doesn't
+  // account for homeCoverTileHeight). Clamp to the actual on-screen space above the button hints.
+  const int onScreenHeight =
+      std::max(0, renderer.getScreenHeight() - rect.y - ModernMetrics::values.buttonHintsHeight);
+  const int effectiveHeight = std::min(rect.height, onScreenHeight);
+
+  // Calculate number of rows and fit row height into effective space (capped)
   const int rows = (buttonCount + mainMenuColumns - 1) / mainMenuColumns;
-  const int availablePerRow = (rect.height - (rows - 1) * rowGap) / rows;
-  // Expand up to 1.5x the base menu row height to fill space without looking sparse
+  const int availablePerRow = rows > 0 ? (effectiveHeight - (rows - 1) * rowGap) / rows : effectiveHeight;
   constexpr int maxRowHeight = ModernMetrics::values.menuRowHeight * 3 / 2;
   const int rowHeight =
       std::min(std::max(availablePerRow, static_cast<int>(ModernMetrics::values.menuRowHeight)), maxRowHeight);
 
-  // Center grid vertically within the available rect
+  // Center grid vertically within the effective on-screen area
   const int totalGridHeight = rows * rowHeight + (rows - 1) * rowGap;
-  const int yOffset = (rect.height - totalGridHeight) / 2;
+  const int yOffset = (effectiveHeight - totalGridHeight) / 2;
 
   for (int i = 0; i < buttonCount; ++i) {
     int col = i % mainMenuColumns;
@@ -778,16 +783,20 @@ void ModernTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const st
     constexpr int progressOffset = 76;
     constexpr int dotsOffset = 94;
 
-    // When book is selected: black background for info area, inverted text/bar/dots
+    // Info area pill — always rendered, matches menu button style:
+    //   selected → solid black fill (inverted text)
+    //   unselected → black border with white interior (normal text)
     const bool inverted = bookIsSelected;
+    constexpr int pillPadH = ModernMetrics::values.contentSidePadding;
+    constexpr int pillPadV = 14;
+    const int pillY = infoStart + titleOffset - pillPadV;
+    const int pillW = rect.width - pillPadH * 2;
+    const int pillH = dotsOffset + 6 + pillPadV - titleOffset + pillPadV;
     if (inverted) {
-      // Black rounded pill behind title + author + progress + dots
-      // Horizontal padding matches grid (contentSidePadding), vertical +1mm (~10px)
-      constexpr int pillPadH = ModernMetrics::values.contentSidePadding;
-      constexpr int pillPadV = 14;
-      const int pillY = infoStart + titleOffset - pillPadV;
-      const int pillH = dotsOffset + 6 + pillPadV - titleOffset + pillPadV;
-      renderer.fillRoundedRect(rect.x + pillPadH, pillY, rect.width - pillPadH * 2, pillH, cornerRadius, Color::Black);
+      renderer.fillRoundedRect(rect.x + pillPadH, pillY, pillW, pillH, cornerRadius, Color::Black);
+    } else {
+      renderer.fillRoundedRect(rect.x + pillPadH, pillY, pillW, pillH, cornerRadius, Color::Black);
+      renderer.fillRoundedRect(rect.x + pillPadH + 2, pillY + 2, pillW - 4, pillH - 4, cornerRadius - 2, Color::White);
     }
 
     // Title: 1 line only, truncated, centered

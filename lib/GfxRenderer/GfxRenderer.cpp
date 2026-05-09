@@ -1499,7 +1499,7 @@ int GfxRenderer::getLineHeight(const int fontId) const {
     return 0;
   }
 
-  return fontIt->second.getData(EpdFontFamily::REGULAR)->advanceY;
+  return fontIt->second.getData(EpdFontFamily::REGULAR)->advanceY + fontIt->second.lineHeightAdjust;
 }
 
 int GfxRenderer::getTextHeight(const int fontId) const {

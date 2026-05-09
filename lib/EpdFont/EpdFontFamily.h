@@ -9,6 +9,8 @@ class EpdFontFamily {
                          const EpdFont* boldItalic = nullptr)
       : regular(regular), bold(bold), italic(italic), boldItalic(boldItalic) {}
   ~EpdFontFamily() = default;
+
+  int lineHeightAdjust = 0;
   void getTextDimensions(const char* string, int* w, int* h, Style style = REGULAR) const;
   const EpdFontData* getData(Style style = REGULAR) const;
   const EpdGlyph* getGlyph(uint32_t cp, Style style = REGULAR) const;

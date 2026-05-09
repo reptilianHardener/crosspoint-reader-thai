@@ -247,7 +247,12 @@ void setupDisplayAndFonts() {
   fontCacheManager.setFontDecompressor(&fontDecompressor);
   renderer.setFontCacheManager(&fontCacheManager);
 #ifndef OMIT_FONTS
-  // Bookerly
+  // Bookerly — slight line-height increase for better readability
+  bookerly12FontFamily.lineHeightAdjust = 4;
+  bookerly14FontFamily.lineHeightAdjust = 4;
+  bookerly16FontFamily.lineHeightAdjust = 4;
+  bookerly18FontFamily.lineHeightAdjust = 4;
+  bookerly20FontFamily.lineHeightAdjust = 4;
   renderer.insertFont(BOOKERLY_12_FONT_ID, bookerly12FontFamily);
   renderer.insertFont(BOOKERLY_14_FONT_ID, bookerly14FontFamily);
   renderer.insertFont(BOOKERLY_16_FONT_ID, bookerly16FontFamily);
