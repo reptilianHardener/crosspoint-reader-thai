@@ -107,7 +107,7 @@ void ModernTheme::drawBatteryLeft(const GfxRenderer& renderer, Rect rect, const 
     char percentBuf[8];
     snprintf(percentBuf, sizeof(percentBuf), "%u%%", percentage);
     renderer.drawText(SMALL_FONT_ID, rect.x + batteryPercentSpacing + battWidth, rect.y, percentBuf, true,
-                      EpdFontFamily::BOLD);
+                      EpdFontFamily::REGULAR);
   }
 
   const int x = rect.x;
@@ -123,11 +123,11 @@ void ModernTheme::drawBatteryRight(const GfxRenderer& renderer, Rect rect, const
   if (showPercentage) {
     char percentBuf[8];
     snprintf(percentBuf, sizeof(percentBuf), "%u%%", percentage);
-    const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, percentBuf, EpdFontFamily::BOLD);
+    const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, percentBuf, EpdFontFamily::REGULAR);
     const auto textHeight = renderer.getTextHeight(SMALL_FONT_ID);
     renderer.fillRect(rect.x - textWidth - batteryPercentSpacing, rect.y, textWidth, textHeight, false);
     renderer.drawText(SMALL_FONT_ID, rect.x - textWidth - batteryPercentSpacing, rect.y, percentBuf, true,
-                      EpdFontFamily::BOLD);
+                      EpdFontFamily::REGULAR);
   }
 
   const int x = rect.x;
