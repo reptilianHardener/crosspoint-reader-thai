@@ -244,7 +244,7 @@ void EpubReaderActivity::loop() {
     const uint8_t newOrientation =
         nextTriggered ? (SETTINGS.orientation - 1 + SETTINGS.ORIENTATION_COUNT) % SETTINGS.ORIENTATION_COUNT
                       : (SETTINGS.orientation + 1) % SETTINGS.ORIENTATION_COUNT;
-    applyOrientation(newOrientation);
+    ReaderUtils::applyOrientation(renderer, newOrientation);
     requestUpdate();
     return;
   }

@@ -330,7 +330,8 @@ void setup() {
   // Load optional Thai user dictionary from SD card (non-blocking, silently skips if absent)
   loadThaiUserDictionary();
 
-  switch (gpio.getWakeupReason()) {
+  const auto wakeupReason = gpio.getWakeupReason();
+  switch (wakeupReason) {
     case HalGPIO::WakeupReason::PowerButton:
       LOG_DBG("MAIN", "Verifying power button press duration");
       gpio.verifyPowerButtonWakeup(SETTINGS.getPowerButtonDuration(),

@@ -120,7 +120,7 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
             "refreshFrequency", StrId::STR_CAT_DISPLAY),
         SettingInfo::Enum(StrId::STR_UI_THEME, &CrossPointSettings::uiTheme,
                           {StrId::STR_THEME_CLASSIC, StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_EXTENDED,
-                           StrId::STR_THEME_MODERN},
+                           StrId::STR_THEME_MODERN, StrId::STR_THEME_ROUNDEDRAFF},
                           "uiTheme", StrId::STR_CAT_DISPLAY),
         SettingInfo::Enum(StrId::STR_PREVIEWS, &CrossPointSettings::previewDirection,
                           {StrId::STR_DIR_LEFT, StrId::STR_DIR_RIGHT}, "previewDirection", StrId::STR_CAT_DISPLAY),

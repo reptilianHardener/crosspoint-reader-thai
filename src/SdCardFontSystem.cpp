@@ -6,9 +6,9 @@
 #include "CrossPointSettings.h"
 
 static uint8_t fontSizeEnumFromSettings() {
-  uint8_t e = SETTINGS.fontSize;
-  if (e >= CrossPointSettings::FONT_SIZE_COUNT) e = 1;  // default to MEDIUM
-  return e;
+  uint8_t ptSize = SETTINGS.fontSize;
+  if (ptSize < CrossPointSettings::FONT_SIZE_MIN) ptSize = CrossPointSettings::FONT_SIZE_MIN;
+  return (ptSize - CrossPointSettings::FONT_SIZE_MIN) / CrossPointSettings::FONT_SIZE_STEP;
 }
 
 void SdCardFontSystem::begin(GfxRenderer& renderer) {

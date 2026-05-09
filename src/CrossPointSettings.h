@@ -151,7 +151,7 @@ class CrossPointSettings {
   };
 
   // UI Theme
-  enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2, MODERN = 3 };
+  enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2, MODERN = 3, ROUNDEDRAFF = 4 };
   enum PREVIEW_DIRECTION { PREVIEW_LEFT = 0, PREVIEW_RIGHT = 1, PREVIEW_DIRECTION_COUNT };
 
   // Image rendering in EPUB reader

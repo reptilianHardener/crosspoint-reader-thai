@@ -261,7 +261,8 @@ void ModernTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount
                            const std::function<std::string(int index)>& rowTitle,
                            const std::function<std::string(int index)>& rowSubtitle,
                            const std::function<UIIcon(int index)>& rowIcon,
-                           const std::function<std::string(int index)>& rowValue, bool highlightValue) const {
+                           const std::function<std::string(int index)>& rowValue, bool highlightValue,
+                           const std::function<bool(int index)>& /*rowDimmed*/) const {
   int rowHeight =
       (rowSubtitle != nullptr) ? ModernMetrics::values.listWithSubtitleRowHeight : ModernMetrics::values.listRowHeight;
   int pageItems = rect.height / rowHeight;
