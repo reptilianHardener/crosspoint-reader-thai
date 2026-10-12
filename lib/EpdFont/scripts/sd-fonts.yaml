@@ -44,6 +44,7 @@ scriptGroups:
   - {tag: hangul, label: Korean}
   - {tag: cherokee, label: Cherokee}
   - {tag: tifinagh, label: Tifinagh}
+  - {tag: thai, label: Thai}
 
 families:
   # ── Serif ──────────────────────────────────────────────────────────────
@@ -401,3 +402,71 @@ families:
     styles:
       regular: {url: "https://raw.githubusercontent.com/fonts-archive/MaruBuri/977eeff68d1d40bcef341f09c1f56cce1903bb8a/MaruBuri-SemiBold.otf"}
       bold:    {url: "https://raw.githubusercontent.com/fonts-archive/MaruBuri/977eeff68d1d40bcef341f09c1f56cce1903bb8a/MaruBuri-Bold.otf"}
+
+  # ── Thai ───────────────────────────────────────────────────────────────
+  # The firmware has no built-in Thai glyphs: a Thai book (and Thai text in the
+  # UI) needs one of these families on the SD card. Every family carries Latin
+  # too, so it can be the reader font for mixed Thai/English books.
+  #
+  # Sizes 8 and 10 are there for the interface, not for reading: it draws at 8, 10
+  # and 12 pt and borrows Thai glyphs from the selected reader family at exactly
+  # those sizes.
+
+  - name: NotoSansThaiLooped
+    description: "Traditional looped Thai sans-serif (Thai, Latin)"
+    scripts: [thai, latin]
+    intervals: thai,latin-ext,punctuation
+    sizes: [8, 10, 12, 14, 16, 18, 20]
+    styles:
+      regular: {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansthailooped/NotoSansThaiLooped%5Bwdth%2Cwght%5D.ttf", variable: {wght: 400, wdth: 100}}
+      bold:    {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansthailooped/NotoSansThaiLooped%5Bwdth%2Cwght%5D.ttf", variable: {wght: 700, wdth: 100}}
+
+  - name: NotoSerifThai
+    description: "Thai serif (Thai, Latin)"
+    scripts: [thai, latin]
+    intervals: thai,latin-ext,punctuation
+    sizes: [8, 10, 12, 14, 16, 18, 20]
+    styles:
+      regular: {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/notoserifthai/NotoSerifThai%5Bwdth%2Cwght%5D.ttf", variable: {wght: 400, wdth: 100}}
+      bold:    {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/notoserifthai/NotoSerifThai%5Bwdth%2Cwght%5D.ttf", variable: {wght: 700, wdth: 100}}
+
+  - name: Sarabun
+    description: "Thai government standard text face (Thai, Latin)"
+    scripts: [thai, latin]
+    intervals: thai,latin-ext,punctuation
+    sizes: [8, 10, 12, 14, 16, 18, 20]
+    styles:
+      regular:    {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/sarabun/Sarabun-Regular.ttf"}
+      bold:       {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/sarabun/Sarabun-Bold.ttf"}
+      italic:     {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/sarabun/Sarabun-Italic.ttf"}
+      bolditalic: {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/sarabun/Sarabun-BoldItalic.ttf"}
+
+  - name: BaiJamjuree
+    description: "Geometric loopless Thai sans-serif (Thai, Latin)"
+    scripts: [thai, latin]
+    intervals: thai,latin-ext,punctuation
+    sizes: [8, 10, 12, 14, 16, 18, 20]
+    styles:
+      regular:    {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/baijamjuree/BaiJamjuree-Regular.ttf"}
+      bold:       {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/baijamjuree/BaiJamjuree-Bold.ttf"}
+      italic:     {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/baijamjuree/BaiJamjuree-Italic.ttf"}
+      bolditalic: {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/baijamjuree/BaiJamjuree-BoldItalic.ttf"}
+
+  - name: Mali
+    description: "Informal handwritten Thai (Thai, Latin)"
+    scripts: [thai, latin]
+    intervals: thai,latin-ext,punctuation
+    sizes: [8, 10, 12, 14, 16, 18, 20]
+    styles:
+      regular:    {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/mali/Mali-Regular.ttf"}
+      bold:       {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/mali/Mali-Bold.ttf"}
+      italic:     {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/mali/Mali-Italic.ttf"}
+      bolditalic: {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/mali/Mali-BoldItalic.ttf"}
+
+  - name: Itim
+    description: "Rounded handwritten Thai (Thai, Latin)"
+    scripts: [thai, latin]
+    intervals: thai,latin-ext,punctuation
+    sizes: [8, 10, 12, 14, 16, 18, 20]
+    styles:
+      regular: {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/itim/Itim-Regular.ttf"}
