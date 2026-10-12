@@ -146,6 +146,19 @@ enum UIIcon {
   Blocks
 };
 
+// Layout of a home menu drawn as a grid rather than a single column. Shared between the
+// theme (drawing) and HomeActivity (navigation and touch hit-testing) so the two cannot
+// drift apart.
+struct HomeMenuGrid {
+  int columns = 1;
+  int left = 0;     // x of the first column
+  int top = 0;      // y of the first row
+  int colStep = 0;  // column pitch (tile width + gap)
+  int rowStep = 0;  // row pitch (tile height + gap)
+  int tileWidth = 0;
+  int tileHeight = 0;
+};
+
 // Default theme implementation (Classic Theme)
 // Additional themes can inherit from this and override methods as needed
 
@@ -286,6 +299,17 @@ class BaseTheme {
   // Thumb generation height for home covers; 0 means use metrics.homeCoverHeight.
   // Themes with slots wider than 0.6 aspect override this so covers still fill.
   virtual int homeCoverThumbHeight(const GfxRenderer&) const { return 0; }
+  // True when the home screen shows the recent books as a carousel: one book is centred
+  // and Left/Right rotate through the others, instead of every book having its own tile.
+  virtual bool homeIsCarousel() const { return false; }
+  // Called when the home screen opens, before its first render, so a theme can drop
+  // any state it keeps between frames (the carousel's remembered centre book).
+  virtual void onHomeEnter() const {}
+  // Further thumbnail heights the home screen draws besides homeCoverThumbHeight()
+  // (the carousel's smaller side covers). Writes up to `capacity` heights, returns the count.
+  virtual int homeExtraCoverThumbHeights(int* /*heights*/, int /*capacity*/) const { return 0; }
+  // Fills `grid` and returns true when drawButtonMenu lays the home menu out as a grid.
+  virtual bool homeMenuGrid(const GfxRenderer&, Rect, int /*buttonCount*/, HomeMenuGrid&) const { return false; }
 
   // Shared constants and helpers for battery drawing (used by all themes)
   static constexpr int batteryPercentSpacing = 4;
