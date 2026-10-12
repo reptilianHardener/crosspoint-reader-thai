@@ -1,3 +1,40 @@
+# CrossPoint Halo 2 Custom Firmware
+
+> **Fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader)** — customised for Thai language support, improved typography, and Halo 2 UI improvements.
+>
+> 🤖 **Built with [Claude](https://claude.ai) via Vibe Coding.**
+> This firmware was developed collaboratively with AI. Using AI as a tool doesn't make the work less real — it just means the problems get solved faster. If that bothers you, that's okay.
+
+## What this fork adds
+
+- **Thai reading**: dictionary-based word breaking so Thai text wraps between words, correct stacking of vowel and tone marks, a user dictionary for words the built-in list misses (**Settings > Reader > Thai Dictionary**), and Thai-aware wrapping for TXT files.
+- **Thai UI and keyboard**: a Thai translation and a Kedmanee on-screen keyboard layer.
+- **Halo 2 theme**: a cover carousel on the home screen, a two-column menu, and a "Halo 2 Cover" sleep screen with the book's title and reading progress.
+- **Bold Text**: a reader setting that lays the whole book out in bold.
+
+### Thai fonts
+
+The firmware has no built-in Thai glyphs. Thai books, and Thai text in the interface, need a Thai font on the SD card:
+
+1. Build the Thai families (Noto Sans Thai Looped, Noto Serif Thai, Sarabun, Bai Jamjuree, Mali, Itim):
+
+   ```sh
+   pip install -r lib/EpdFont/scripts/requirements.txt
+   python3 lib/EpdFont/scripts/build-sd-fonts.py \
+     --only NotoSansThaiLooped,NotoSerifThai,Sarabun,BaiJamjuree,Mali,Itim
+   ```
+
+2. Copy the family folders from `lib/EpdFont/scripts/output/` to `/fonts/` on the SD card.
+3. Pick the family under **Settings > Reader > Text Settings**.
+
+The interface borrows its Thai glyphs from that selected family, at 8, 10 and 12 pt. Until a Thai family is selected, Thai menu text and Thai book titles cannot be drawn. Switch the language to Thai only after the font is in place.
+
+See [docs/sd-card-fonts.md](docs/sd-card-fonts.md) for the other ways to install fonts. The on-device font download lists upstream's catalogue, which does not include these Thai families.
+
+---
+
+The rest of this document is the upstream project's README.
+
 # CrossPoint Reader
 
 [![Fund contributors](https://img.shields.io/badge/%F0%9F%91%91_Fund_contributors-royalty.dev-BB953A?style=for-the-badge&labelColor=1a1a1a)](https://app.royalty.dev/crosspoint-reader/crosspoint-reader)
