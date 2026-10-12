@@ -90,6 +90,21 @@ if (parsedSize != fileSize) {
 
 ## `section.bin`
 
+### Version 49
+
+Version 49 adds two fields to the header, after `wordSpacingPercent` and before
+the page count:
+
+- `forceBold` (`bool`): the reader's "Bold text" setting. When set, every run is
+  laid out in the bold face.
+- `thaiDictionaryRevision` (`uint16_t`): a fingerprint of the Thai user
+  dictionary (`0` when none is loaded).
+
+Both are part of the cache key. The version was also bumped because Thai text is
+now split at dictionary word boundaries, which become zero-width break
+opportunities, and because Thai vowel and tone marks no longer contribute to a
+word's measured width. Cached line breaks from version 48 no longer match.
+
 ### Version 48
 
 Version 48 keeps the version 47 serialized layout unchanged. It was bumped

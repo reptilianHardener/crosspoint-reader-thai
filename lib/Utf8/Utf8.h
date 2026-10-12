@@ -96,10 +96,35 @@ inline bool utf8IsCjkCodepoint(const uint32_t cp) {
          || (cp >= 0x30000 && cp <= 0x323AF);  // CJK Extensions G-H
 }
 
+// Thai (U+0E00-U+0E7F). Thai is written without spaces between words and stacks up to two
+// marks above a consonant, so layout and rendering both need to classify its codepoints.
+inline bool utf8IsThaiCodepoint(const uint32_t cp) { return cp >= 0x0E00 && cp <= 0x0E7F; }
+
+// Below-base vowels (sara u, sara uu) and phinthu.
+inline bool utf8IsThaiLowerCombiningMark(const uint32_t cp) { return cp >= 0x0E38 && cp <= 0x0E3A; }
+
+// First tier above the base: upper vowels, mai han akat, mai tai khu, nikhahit.
+inline bool utf8IsThaiUpperLevelTwoMark(const uint32_t cp) {
+  return cp == 0x0E31 || (cp >= 0x0E34 && cp <= 0x0E37) || cp == 0x0E47 || cp == 0x0E4D;
+}
+
+// Second tier above the base: tone marks, thanthakhat, yamakkan. These sit on top of a
+// level-two mark when one is present.
+inline bool utf8IsThaiUpperLevelThreeMark(const uint32_t cp) { return (cp >= 0x0E48 && cp <= 0x0E4C) || cp == 0x0E4E; }
+
+inline bool utf8IsThaiUpperCombiningMark(const uint32_t cp) {
+  return utf8IsThaiUpperLevelTwoMark(cp) || utf8IsThaiUpperLevelThreeMark(cp);
+}
+
+inline bool utf8IsThaiCombiningMark(const uint32_t cp) {
+  return utf8IsThaiLowerCombiningMark(cp) || utf8IsThaiUpperCombiningMark(cp);
+}
+
 // Returns true for Unicode combining diacritical marks that should not advance the cursor.
 inline bool utf8IsCombiningMark(const uint32_t cp) {
-  return (cp >= 0x0300 && cp <= 0x036F)      // Combining Diacritical Marks
-         || (cp >= 0x1DC0 && cp <= 0x1DFF)   // Combining Diacritical Marks Supplement
-         || (cp >= 0x20D0 && cp <= 0x20FF)   // Combining Diacritical Marks for Symbols
-         || (cp >= 0xFE20 && cp <= 0xFE2F);  // Combining Half Marks
+  return (cp >= 0x0300 && cp <= 0x036F)     // Combining Diacritical Marks
+         || (cp >= 0x1DC0 && cp <= 0x1DFF)  // Combining Diacritical Marks Supplement
+         || (cp >= 0x20D0 && cp <= 0x20FF)  // Combining Diacritical Marks for Symbols
+         || (cp >= 0xFE20 && cp <= 0xFE2F)  // Combining Half Marks
+         || utf8IsThaiCombiningMark(cp);    // Thai above/below vowels and tone marks
 }

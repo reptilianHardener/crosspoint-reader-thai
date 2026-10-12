@@ -23,4 +23,9 @@ struct ReaderRenderSpec {
   bool embeddedStyle = true;
   uint8_t imageRendering = 0;
   bool focusReadingEnabled = false;
+  // Lay out every run in the bold face regardless of the book's markup.
+  bool forceBold = false;
+  // Fingerprint of the Thai user dictionary (0 = none loaded). Word boundaries, and so
+  // line breaks, depend on it, so editing the dictionary must invalidate cached sections.
+  uint16_t thaiDictionaryRevision = 0;
 };

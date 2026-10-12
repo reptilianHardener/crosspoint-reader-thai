@@ -16,6 +16,7 @@
 #include "../Memory/Memory.h"
 #include "FontCacheManager.h"
 #include "GlyphBitmap.h"
+#include "ThaiMarkStack.h"
 
 namespace {
 constexpr int trackingBetween(const uint32_t leftCp, const uint32_t rightCp, const int8_t tracking) {
@@ -729,6 +730,7 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
   const auto& font = fontIt->second;
 
   const char* textCursor = renderedText;
+  ThaiMarkStack thaiStack;
   uint32_t cp;
   uint32_t prevCp = 0;
   while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&textCursor)))) {
@@ -743,6 +745,21 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
       const EpdGlyph* combiningGlyph = font.getGlyph(cp, style);
       if (!combiningGlyph) continue;
       const auto anchor = combiningMark::anchorFor(cp);
+      if (anchor == combiningMark::Anchor::PenNative) {
+        // Thai mark: horizontally where the font put it (relative to the pen after the
+        // base), vertically raised only as far as needed to clear what is stacked below.
+        if (utf8IsThaiUpperLevelThreeMark(cp) && !thaiStack.hasStacked) {
+          const auto* peek = reinterpret_cast<const uint8_t*>(textCursor);
+          if (utf8NextCodepoint(&peek) == 0x0E33) {
+            if (const EpdGlyph* saraAm = font.getGlyph(0x0E33, style)) thaiStack.seedFromSaraAm(saraAm->top);
+          }
+        }
+        const int raiseBy = thaiStack.raiseFor(cp, combiningGlyph->top, combiningGlyph->height, lastBaseTop,
+                                               font.getData(style)->advanceY);
+        const int penX = lastBaseX + fp4::toPixel(prevAdvanceFP);
+        renderCharImpl<TextRotation::None>(*this, renderMode, font, cp, penX, yPos - raiseBy, black, style);
+        continue;
+      }
       const int raiseBy =
           combiningMark::raiseAboveBase(anchor, combiningGlyph->top, combiningGlyph->height, lastBaseTop);
       const int combiningX = combiningMark::anchorOver(anchor, lastBaseX, lastBaseLeft, lastBaseWidth,
@@ -752,6 +769,7 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
     }
 
     cp = font.applyLigatures(cp, textCursor, style);
+    thaiStack.resetForBase();
 
     // Differential rounding: snap (previous advance + current kern) as one unit so
     // identical character pairs always produce the same pixel step regardless of
@@ -2131,6 +2149,11 @@ int GfxRenderer::getTextAdvanceX(const int fontId, const char* text, EpdFontFami
       if (BidiUtils::isTransparentMark(cp)) {
         continue;
       }
+      // Thai marks are zero-advance overlays in drawText regardless of what the font's
+      // advance table says, so they must not widen the measured run either.
+      if (utf8IsThaiCombiningMark(cp)) {
+        continue;
+      }
       int32_t advFP = sdIt->second->getAdvance(cp, styleIdx);
       if (!utf8IsCombiningMark(cp)) {
         if (advFP == 0) {
@@ -2244,6 +2267,7 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
   int lastBaseWidth = 0;
   int lastBaseTop = 0;
   int32_t prevAdvanceFP = 0;  // 12.4 fixed-point: prev glyph's advance + next kern for snap
+  ThaiMarkStack thaiStack;
 
   uint32_t cp;
   uint32_t prevCp = 0;
@@ -2259,6 +2283,20 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
       const EpdGlyph* combiningGlyph = font.getGlyph(cp, style);
       if (!combiningGlyph) continue;
       const auto anchor = combiningMark::anchorFor(cp);
+      if (anchor == combiningMark::Anchor::PenNative) {
+        // Thai mark: see drawText. The pen runs along -Y in this rotation.
+        if (utf8IsThaiUpperLevelThreeMark(cp) && !thaiStack.hasStacked) {
+          const auto* peek = reinterpret_cast<const uint8_t*>(text);
+          if (utf8NextCodepoint(&peek) == 0x0E33) {
+            if (const EpdGlyph* saraAm = font.getGlyph(0x0E33, style)) thaiStack.seedFromSaraAm(saraAm->top);
+          }
+        }
+        const int raiseBy = thaiStack.raiseFor(cp, combiningGlyph->top, combiningGlyph->height, lastBaseTop,
+                                               font.getData(style)->advanceY);
+        const int penY = lastBaseY - fp4::toPixel(prevAdvanceFP);
+        renderCharImpl<TextRotation::Rotated90CW>(*this, renderMode, font, cp, x - raiseBy, penY, black, style);
+        continue;
+      }
       const int raiseBy =
           combiningMark::raiseAboveBase(anchor, combiningGlyph->top, combiningGlyph->height, lastBaseTop);
       const int combiningX = x - raiseBy;
@@ -2269,6 +2307,7 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
     }
 
     cp = font.applyLigatures(cp, text, style);
+    thaiStack.resetForBase();
 
     // Differential rounding: snap (previous advance + current kern) as one unit,
     // subtracting for the rotated coordinate direction.
