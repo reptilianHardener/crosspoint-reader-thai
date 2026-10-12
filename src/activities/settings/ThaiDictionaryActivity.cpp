@@ -2,6 +2,8 @@
 
 #include <GfxRenderer.h>
 #include <I18n.h>
+#include <Logging.h>
+#include <Memory.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -84,9 +86,13 @@ void ThaiDictionaryActivity::promptForWord() {
     rebuildRows();
     moveSelectionTo(listCount() - 1);
   };
-  startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_ENTER_THAI_WORD), "",
-                                                                 MAX_WORD_BYTES, InputType::Text),
-                         handler);
+  auto keyboard = makeUniqueNoThrow<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_ENTER_THAI_WORD), "",
+                                                           MAX_WORD_BYTES, InputType::Text, /*openInThai=*/true);
+  if (!keyboard) {
+    LOG_ERR("THAI", "OOM: KeyboardEntryActivity");
+    return;
+  }
+  startActivityForResult(std::move(keyboard), handler);
 }
 
 void ThaiDictionaryActivity::activateIndex(const int index) {

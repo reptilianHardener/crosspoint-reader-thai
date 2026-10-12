@@ -18,14 +18,18 @@ enum class InputType { Text, Password, Url };
 // editing, and the URL snippet layouts.
 class KeyboardEntryActivity : public Activity {
  public:
+  // openInThai: start on the Thai layer (and offer it through the language key) no matter
+  // what the UI language is. Used where the field only makes sense in Thai.
   explicit KeyboardEntryActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                  std::string title = "Enter Text", std::string initialText = "",
-                                 const size_t maxLength = 0, InputType inputType = InputType::Text)
+                                 const size_t maxLength = 0, InputType inputType = InputType::Text,
+                                 const bool openInThai = false)
       : Activity("KeyboardEntry", renderer, mappedInput),
         title(std::move(title)),
         text(std::move(initialText)),
         maxLength(maxLength),
-        inputType(inputType) {}
+        inputType(inputType),
+        openInThai(openInThai) {}
 
   void onEnter() override;
   void onExit() override;
@@ -55,6 +59,14 @@ class KeyboardEntryActivity : public Activity {
   bool shifted = false;
   bool symbols = false;
   bool urlPanel = false;  // URL snippet panel replaces the letter layer
+
+  // Thai (Kedmanee) letter layer. The SDK has no Thai layout, so like the URL layers it
+  // is an app-defined table in the .cpp. It takes the last place in the language-key
+  // cycle, after the enabled SDK layouts.
+  const bool openInThai;
+  bool thaiAvailable = false;     // resolved in onEnter(): text fields with a Thai UI, or openInThai
+  bool thaiLayer = false;         // the Thai table is the active letter layer
+  uint8_t sdkLayoutsVisited = 1;  // SDK layouts stepped through since the cycle last restarted
 
   // Key hit rects registered by the keyboard component during render(); loop()
   // routes touch snapshots against them. The 5-row EN layout registers 41 keys,
