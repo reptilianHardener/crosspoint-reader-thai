@@ -102,7 +102,11 @@ class GfxRenderer {
   // cannot render, the whole string is routed to the mapped fallback so it
   // appears at the same point size as the surrounding UI text. Populated by the
   // app-level SD font setup when an SD family is loaded. See resolveTextFontId().
-  std::map<int, int> fallbackFontMap_;
+  // Each primary font takes up to MAX_FALLBACK_FONTS fallbacks, tried in order (0 = empty
+  // slot): the reader's SD family first, then other installed families covering scripts it
+  // lacks.
+  static constexpr size_t MAX_FALLBACK_FONTS = 3;
+  std::map<int, std::array<int, MAX_FALLBACK_FONTS>> fallbackFontMap_;
 
   // If `text` contains a CJK codepoint that `fontId` cannot render and `fontId`
   // has a registered fallback, returns the fallback id; otherwise returns
@@ -195,7 +199,18 @@ class GfxRenderer {
   const std::map<int, TtfEpdFont*>& getTtfFonts() const { return ttfFonts_; }
   // Register/clear size-matched CJK UI fallbacks (see fallbackFontMap_).
   // setFallbackFont maps a primary UI font id to an SD font id of the same size.
-  void setFallbackFont(int primaryFontId, int fallbackFontId) { fallbackFontMap_[primaryFontId] = fallbackFontId; }
+  void setFallbackFont(int primaryFontId, int fallbackFontId) { fallbackFontMap_[primaryFontId][0] = fallbackFontId; }
+  // Append a further fallback, tried after those already registered. Returns false when
+  // every slot is taken.
+  bool addFallbackFont(int primaryFontId, int fallbackFontId) {
+    for (int& slot : fallbackFontMap_[primaryFontId]) {
+      if (slot == 0) {
+        slot = fallbackFontId;
+        return true;
+      }
+    }
+    return false;
+  }
   void clearFallbackFonts() { fallbackFontMap_.clear(); }
   // Ensure SD card font glyph data is loaded for the given text. Called from layout code
   // (which holds a const GfxRenderer&) before measuring word widths. Safe to call on non-SD fonts (no-op).

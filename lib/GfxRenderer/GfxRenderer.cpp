@@ -265,14 +265,16 @@ int GfxRenderer::resolveTextFontId(const int fontId, const char* text, const Epd
   if (fbIt == fallbackFontMap_.end()) {
     return fontId;  // no fallback registered for this font
   }
-  const int fallbackFontId = fbIt->second;
   const auto fontIt = fontMap.find(fontId);
-  const auto fallbackIt = fontMap.find(fallbackFontId);
-  if (fontIt == fontMap.end() || fallbackIt == fontMap.end()) {
-    return fontId;  // unknown primary or fallback not loaded — let the caller handle it
+  if (fontIt == fontMap.end()) {
+    return fontId;  // unknown primary — let the caller handle it
   }
   const EpdFontFamily& primary = fontIt->second;
-  const EpdFontFamily& fallback = fallbackIt->second;
+  const EpdFontFamily* fallbacks[MAX_FALLBACK_FONTS] = {};
+  for (size_t i = 0; i < MAX_FALLBACK_FONTS; i++) {
+    const auto fallbackIt = fbIt->second[i] != 0 ? fontMap.find(fbIt->second[i]) : fontMap.end();
+    if (fallbackIt != fontMap.end()) fallbacks[i] = &fallbackIt->second;
+  }
   const char* cursor = text;
   uint32_t cp;
   while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&cursor)))) {
@@ -282,8 +284,9 @@ int GfxRenderer::resolveTextFontId(const int fontId, const char* text, const Epd
     // skipped outright (every registered font covers it), keeping Latin
     // strings on the fast path, and a partial-coverage fallback is not worth
     // dragging the whole string into for glyphs it would also miss.
-    if (cp >= 0x80 && !primary.hasCodepoint(cp, style) && fallback.hasCodepoint(cp, style)) {
-      return fallbackFontId;
+    if (cp < 0x80 || primary.hasCodepoint(cp, style)) continue;
+    for (size_t i = 0; i < MAX_FALLBACK_FONTS; i++) {
+      if (fallbacks[i] && fallbacks[i]->hasCodepoint(cp, style)) return fbIt->second[i];
     }
   }
   return fontId;

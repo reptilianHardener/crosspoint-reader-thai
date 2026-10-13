@@ -29,6 +29,15 @@ class SdCardFontManager {
   // or loading failed.
   int loadFamilyExtraSize(const SdCardFontFamilyInfo& family, GfxRenderer& renderer, uint8_t pointSize);
 
+  // Additively load the .cpfont of a family other than the reader's at the exact
+  // `pointSize` (UI fallback for scripts the reader family lacks). Returns the
+  // font id, or 0 if the family has no file at that size or loading failed.
+  int loadFallbackFile(const SdCardFontFamilyInfo& family, GfxRenderer& renderer, uint8_t pointSize);
+
+  // Unload one font loaded by loadFallbackFile. The caller must not have
+  // registered it as a renderer fallback.
+  void unloadFont(int fontId, GfxRenderer& renderer);
+
   // Unload everything, unregister from renderer.
   void unloadAll(GfxRenderer& renderer);
 
