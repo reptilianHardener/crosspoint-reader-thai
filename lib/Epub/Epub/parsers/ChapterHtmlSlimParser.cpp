@@ -1097,21 +1097,24 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                     containerWidth = self->viewportWidth - inset;
                   }
                 }
+                // On a vertical page the image stays upright while the page axes are turned:
+                // its width lies across the lines and its height along them.
+                const int maxImageHeight = self->verticalText ? self->viewportWidth : self->viewportHeight;
+                if (self->verticalText) containerWidth = self->viewportHeight;
 
                 if (hasCssHeight && hasCssWidth && dims.width > 0 && dims.height > 0) {
                   // Both CSS height and width set: resolve both, then clamp to viewport preserving requested ratio
                   displayHeight = static_cast<int>(
-                      imgStyle.imageHeight.toPixels(emSize, static_cast<float>(self->viewportHeight)) + 0.5f);
+                      imgStyle.imageHeight.toPixels(emSize, static_cast<float>(maxImageHeight)) + 0.5f);
                   displayWidth =
                       static_cast<int>(imgStyle.imageWidth.toPixels(emSize, static_cast<float>(containerWidth)) + 0.5f);
                   if (displayHeight < 1) displayHeight = 1;
                   if (displayWidth < 1) displayWidth = 1;
-                  if (displayWidth > containerWidth || displayHeight > self->viewportHeight) {
+                  if (displayWidth > containerWidth || displayHeight > maxImageHeight) {
                     float scaleX =
                         (displayWidth > containerWidth) ? static_cast<float>(containerWidth) / displayWidth : 1.0f;
-                    float scaleY = (displayHeight > self->viewportHeight)
-                                       ? static_cast<float>(self->viewportHeight) / displayHeight
-                                       : 1.0f;
+                    float scaleY =
+                        (displayHeight > maxImageHeight) ? static_cast<float>(maxImageHeight) / displayHeight : 1.0f;
                     float scale = (scaleX < scaleY) ? scaleX : scaleY;
                     displayWidth = static_cast<int>(displayWidth * scale + 0.5f);
                     displayHeight = static_cast<int>(displayHeight * scale + 0.5f);
@@ -1122,12 +1125,12 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                 } else if (hasCssHeight && !hasCssWidth && dims.width > 0 && dims.height > 0) {
                   // Use CSS height (resolve % against viewport height) and derive width from aspect ratio
                   displayHeight = static_cast<int>(
-                      imgStyle.imageHeight.toPixels(emSize, static_cast<float>(self->viewportHeight)) + 0.5f);
+                      imgStyle.imageHeight.toPixels(emSize, static_cast<float>(maxImageHeight)) + 0.5f);
                   if (displayHeight < 1) displayHeight = 1;
                   displayWidth =
                       static_cast<int>(displayHeight * (static_cast<float>(dims.width) / dims.height) + 0.5f);
-                  if (displayHeight > self->viewportHeight) {
-                    displayHeight = self->viewportHeight;
+                  if (displayHeight > maxImageHeight) {
+                    displayHeight = maxImageHeight;
                     // Rescale width to preserve aspect ratio when height is clamped
                     displayWidth =
                         static_cast<int>(displayHeight * (static_cast<float>(dims.width) / dims.height) + 0.5f);
@@ -1150,8 +1153,8 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                   if (displayWidth < 1) displayWidth = 1;
                   displayHeight =
                       static_cast<int>(displayWidth * (static_cast<float>(dims.height) / dims.width) + 0.5f);
-                  if (displayHeight > self->viewportHeight) {
-                    displayHeight = self->viewportHeight;
+                  if (displayHeight > maxImageHeight) {
+                    displayHeight = maxImageHeight;
                     // Rescale width to preserve aspect ratio when height is clamped
                     displayWidth =
                         static_cast<int>(displayHeight * (static_cast<float>(dims.width) / dims.height) + 0.5f);
@@ -1162,7 +1165,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                 } else {
                   // Scale to fit container while maintaining aspect ratio
                   int maxWidth = containerWidth;
-                  int maxHeight = self->viewportHeight;
+                  int maxHeight = maxImageHeight;
                   float scaleX = (dims.width > maxWidth) ? (float)maxWidth / dims.width : 1.0f;
                   float scaleY = (dims.height > maxHeight) ? (float)maxHeight / dims.height : 1.0f;
                   float scale = (scaleX < scaleY) ? scaleX : scaleY;
@@ -1196,10 +1199,13 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                   }
                 }
 
+                // Extent the image takes in the flow of lines, and across it.
+                const int flowExtent = self->verticalText ? displayWidth : displayHeight;
+                const int crossExtent = self->verticalText ? displayHeight : displayWidth;
+
                 // Create page for image - only break if image won't fit remaining space
                 if (self->currentPage && !self->currentPage->elements.empty() &&
-                    (self->currentPageNextY + imageMarginTop + displayHeight + imageMarginBottom >
-                     self->viewportHeight)) {
+                    (self->currentPageNextY + imageMarginTop + flowExtent + imageMarginBottom > self->viewportHeight)) {
                   self->completePageFn(std::move(self->currentPage), self->xpathParagraphIndex,
                                        self->xpathListItemIndex, self->currentPageVisibleOffset);
                   self->completedPageCount++;
@@ -1228,8 +1234,8 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                 // bar / big screen margin) absorbs that overflow silently, but with a
                 // thin reserve it crosses the physical screen edge and fails
                 // ImageBlock::render's bounds check, dropping the image entirely.
-                if (self->currentPageNextY + imageMarginTop + displayHeight > self->viewportHeight) {
-                  const int room = self->viewportHeight - displayHeight - self->currentPageNextY;
+                if (self->currentPageNextY + imageMarginTop + flowExtent > self->viewportHeight) {
+                  const int room = self->viewportHeight - flowExtent - self->currentPageNextY;
                   imageMarginTop = static_cast<int16_t>(room > 0 ? room : 0);
                 }
                 self->currentPageNextY += imageMarginTop;
@@ -1240,7 +1246,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                   LOG_ERR("EHP", "Failed to create ImageBlock");
                   return;
                 }
-                int xPos = (self->viewportWidth - displayWidth) / 2;
+                int xPos = (self->viewportWidth - crossExtent) / 2;
                 auto pageImage = makeUniqueNoThrow<PageImage>(std::move(imageBlock), xPos, self->currentPageNextY);
                 if (!pageImage) {
                   LOG_ERR("EHP", "Failed to create PageImage");
@@ -1248,7 +1254,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                 }
                 self->currentPage->elements.push_back(std::move(pageImage));
                 self->setCurrentPageVisibleOffset(self->visibleTextOffset);
-                self->currentPageNextY += displayHeight + imageMarginBottom;
+                self->currentPageNextY += flowExtent + imageMarginBottom;
 
                 // The image consumed the empty block's accumulated vertical spacing.
                 // Reset the block so the Vertical merge in startNewTextBlock doesn't

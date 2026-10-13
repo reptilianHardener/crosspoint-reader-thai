@@ -9,6 +9,7 @@
 
 - **Thai reading**: dictionary-based word breaking so Thai text wraps between words, correct stacking of vowel and tone marks, a user dictionary for words the built-in list misses (**Settings > Reader > Thai Dictionary**), and Thai-aware wrapping for TXT files.
 - **Thai UI and keyboard**: a Thai translation and a Kedmanee on-screen keyboard layer.
+- **Vertical Japanese (tategaki)**: Japanese-language EPUBs are set in vertical lines running right to left, with upright kana and kanji, ruby to the right of its base, and Latin text and digits lying sideways. Pages advance leftward, so the front Left button and a rightward swipe turn forward. Turn it off under **Settings > Reader > Vertical Japanese Text**.
 - **Halo 2 theme**: a cover carousel on the home screen, a two-column menu, and a "Halo 2 Cover" sleep screen with the book's title and reading progress.
 - **Bold Text**: a reader setting that lays the whole book out in bold.
 
@@ -30,6 +31,10 @@ The firmware has no built-in Thai glyphs. Thai books, and Thai text in the inter
 The interface borrows its Thai glyphs from that selected family, at 8, 10 and 12 pt. Until a Thai family is selected, Thai menu text and Thai book titles cannot be drawn. Switch the language to Thai only after the font is in place.
 
 See [docs/sd-card-fonts.md](docs/sd-card-fonts.md) for the other ways to install fonts. The on-device font download lists upstream's catalogue, which does not include these Thai families.
+
+### Japanese fonts
+
+Japanese needs a font on the SD card in the same way. Build `NotoSerifJP` (Mincho) or `NotoSansJP` (Gothic) with `--only NotoSerifJP,NotoSansJP`, copy the folders to `/fonts/`, and select one as the reader font. A book is treated as Japanese when its OPF `dc:language` is `ja`.
 
 ---
 

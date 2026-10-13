@@ -37,6 +37,13 @@ inline bool isRtlBookLanguage(std::string_view tag) {
          (first == 'f' && second == 'a');
 }
 
+inline bool isJapaneseBookLanguage(std::string_view tag) {
+  const auto lower = [&tag](const size_t i) { return std::tolower(static_cast<unsigned char>(tag[i])); };
+  if (tag.size() == 3) return lower(0) == 'j' && lower(1) == 'p' && lower(2) == 'n';
+  if (tag.size() < 2 || (tag.size() > 2 && tag[2] != '-' && tag[2] != '_')) return false;
+  return lower(0) == 'j' && lower(1) == 'a';
+}
+
 inline void applyOrientation(GfxRenderer& renderer, const uint8_t orientation) {
   switch (orientation) {
     case CrossPointSettings::ORIENTATION::PORTRAIT:
@@ -62,11 +69,14 @@ struct PageTurnResult {
   bool fromTilt;
 };
 
-inline PageTurnResult detectPageTurn(const MappedInputManager& input) {
+// rtlPages: the book's pages advance leftward (vertical Japanese), so the front Left button
+// turns forward and Right turns back. The side buttons have no left or right and keep their
+// roles.
+inline PageTurnResult detectPageTurn(const MappedInputManager& input, const bool rtlPages = false) {
   const bool usePress = SETTINGS.longPressButtonBehavior == SETTINGS.OFF;
   const bool tiltNext = SETTINGS.tiltPageTurn && halTiltSensor.wasTiltedForward();
   const bool tiltPrev = SETTINGS.tiltPageTurn && halTiltSensor.wasTiltedBack();
-  const bool swapFront = input.isNavDirectionSwapped();
+  const bool swapFront = input.isNavDirectionSwapped() != rtlPages;
   const auto prevButton = swapFront ? MappedInputManager::Button::Right : MappedInputManager::Button::Left;
   const auto nextButton = swapFront ? MappedInputManager::Button::Left : MappedInputManager::Button::Right;
   const auto pageButtonTriggered = [&](const MappedInputManager::Button button) {

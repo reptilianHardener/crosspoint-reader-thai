@@ -123,6 +123,8 @@ class GfxRenderer {
 
   void renderChar(const EpdFontFamily& fontFamily, uint32_t cp, int* x, int* y, bool pixelState,
                   EpdFontFamily::Style style) const;
+  void drawTextRun(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style,
+                   BidiUtils::BidiBaseDir baseDir, int8_t tracking, bool vertical) const;
   void freeBwBufferChunks();
   template <Color color>
   void drawPixelDither(int x, int y) const;
@@ -334,6 +336,12 @@ class GfxRenderer {
   void drawText(int fontId, int x, int y, const char* text, bool black = true,
                 EpdFontFamily::Style style = EpdFontFamily::REGULAR,
                 BidiUtils::BidiBaseDir baseDir = BidiUtils::BidiBaseDir::AUTO, int8_t tracking = 0) const;
+  // Vertical (tategaki) run: drawText() turned a quarter clockwise about (x, y). The pen moves
+  // down the screen from y and the line's top edge is the column x, so a line occupies
+  // (x - lineHeight, x]. Kana, kanji and fullwidth forms stand upright; other glyphs lie
+  // sideways along the line.
+  void drawTextVertical(int fontId, int x, int y, const char* text, bool black = true,
+                        EpdFontFamily::Style style = EpdFontFamily::REGULAR, int8_t tracking = 0) const;
   int getSpaceWidth(int fontId, EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
   /// Returns the total inter-word advance: fp4::toPixel(spaceAdvance + kern(leftCp,' ') + kern(' ',rightCp)).
   /// Using a single snap avoids the +/-1 px rounding error that arises when space advance and kern are

@@ -28,4 +28,7 @@ struct ReaderRenderSpec {
   // Fingerprint of the Thai user dictionary (0 = none loaded). Word boundaries, and so
   // line breaks, depend on it, so editing the dictionary must invalidate cached sections.
   uint16_t thaiDictionaryRevision = 0;
+  // Tategaki: the page is laid out as vertical lines stacked right to left. viewportWidth is
+  // then the line length (down the screen) and viewportHeight the room for lines (across it).
+  bool verticalText = false;
 };

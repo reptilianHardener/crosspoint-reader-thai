@@ -96,6 +96,15 @@ class EpubReaderActivity final : public ReaderActivity {
   std::vector<PageLink> currentPageLinks;
   int currentPageLinkMarginLeft = 0;
   int currentPageLinkMarginTop = 0;
+
+  // The open book is laid out as tategaki: vertical lines stacked right to left, pages
+  // advancing leftward. Refreshed by renderBook() from the book language and the setting.
+  bool verticalLayout = false;
+  bool wantsVerticalLayout() const;
+  ReaderRenderSpec makeRenderSpec(uint16_t viewportWidth, uint16_t viewportHeight) const;
+  // Screen position the page's elements are drawn from: its top-left corner, or on a
+  // vertical page its top-right one (see PageElement::render).
+  int pageOriginX(int marginLeft, int marginRight) const;
   struct SavedPosition {
     int spineIndex;
     int pageNumber;

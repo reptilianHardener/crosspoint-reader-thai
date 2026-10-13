@@ -339,6 +339,8 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t focusReadingEnabled = 0;
   // Bold text - lays out the whole book in the bold face (0 = as marked up, 1 = all bold)
   uint8_t readerBoldText = 0;
+  // Set Japanese-language EPUBs vertically (tategaki), pages advancing leftward (1 = enabled)
+  uint8_t verticalJapanese = 1;
   uint8_t readerMenuStyle = READER_MENU_LIST;
   // SD card font family name (empty = use built-in fontFamily)
   char sdFontFamilyName[32] = "";

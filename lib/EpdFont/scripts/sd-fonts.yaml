@@ -12,6 +12,9 @@
 #   intervals:   Comma-separated Unicode interval presets for fontconvert_sdcard.py
 #   sizes:       Point sizes to generate
 #   force_autohint: (optional) Force FreeType auto-hinter instead of native hinting
+#   bridge_gaps: (optional) Join codepoint intervals separated by at most this many
+#                missing codepoints. Needed for sparse CJK fonts: the firmware keeps
+#                every interval in RAM and rejects a font with more than 4096.
 #   styles:      Map of style name -> font source
 #                  path: relative to lib/EpdFont (for committed fonts)
 #                  url:  download URL (for fonts not in the repo)
@@ -402,6 +405,32 @@ families:
     styles:
       regular: {url: "https://raw.githubusercontent.com/fonts-archive/MaruBuri/977eeff68d1d40bcef341f09c1f56cce1903bb8a/MaruBuri-SemiBold.otf"}
       bold:    {url: "https://raw.githubusercontent.com/fonts-archive/MaruBuri/977eeff68d1d40bcef341f09c1f56cce1903bb8a/MaruBuri-Bold.otf"}
+
+  # ── Japanese ───────────────────────────────────────────────────────────
+  # Kana, the kanji of the JIS sets and fullwidth forms, plus Latin. With one of
+  # these selected, Japanese-language EPUBs are set vertically (tategaki) unless
+  # Settings > Reader > Vertical Japanese Text is off; the same glyphs serve both
+  # directions. Sizes 8 and 10 are for the interface (see the Thai note below).
+
+  - name: NotoSerifJP
+    description: "Mincho serif for Japanese body text (Kana, Kanji, Latin)"
+    scripts: [cjk, latin]
+    intervals: cjk,latin-ext,punctuation,symbols
+    sizes: [8, 10, 12, 14, 16, 18]
+    bridge_gaps: 4
+    styles:
+      regular: {url: "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Serif/SubsetOTF/JP/NotoSerifJP-Regular.otf"}
+      bold:    {url: "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Serif/SubsetOTF/JP/NotoSerifJP-Bold.otf"}
+
+  - name: NotoSansJP
+    description: "Gothic sans-serif for Japanese (Kana, Kanji, Latin)"
+    scripts: [cjk, latin]
+    intervals: cjk,latin-ext,punctuation,symbols
+    sizes: [8, 10, 12, 14, 16, 18]
+    bridge_gaps: 4
+    styles:
+      regular: {url: "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf"}
+      bold:    {url: "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Bold.otf"}
 
   # ── Thai ───────────────────────────────────────────────────────────────
   # The firmware has no built-in Thai glyphs: a Thai book (and Thai text in the

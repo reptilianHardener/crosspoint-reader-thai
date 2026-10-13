@@ -90,12 +90,13 @@ bool EpubReaderFootnoteSelectActivity::drawHighlightWithSnapshot() {
   if (footnoteLinks.empty()) return false;
   const PageLink* link = footnoteLinks[selected].link;
 
-  const int x = link->x + marginLeft;
-  const int y = link->y + marginTop;
+  // A vertical page stores the link along (x, width) and across (y, height) its lines.
+  const int x = vertical ? marginLeft - link->y - link->height + 1 : link->x + marginLeft;
+  const int y = vertical ? marginTop + link->x : link->y + marginTop;
   int hx = x - 2;
   int hy = y - 2;
-  int hw = link->width + 4;
-  int hh = link->height + 4;
+  int hw = (vertical ? link->height : link->width) + 4;
+  int hh = (vertical ? link->width : link->height) + 4;
 
   if (hx < 0) {
     hw += hx;
@@ -119,7 +120,9 @@ bool EpubReaderFootnoteSelectActivity::drawHighlightWithSnapshot() {
   renderer.fillRect(hx, hy, hw, hh, true);
   // Draw a small marker (the footnote number) at the highlight position
   const char* number = footnoteLinks[selected].footnote->number;
-  if (number[0]) {
+  if (number[0] && vertical) {
+    renderer.drawTextVertical(SETTINGS.getReaderFontId(), x + link->height, y, number, false);
+  } else if (number[0]) {
     renderer.drawText(SETTINGS.getReaderFontId(), x, y - 1, number, false);
   }
   return saved;
@@ -142,7 +145,7 @@ void EpubReaderFootnoteSelectActivity::render(RenderLock&&) {
 
   // Render the page underneath
   if (page) {
-    page->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop);
+    page->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop, vertical);
   }
 
   if (!footnoteLinks.empty()) {

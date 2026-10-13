@@ -40,6 +40,7 @@ class ChapterHtmlSlimParser {
   int partWordBufferIndex = 0;
   bool nextWordContinues = false;  // true when next flushed word attaches to previous (inline element boundary)
   bool forceBold = false;          // reader "bold text" setting (see setForceBold)
+  bool verticalText = false;       // tategaki page (see setVerticalText)
   // A ZERO WIDTH SPACE (U+200B) was seen since the last flushed word: the next word may wrap
   // onto a new line but renders with no gap. Cleared by real whitespace, which wins.
   bool nextWordZeroWidthBreak = false;
@@ -229,6 +230,9 @@ class ChapterHtmlSlimParser {
   }
   // Lay out all text in the bold face, on top of whatever the markup asks for.
   void setForceBold(const bool enabled) { forceBold = enabled; }
+  // The page is drawn as vertical lines: viewportWidth runs down the screen and viewportHeight
+  // across it. Text flows unchanged; images stay upright, so their extents swap.
+  void setVerticalText(const bool enabled) { verticalText = enabled; }
 
   // One-shot parse: builds every page before returning (begin + step* + finish).
   bool parseAndBuildPages();

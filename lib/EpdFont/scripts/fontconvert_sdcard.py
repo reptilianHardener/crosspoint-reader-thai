@@ -571,7 +571,7 @@ def extract_ligatures_fonttools(font_path, codepoints):
 
 
 def rasterize_font_style(fontfile, size, intervals, style_id=0, force_autohint=False,
-                         fallback_fontfile=None):
+                         fallback_fontfile=None, bridge_gaps=0):
     """Rasterize all glyphs for one font style. Returns StyleRasterData."""
     import freetype
 
@@ -627,8 +627,26 @@ def rasterize_font_style(fontfile, size, intervals, style_id=0, force_autohint=F
             validated_intervals.append((start, i_end))
 
     intervals = validated_intervals
+
+    # Join intervals separated by at most bridge_gaps missing codepoints. A sparse
+    # CJK font otherwise yields thousands of intervals, all of which the firmware
+    # keeps in RAM; the joined-over codepoints cost only a glyph record on the card
+    # and carry the replacement glyph.
+    filler_codepoints = set()
+    if bridge_gaps > 0 and intervals:
+        bridged = [intervals[0]]
+        for start, end in intervals[1:]:
+            prev_start, prev_end = bridged[-1]
+            if start - prev_end - 1 <= bridge_gaps:
+                filler_codepoints.update(range(prev_end + 1, start))
+                bridged[-1] = (prev_start, end)
+            else:
+                bridged.append((start, end))
+        intervals = bridged
+
     total_glyphs = sum(end - start + 1 for start, end in intervals)
-    print(f"  [{style_label}] Validated: {len(intervals)} intervals, {total_glyphs} glyphs", file=sys.stderr)
+    print(f"  [{style_label}] Validated: {len(intervals)} intervals, {total_glyphs} glyphs "
+          f"({len(filler_codepoints)} filler)", file=sys.stderr)
 
     # Rasterize all glyphs
     total_bitmap_size = 0
@@ -636,7 +654,7 @@ def rasterize_font_style(fontfile, size, intervals, style_id=0, force_autohint=F
 
     for i_start, i_end in intervals:
         for code_point in range(i_start, i_end + 1):
-            f = load_glyph(code_point)
+            f = load_glyph(0xFFFD if code_point in filler_codepoints else code_point)
             if f is None:
                 glyph = GlyphProps(0, 0, 0, 0, 0, 0, total_bitmap_size, code_point)
                 all_glyphs.append((glyph, b''))
@@ -830,7 +848,7 @@ def style_sections_total_size(sections):
 # --- File writers ---
 
 def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
-                               force_autohint=False, fallback_style_fonts=None):
+                               force_autohint=False, fallback_style_fonts=None, bridge_gaps=0):
     """Generate a multi-style v4 .cpfont file.
 
     style_fonts: dict of {style_id: fontfile_path} e.g. {0: "Regular.ttf", 2: "Italic.ttf"}
@@ -852,7 +870,8 @@ def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
         raster_data[style_id] = rasterize_font_style(
             fontfile, size, intervals, style_id=style_id,
             force_autohint=force_autohint,
-            fallback_fontfile=fallback_fontfile)
+            fallback_fontfile=fallback_fontfile,
+            bridge_gaps=bridge_gaps)
 
     # Pack binary sections for each style
     packed_sections = {}  # style_id -> tuple of section bytearrays
@@ -947,6 +966,9 @@ def main():
                         help="Font family name for output filenames (default: derived from font filename).")
     parser.add_argument("--force-autohint", dest="force_autohint", action="store_true",
                         help="Force FreeType auto-hinter instead of native font hinting.")
+    parser.add_argument("--bridge-gaps", dest="bridge_gaps", type=int, default=0,
+                        help="Join intervals separated by at most this many missing codepoints "
+                             "(sparse CJK fonts; the firmware accepts at most 4096 intervals).")
     parser.add_argument("-o", "--output", dest="output",
                         help="Output file path (for single-size mode).")
     parser.add_argument("--output-dir", dest="output_dir",
@@ -1070,7 +1092,8 @@ def main():
         total_size += generate_cpfont_multistyle(
             style_fonts, sz, intervals, output_path,
             force_autohint=args.force_autohint,
-            fallback_style_fonts=fallback_style_fonts)
+            fallback_style_fonts=fallback_style_fonts,
+            bridge_gaps=args.bridge_gaps)
     print(f"\nTotal: {len(sizes)} files, {total_size / 1024 / 1024:.2f} MB", file=sys.stderr)
 
 
