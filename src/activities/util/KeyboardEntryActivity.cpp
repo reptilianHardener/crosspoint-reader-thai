@@ -95,6 +95,72 @@ const fui::KeyboardKey URL_SNIP_BOTTOM[] = {UKS("abc", fui::KeyKind::Mode, fui::
                                             UKS("Del", fui::KeyKind::Delete, fui::QWERTY_KEY_BACKSPACE, 2),
                                             UKS("OK", fui::KeyKind::Ok, fui::QWERTY_KEY_ENTER, 2)};
 
+// ---------------------------------------------------------------------------
+// Thai layers: the Kedmanee arrangement (the standard Thai computer keyboard),
+// one table per shift state. Like the URL layers these are app-defined tables
+// over the public KeyboardLayout structs, because the SDK ships no Thai layout.
+//
+// Key ids are the Unicode code point (all below 0x0E80, so they fit int16_t and
+// cannot collide with the ASCII ids). Twelve keys per row is what a 480 px
+// panel can hold, so the two obsolete consonants of the 13th column ride as
+// long-press alternates on their modern look-alikes: kho khuat on kho khai,
+// kho khon on kho khwai.
+// ---------------------------------------------------------------------------
+
+const fui::KeyboardKey TH_ROW1[] = {UK("ๅ", "ๅ", 0x0E45), UK("/", "/", '/'),          UK("-", "-", '-'),
+                                    UK("ภ", "ภ", 0x0E20), UK("ถ", "ถ", 0x0E16),       UK("ุ", "ุ", 0x0E38),
+                                    UK("ึ", "ึ", 0x0E36),   UKA("ค", "ค", 0x0E04, "ฅ"), UK("ต", "ต", 0x0E15),
+                                    UK("จ", "จ", 0x0E08), UKA("ข", "ข", 0x0E02, "ฃ"), UK("ช", "ช", 0x0E0A)};
+const fui::KeyboardKey TH_ROW2[] = {UK("ๆ", "ๆ", 0x0E46), UK("ไ", "ไ", 0x0E44), UK("ำ", "ำ", 0x0E33),
+                                    UK("พ", "พ", 0x0E1E), UK("ะ", "ะ", 0x0E30), UK("ั", "ั", 0x0E31),
+                                    UK("ี", "ี", 0x0E35),   UK("ร", "ร", 0x0E23), UK("น", "น", 0x0E19),
+                                    UK("ย", "ย", 0x0E22), UK("บ", "บ", 0x0E1A), UK("ล", "ล", 0x0E25)};
+const fui::KeyboardKey TH_ROW3[] = {UK("ฟ", "ฟ", 0x0E1F), UK("ห", "ห", 0x0E2B), UK("ก", "ก", 0x0E01),
+                                    UK("ด", "ด", 0x0E14), UK("เ", "เ", 0x0E40), UK("้", "้", 0x0E49),
+                                    UK("่", "่", 0x0E48),   UK("า", "า", 0x0E32), UK("ส", "ส", 0x0E2A),
+                                    UK("ว", "ว", 0x0E27), UK("ง", "ง", 0x0E07)};
+const fui::KeyboardKey TH_ROW4[] = {UK("ผ", "ผ", 0x0E1C),
+                                    UK("ป", "ป", 0x0E1B),
+                                    UK("แ", "แ", 0x0E41),
+                                    UK("อ", "อ", 0x0E2D),
+                                    UK("ิ", "ิ", 0x0E34),
+                                    UK("ื", "ื", 0x0E37),
+                                    UK("ท", "ท", 0x0E17),
+                                    UK("ม", "ม", 0x0E21),
+                                    UK("ใ", "ใ", 0x0E43),
+                                    UK("ฝ", "ฝ", 0x0E1D),
+                                    UKS("Del", fui::KeyKind::Delete, fui::QWERTY_KEY_BACKSPACE, 2)};
+
+const fui::KeyboardKey TH_SHIFT_ROW1[] = {UK("+", "+", '+'),    UK("๑", "๑", 0x0E51), UK("๒", "๒", 0x0E52),
+                                          UK("๓", "๓", 0x0E53), UK("๔", "๔", 0x0E54), UK("ู", "ู", 0x0E39),
+                                          UK("฿", "฿", 0x0E3F), UK("๕", "๕", 0x0E55), UK("๖", "๖", 0x0E56),
+                                          UK("๗", "๗", 0x0E57), UK("๘", "๘", 0x0E58), UK("๙", "๙", 0x0E59)};
+const fui::KeyboardKey TH_SHIFT_ROW2[] = {UK("๐", "๐", 0x0E50), UK("\"", "\"", '"'),  UK("ฎ", "ฎ", 0x0E0E),
+                                          UK("ฑ", "ฑ", 0x0E11), UK("ธ", "ธ", 0x0E18), UK("ํ", "ํ", 0x0E4D),
+                                          UK("๊", "๊", 0x0E4A),   UK("ณ", "ณ", 0x0E13), UK("ฯ", "ฯ", 0x0E2F),
+                                          UK("ญ", "ญ", 0x0E0D), UK("ฐ", "ฐ", 0x0E10), UK(",", ",", ',')};
+const fui::KeyboardKey TH_SHIFT_ROW3[] = {UK("ฤ", "ฤ", 0x0E24), UK("ฆ", "ฆ", 0x0E06), UK("ฏ", "ฏ", 0x0E0F),
+                                          UK("โ", "โ", 0x0E42), UK("ฌ", "ฌ", 0x0E0C), UK("็", "็", 0x0E47),
+                                          UK("๋", "๋", 0x0E4B),   UK("ษ", "ษ", 0x0E29), UK("ศ", "ศ", 0x0E28),
+                                          UK("ซ", "ซ", 0x0E0B), UK(".", ".", '.')};
+const fui::KeyboardKey TH_SHIFT_ROW4[] = {UK("(", "(", '('),
+                                          UK(")", ")", ')'),
+                                          UK("ฉ", "ฉ", 0x0E09),
+                                          UK("ฮ", "ฮ", 0x0E2E),
+                                          UK("ฺ", "ฺ", 0x0E3A),
+                                          UK("์", "์", 0x0E4C),
+                                          UK("?", "?", '?'),
+                                          UK("ฒ", "ฒ", 0x0E12),
+                                          UK("ฬ", "ฬ", 0x0E2C),
+                                          UK("ฦ", "ฦ", 0x0E26),
+                                          UKS("Del", fui::KeyKind::Delete, fui::QWERTY_KEY_BACKSPACE, 2)};
+// Same shape as the SDK's bottom row with a language key, so the control keys do not
+// move when cycling between Thai and the SDK layouts.
+const fui::KeyboardKey TH_BOTTOM[] = {
+    UKS("?123", fui::KeyKind::Mode, fui::QWERTY_KEY_MODE, 2), UKS(nullptr, fui::KeyKind::Lang, fui::QWERTY_KEY_LANG, 1),
+    UKS("Shift", fui::KeyKind::Shift, fui::QWERTY_KEY_SHIFT, 2),
+    UKS("Space", fui::KeyKind::Space, fui::QWERTY_KEY_SPACE, 3), UKS("OK", fui::KeyKind::Ok, fui::QWERTY_KEY_ENTER, 2)};
+
 #undef UK
 #undef UKA
 #undef UKW
@@ -107,7 +173,14 @@ const fui::KeyboardRow URL_SHIFT_ROWS[] = {
 const fui::KeyboardRow URL_SNIP_ROWS[] = {
     {URL_SNIP_ROW1, 3, 0}, {URL_SNIP_ROW2, 3, 0}, {URL_SNIP_ROW3, 3, 0}, {URL_SNIP_BOTTOM, 4, 0}};
 
+const fui::KeyboardRow TH_ROWS[] = {
+    {TH_ROW1, 12, 0}, {TH_ROW2, 12, 0}, {TH_ROW3, 11, 0}, {TH_ROW4, 11, 0}, {TH_BOTTOM, 5, 0}};
+const fui::KeyboardRow TH_SHIFT_ROWS[] = {
+    {TH_SHIFT_ROW1, 12, 0}, {TH_SHIFT_ROW2, 12, 0}, {TH_SHIFT_ROW3, 11, 0}, {TH_SHIFT_ROW4, 11, 0}, {TH_BOTTOM, 5, 0}};
+
 const fui::KeyboardLayout URL_LAYOUT{URL_ROWS, 5};
+const fui::KeyboardLayout THAI_LAYOUT{TH_ROWS, 5};
+const fui::KeyboardLayout THAI_SHIFT_LAYOUT{TH_SHIFT_ROWS, 5};
 const fui::KeyboardLayout URL_SHIFT_LAYOUT{URL_SHIFT_ROWS, 5};
 const fui::KeyboardLayout URL_SNIPPET_LAYOUT{URL_SNIP_ROWS, 4};
 
@@ -119,9 +192,13 @@ void KeyboardEntryActivity::onEnter() {
   // URL layers are EN-arranged app tables; everything else opens on the UI
   // language's layout, or on an enabled one if the user switched that off.
   layoutId = inputType == InputType::Url ? fui::KeyboardLayoutId::QwertyEn : keyboard_layouts::startingLayout();
+  // Thai is offered on plain text fields only: URLs and credentials are ASCII.
+  thaiAvailable = inputType == InputType::Text && (openInThai || I18N.getLanguage() == Language::TH);
+  thaiLayer = thaiAvailable && openInThai;
+  sdkLayoutsVisited = 1;
   // The key only earns its slot in the bottom row with somewhere to go.
   const uint16_t enabledLayouts = keyboard_layouts::enabled();
-  showLangKey = (enabledLayouts & (enabledLayouts - 1)) != 0;
+  showLangKey = thaiAvailable || (enabledLayouts & (enabledLayouts - 1)) != 0;
   shifted = false;
   symbols = false;
   urlPanel = false;
@@ -152,6 +229,7 @@ const fui::KeyboardLayout& KeyboardEntryActivity::currentLayout() const {
     if (urlPanel) return URL_SNIPPET_LAYOUT;
     return shifted ? URL_SHIFT_LAYOUT : URL_LAYOUT;
   }
+  if (thaiLayer) return shifted ? THAI_SHIFT_LAYOUT : THAI_LAYOUT;
   return fui::builtinKeyboardLayout(layoutId, shifted, false, /*numberRow=*/true, showLangKey);
 }
 
@@ -276,11 +354,22 @@ bool KeyboardEntryActivity::activateValue(const int16_t value, const bool longPr
     case fui::QWERTY_KEY_LANG: {
       delPressCount = 0;
       hintVisible = false;
-      const fui::KeyboardLayoutId nextId = keyboard_layouts::next(layoutId);
-      // The non-Latin tables draw the key even with one layout enabled; a
-      // full-screen e-ink repaint for an unchanged keyboard costs a second.
-      if (nextId == layoutId) return false;
-      layoutId = nextId;
+      if (thaiLayer) {
+        // Thai is the last stop: the cycle restarts on the first SDK layout.
+        thaiLayer = false;
+        layoutId = keyboard_layouts::startingLayout();
+        sdkLayoutsVisited = 1;
+      } else if (thaiAvailable && sdkLayoutsVisited >= __builtin_popcount(keyboard_layouts::enabled())) {
+        // Every enabled SDK layout has had its turn.
+        thaiLayer = true;
+      } else {
+        const fui::KeyboardLayoutId nextId = keyboard_layouts::next(layoutId);
+        // The non-Latin tables draw the key even with one layout enabled; a
+        // full-screen e-ink repaint for an unchanged keyboard costs a second.
+        if (nextId == layoutId) return false;
+        layoutId = nextId;
+        sdkLayoutsVisited++;
+      }
       // Shift is per-layer: carrying it across would strand the new layout in
       // upper case. Row widths differ between scripts (Cyrillic runs 12/11/11
       // against Latin's 10/9/9), so the selection has to be re-clamped.
@@ -977,8 +1066,8 @@ void KeyboardEntryActivity::render(RenderLock&&) {
   props.inputMask = static_cast<uint16_t>(fui::InputTouch | fui::InputLongPress);
   props.selectedIndex = cursorMode ? -1 : static_cast<int16_t>(selectedLogicalIndex());
   // The 12-column Arabic rows need the smaller font for wide isolated letters.
-  props.labelText.font = layoutId == fui::KeyboardLayoutId::ArabicAr && !symbols ? fui::GfxRendererTarget::FONT_SMALL
-                                                                                 : fui::GfxRendererTarget::FONT_BODY;
+  const bool arabicLetters = layoutId == fui::KeyboardLayoutId::ArabicAr && !symbols && !thaiLayer;
+  props.labelText.font = arabicLetters ? fui::GfxRendererTarget::FONT_SMALL : fui::GfxRendererTarget::FONT_BODY;
   props.altText.font = fui::GfxRendererTarget::FONT_SMALL;
   props.gap = static_cast<int16_t>(metrics.keyboardKeySpacing);
   props.padding = fui::Insets{0, 0, 0, 0};

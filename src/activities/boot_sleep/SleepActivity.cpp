@@ -18,12 +18,14 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <limits>
 #include <string>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "RecentBooksStore.h"
 #include "activities/reader/ReaderUtils.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -126,7 +128,31 @@ bool isValidPngHeader(HalFile& file) {
          supportedBitDepth && supportedColorType && compression == 0 && filter == 0 && interlace == 0;
 }
 
-BitmapPlacement calculateBitmapPlacement(const int bitmapWidth, const int bitmapHeight, const GfxRenderer& renderer) {
+// Title and reading progress of the book the device fell asleep in, for the Halo 2 panel.
+// Taken from the recents list (already in RAM); a book not listed there falls back to its
+// file name rather than re-opening the book just for a title.
+RecentBook sleepBookInfo(const std::string& path) {
+  RecentBook info;
+  const auto& books = RECENT_BOOKS.getBooks();
+  const auto it = std::find_if(books.begin(), books.end(), [&](const RecentBook& b) { return b.path == path; });
+  if (it != books.end()) {
+    info = *it;
+  }
+  info.path = path;
+  if (info.title.empty()) {
+    const auto slash = path.find_last_of('/');
+    info.title = slash == std::string::npos ? path : path.substr(slash + 1);
+    const auto dot = info.title.find_last_of('.');
+    if (dot != std::string::npos && dot > 0) {
+      info.title.resize(dot);
+    }
+  }
+  return info;
+}
+
+BitmapPlacement calculateBitmapPlacement(const int bitmapWidth, const int bitmapHeight, const GfxRenderer& renderer,
+                                         const bool forceCrop = false) {
+  const bool crop = forceCrop || SETTINGS.sleepScreenCoverMode == CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP;
   BitmapPlacement placement;
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
@@ -136,14 +162,14 @@ BitmapPlacement calculateBitmapPlacement(const int bitmapWidth, const int bitmap
     const float screenRatio = static_cast<float>(pageWidth) / static_cast<float>(pageHeight);
 
     if (ratio > screenRatio) {
-      if (SETTINGS.sleepScreenCoverMode == CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP) {
+      if (crop) {
         placement.cropX = 1.0f - (screenRatio / ratio);
         ratio = (1.0f - placement.cropX) * static_cast<float>(bitmapWidth) / static_cast<float>(bitmapHeight);
       }
       placement.x = 0;
       placement.y = std::round((static_cast<float>(pageHeight) - static_cast<float>(pageWidth) / ratio) / 2);
     } else {
-      if (SETTINGS.sleepScreenCoverMode == CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP) {
+      if (crop) {
         placement.cropY = 1.0f - (ratio / screenRatio);
         ratio = static_cast<float>(bitmapWidth) / ((1.0f - placement.cropY) * static_cast<float>(bitmapHeight));
       }
@@ -555,6 +581,7 @@ void SleepActivity::onEnter() {
     case (CrossPointSettings::SLEEP_SCREEN_MODE::CUSTOM):
       return renderCustomSleepScreen();
     case (CrossPointSettings::SLEEP_SCREEN_MODE::COVER):
+    case (CrossPointSettings::SLEEP_SCREEN_MODE::HALO2_COVER):
       return renderCoverSleepScreen();
     case (CrossPointSettings::SLEEP_SCREEN_MODE::COVER_CUSTOM):
       if (APP_STATE.lastSleepFromReader) {
@@ -633,10 +660,73 @@ void SleepActivity::renderDefaultSleepScreen() const {
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
 }
 
-void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const bool preserveBackground) const {
+void SleepActivity::drawSleepInfoPanel(const RecentBook& book) const {
+  constexpr int panelMarginX = 16;
+  constexpr int panelMarginBottom = 16;
+  constexpr int panelPaddingX = 14;
+  constexpr int panelPaddingY = 10;
+  constexpr int cornerRadius = 6;
+  constexpr int barHeight = 6;
+  constexpr int titleBarGap = 8;
+  constexpr int percentGap = 8;
+
+  const int pageWidth = renderer.getScreenWidth();
+  const int pageHeight = renderer.getScreenHeight();
+  const int panelWidth = pageWidth - panelMarginX * 2;
+  const int textWidth = panelWidth - panelPaddingX * 2;
+
+  auto titleLines = renderer.wrappedText(UI_10_FONT_ID, book.title.empty() ? tr(STR_UNNAMED) : book.title.c_str(),
+                                         textWidth, 2, EpdFontFamily::BOLD);
+  if (titleLines.empty()) {
+    titleLines.emplace_back(tr(STR_UNNAMED));
+  }
+  const int titleLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
+  const int panelHeight =
+      panelPaddingY * 2 + static_cast<int>(titleLines.size()) * titleLineHeight + titleBarGap + barHeight;
+  const int panelX = panelMarginX;
+  const int panelY = pageHeight - panelMarginBottom - panelHeight;
+
+  renderer.fillRoundedRect(panelX, panelY, panelWidth, panelHeight, cornerRadius, Color::Black);
+  // On a differential grayscale plane a set pixel means "add gray here". The panel is pure
+  // black and white, so the planes only need its silhouette cleared (as the theme's button
+  // hints do); the B/W pass carries the text.
+  if (renderer.getRenderMode() != GfxRenderer::BW && !renderer.grayPlanesAreAbsolute()) {
+    return;
+  }
+  renderer.drawRoundedRect(panelX, panelY, panelWidth, panelHeight, 1, cornerRadius, false);
+
+  int y = panelY + panelPaddingY;
+  for (const auto& line : titleLines) {
+    const int lineWidth = renderer.getTextWidth(UI_10_FONT_ID, line.c_str(), EpdFontFamily::BOLD);
+    renderer.drawText(UI_10_FONT_ID, panelX + (panelWidth - lineWidth) / 2, y, line.c_str(), false,
+                      EpdFontFamily::BOLD);
+    y += titleLineHeight;
+  }
+
+  const int percent = std::min<int>(book.progressPercent, 100);
+  char percentText[8];
+  snprintf(percentText, sizeof(percentText), "%d%%", percent);
+  // Reserve room for "100%" so the bar has the same length for every book.
+  const int percentSlot = renderer.getTextWidth(SMALL_FONT_ID, "100%");
+  const int barX = panelX + panelPaddingX;
+  const int barY = panelY + panelHeight - panelPaddingY - barHeight;
+  const int barWidth = textWidth - percentGap - percentSlot;
+  renderer.fillRoundedRect(barX, barY, barWidth, barHeight, barHeight / 2, Color::DarkGray);
+  if (percent > 0) {
+    renderer.fillRoundedRect(barX, barY, std::max(barHeight, barWidth * percent / 100), barHeight, barHeight / 2,
+                             Color::White);
+  }
+  renderer.drawText(SMALL_FONT_ID,
+                    barX + barWidth + percentGap + (percentSlot - renderer.getTextWidth(SMALL_FONT_ID, percentText)),
+                    barY + (barHeight - renderer.getLineHeight(SMALL_FONT_ID)) / 2, percentText, false);
+}
+
+void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const bool preserveBackground,
+                                            const RecentBook* infoPanelBook) const {
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
-  const auto placement = calculateBitmapPlacement(bitmap.getWidth(), bitmap.getHeight(), renderer);
+  const auto placement =
+      calculateBitmapPlacement(bitmap.getWidth(), bitmap.getHeight(), renderer, infoPanelBook != nullptr);
   const int x = placement.x;
   const int y = placement.y;
   const float cropX = placement.cropX;
@@ -654,6 +744,7 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const bool pre
     renderer.displayBuffer(HalDisplay::HALF_REFRESH);
     return;
   }
+  if (infoPanelBook) drawSleepInfoPanel(*infoPanelBook);
 
   if (!preserveBackground &&
       SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE) {
@@ -686,6 +777,7 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const bool pre
         ready = false;
         break;
       }
+      if (infoPanelBook) drawSleepInfoPanel(*infoPanelBook);
       if (plane == GfxRenderer::GRAYSCALE_LSB)
         renderer.copyGrayscaleLsbBuffers();
       else
@@ -812,7 +904,9 @@ void SleepActivity::renderCoverSleepScreen() const {
       display.getController() == HalDisplay::Controller::SSD1677 &&
       SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
   std::string coverBmpPath;
-  bool cropped = SETTINGS.sleepScreenCoverMode == CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP;
+  // The Halo 2 layout always fills the screen: its info panel sits on the image's bottom edge.
+  const bool infoPanel = SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::HALO2_COVER;
+  bool cropped = infoPanel || SETTINGS.sleepScreenCoverMode == CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP;
 
   // Check if the current book is XTC, TXT, or EPUB
   if (FsHelpers::hasXtcExtension(APP_STATE.openEpubPath)) {
@@ -867,7 +961,12 @@ void SleepActivity::renderCoverSleepScreen() const {
     Bitmap bitmap(file);
     if (bitmap.parseHeaders() == BmpReaderError::Ok) {
       LOG_DBG("SLP", "Rendering sleep cover: %s", coverBmpPath.c_str());
-      renderBitmapSleepScreen(bitmap);
+      if (infoPanel) {
+        const RecentBook book = sleepBookInfo(APP_STATE.openEpubPath);
+        renderBitmapSleepScreen(bitmap, false, &book);
+      } else {
+        renderBitmapSleepScreen(bitmap);
+      }
       return;
     }
   }

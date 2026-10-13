@@ -143,6 +143,41 @@ bool containsCjkBreakableCodepoint(const std::string& text) {
   return false;
 }
 
+// True when the word holds at least two Thai codepoints, i.e. it is worth asking the
+// dictionary for word boundaries. Thai is written without spaces, so a whole clause
+// arrives here as one "word".
+bool containsThaiRun(const std::string& text) {
+  int thaiCount = 0;
+  const auto* ptr = reinterpret_cast<const unsigned char*>(text.c_str());
+  while (*ptr) {
+    if (utf8IsThaiCodepoint(utf8NextCodepoint(&ptr)) && ++thaiCount >= 2) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Line cost for the optimal-fit breaker. Ordinary paragraphs use squared slack with a free
+// last line. Thai paragraphs have no visible word gaps to absorb slack, so a ragged or
+// loosely justified line is far more noticeable: a cubic term makes large trailing
+// whitespace disproportionately expensive, lines under 72% full take a flat penalty,
+// and the last line is discounted rather than free.
+long long lineBadness(const int remainingSpace, const int lineWidth, const bool isLastLine,
+                      const bool preferFullLines) {
+  const long long slack = remainingSpace;
+  const long long baseCost = slack * slack;
+  if (!preferFullLines) {
+    return isLastLine ? 0 : baseCost;
+  }
+
+  long long cost = baseCost + (baseCost * slack) / std::max(1, lineWidth);
+  const int usedWidth = lineWidth - remainingSpace;
+  if (!isLastLine && usedWidth * 100 < lineWidth * 72) {
+    cost += static_cast<long long>(lineWidth) * lineWidth;
+  }
+  return isLastLine ? cost / 6 : cost;
+}
+
 uint32_t countCodepoints(const std::string_view text) {
   const auto* ptr = reinterpret_cast<const unsigned char*>(text.data());
   const auto* const end = ptr + text.size();
@@ -441,7 +476,8 @@ bool ParsedText::storeWord(const std::string_view text, WordStore::StoredWord& o
 }
 
 void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle, const bool underline,
-                         const bool attachToPrevious, const uint32_t visibleTextOffset, const uint8_t linkId) {
+                         const bool attachToPrevious, const uint32_t visibleTextOffset, const uint8_t linkId,
+                         const bool zeroWidthBreakBefore) {
   if (word.empty()) return;
 
   // The device fonts carry no combining-mark positioning, so EPUB text stored in NFD
@@ -494,6 +530,13 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
       hasCjkBreakOpportunityBetween(lastCodepoint(wordStore.view(words.back())), firstCodepoint(word))) {
     effectiveAttachToPrevious = false;
     effectiveNoSpaceBefore = true;
+  }
+  // An explicit U+200B is the author saying "break allowed here, no visible gap" -- the same
+  // boundary state as above. Thai EPUBs pre-segmented with ZWSP rely on it.
+  if (zeroWidthBreakBefore && !words.empty()) {
+    effectiveAttachToPrevious = false;
+    effectiveNoSpaceBefore = true;
+    hasThaiWordBreaks = hasThaiWordBreaks || utf8IsThaiCodepoint(firstCodepoint(word));
   }
 
   // Bulk-reserve the per-token parallel arrays before a burst of pushes so they
@@ -551,6 +594,40 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
       hasRtlWord = true;
     }
     return;
+  }
+
+  // Thai: split the run at dictionary word boundaries so the line breaker has somewhere to
+  // break. Each boundary is the same "breakable, zero-width, stretchable" gap CJK uses
+  // (continues=false, noSpaceBefore=true), so words stay gapless on the line, may wrap
+  // between words, and take their share of justification. includeFallback=false keeps this
+  // to real dictionary boundaries; cluster-level fallback splits are left to the overflow
+  // path in hyphenateWordAtIndex().
+  if (containsThaiRun(word)) {
+    const auto thaiBreaks = Hyphenator::breakOffsets(word, /*includeFallback=*/false);
+    if (!thaiBreaks.empty()) {
+      ensureTokenCapacity(thaiBreaks.size() + 1);
+      bool firstToken = true;
+      size_t tokenStart = 0;
+      uint32_t tokenVisibleOffset = visibleTextOffset;
+      for (const auto& info : thaiBreaks) {
+        // A break that wants an inserted hyphen belongs to a Latin segment of a mixed
+        // word; that is hyphenation, not segmentation, and stays with the line breaker.
+        if (info.requiresInsertedHyphen) continue;
+        if (info.byteOffset <= tokenStart || info.byteOffset >= word.size()) continue;
+        const std::string_view token(word.data() + tokenStart, info.byteOffset - tokenStart);
+        pushToken(token, firstToken ? effectiveAttachToPrevious : false, firstToken ? effectiveNoSpaceBefore : true,
+                  /*focusBoundary=*/0, tokenVisibleOffset);
+        tokenVisibleOffset += countCodepoints(token);
+        firstToken = false;
+        tokenStart = info.byteOffset;
+      }
+      pushToken(std::string_view(word).substr(tokenStart), firstToken ? effectiveAttachToPrevious : false,
+                firstToken ? effectiveNoSpaceBefore : true, /*focusBoundary=*/0, tokenVisibleOffset);
+      if (!firstToken) {
+        hasThaiWordBreaks = true;
+      }
+      return;
+    }
   }
 
   // Already-bold text should stay fully bold; focus splitting would make its suffix regular later.
@@ -1081,20 +1158,12 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
         continue;  // Cannot split here as it would overflow the right margin
       }
 
-      int cost;
-      if (j == totalWordCount - 1) {
-        cost = 0;  // Last line
-      } else {
-        const int remainingSpace = effectivePageWidth - currlen;
-        // Use long long for the square to prevent overflow
-        const long long cost_ll = static_cast<long long>(remainingSpace) * remainingSpace + dp[j + 1];
-
-        if (cost_ll > MAX_COST) {
-          cost = MAX_COST;
-        } else {
-          cost = static_cast<int>(cost_ll);
-        }
-      }
+      const bool isLastLine = j == totalWordCount - 1;
+      // long long throughout: the squared (and, for Thai, cubed) slack overflows int.
+      const long long cost_ll =
+          lineBadness(effectivePageWidth - currlen, effectivePageWidth, isLastLine, hasThaiWordBreaks) +
+          (isLastLine ? 0 : dp[j + 1]);
+      const int cost = cost_ll > MAX_COST ? MAX_COST : static_cast<int>(cost_ll);
 
       // Favor longer lines when line-breaking costs are equal, to avoid unnecessary short lines in Chinese and Japanese
       // text.

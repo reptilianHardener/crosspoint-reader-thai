@@ -9,7 +9,12 @@
 #include <Serialization.h>
 #include <Utf8.h>
 
+#include <algorithm>
+#include <vector>
+
 #include "CrossPointSettings.h"
+#include "Epub/hyphenation/HyphenationCommon.h"
+#include "Epub/hyphenation/ThaiWordBreaker.h"
 #include "ProgressFile.h"
 #include "ReaderActivity.h"
 #include "ReaderUtils.h"
@@ -20,7 +25,52 @@ namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
 // Cache file magic and version
 constexpr uint32_t CACHE_MAGIC = 0x54585449;  // "TXTI"
-constexpr uint8_t CACHE_VERSION = 3;          // Increment when cache format changes
+constexpr uint8_t CACHE_VERSION = 4;          // Increment when cache format or wrap logic changes
+
+// Thai has no spaces between words, so a line that overflows usually offers no space to
+// break at. Given the byte offset where the line stops fitting, returns the last Thai word
+// boundary at or before it (0 if there is none), so the wrap falls between words instead
+// of between a consonant and its vowel or tone mark.
+//
+// Only a window around the limit is segmented: the lines here can be whole paragraphs,
+// and the word breaker allocates per codepoint.
+size_t thaiBreakAtOrBefore(const std::string& line, const size_t limit, const bool includeFallback) {
+  constexpr size_t LOOK_BEHIND_BYTES = 240;  // about 80 Thai characters
+  constexpr size_t LOOK_AHEAD_BYTES = 60;    // enough to see where the word at the limit ends
+  const auto alignToCodepoint = [&](size_t pos) {
+    while (pos > 0 && pos < line.size() && (static_cast<uint8_t>(line[pos]) & 0xC0) == 0x80) {
+      --pos;
+    }
+    return pos;
+  };
+  const size_t windowStart = alignToCodepoint(limit > LOOK_BEHIND_BYTES ? limit - LOOK_BEHIND_BYTES : 0);
+  const size_t windowEnd = alignToCodepoint(std::min(line.size(), limit + LOOK_AHEAD_BYTES));
+  if (windowEnd <= windowStart) return 0;
+
+  const auto cps = collectCodepoints(line.substr(windowStart, windowEnd - windowStart));
+  size_t best = 0;
+  size_t runStart = 0;
+  while (runStart < cps.size()) {
+    if (!isThaiCharacter(cps[runStart].value)) {
+      ++runStart;
+      continue;
+    }
+    size_t runEnd = runStart;
+    while (runEnd < cps.size() && isThaiCharacter(cps[runEnd].value)) {
+      ++runEnd;
+    }
+    if (runEnd - runStart >= 2) {
+      const std::vector<CodepointInfo> run(cps.begin() + runStart, cps.begin() + runEnd);
+      for (const size_t idx : ThaiWordBreaker::breakIndexes(run, includeFallback)) {
+        if (idx == 0 || idx >= run.size()) continue;
+        const size_t offset = windowStart + run[idx].byteOffset;
+        if (offset <= limit && offset > best) best = offset;
+      }
+    }
+    runStart = runEnd;
+  }
+  return best;
+}
 }  // namespace
 
 bool TxtReaderActivity::loadBook() {
@@ -200,6 +250,15 @@ bool TxtReaderActivity::loadPageAtOffset(const GfxRenderer& renderer, size_t off
             breakPos--;
           }
         }
+      }
+
+      // The loop above fell back to a bare character boundary when it found no space.
+      // For Thai, pull the break back to a dictionary word boundary, or failing that to
+      // a cluster boundary, so marks stay with their consonant.
+      if (breakPos > 0 && breakPos < line.length() && line[breakPos] != ' ') {
+        size_t thaiBreak = thaiBreakAtOrBefore(line, breakPos, /*includeFallback=*/false);
+        if (thaiBreak == 0) thaiBreak = thaiBreakAtOrBefore(line, breakPos, /*includeFallback=*/true);
+        if (thaiBreak > 0) breakPos = thaiBreak;
       }
 
       if (breakPos == 0) {

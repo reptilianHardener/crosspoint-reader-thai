@@ -327,9 +327,11 @@ void EpubReaderActivity::openDictionaryWordSelect() {
                                    &orientedMarginLeft);
   orientedMarginTop += SETTINGS.screenMargin;
   orientedMarginLeft += SETTINGS.screenMargin;
+  orientedMarginRight += SETTINGS.screenMargin;
 
-  startActivityForResult(std::make_unique<DictionaryWordSelectActivity>(renderer, mappedInput, std::move(page),
-                                                                        orientedMarginLeft, orientedMarginTop),
+  startActivityForResult(std::make_unique<DictionaryWordSelectActivity>(
+                             renderer, mappedInput, std::move(page),
+                             pageOriginX(orientedMarginLeft, orientedMarginRight), orientedMarginTop, verticalLayout),
                          [this](const ActivityResult&) { requestUpdate(); });
 }
 
@@ -348,8 +350,10 @@ void EpubReaderActivity::openFootnoteSelect(const bool reopenMenuOnCancel) {
                                    &orientedMarginLeft);
   orientedMarginTop += SETTINGS.screenMargin;
   orientedMarginLeft += SETTINGS.screenMargin;
-  auto selector = makeUniqueNoThrow<EpubReaderFootnoteSelectActivity>(renderer, mappedInput, std::move(page),
-                                                                      orientedMarginLeft, orientedMarginTop);
+  orientedMarginRight += SETTINGS.screenMargin;
+  auto selector = makeUniqueNoThrow<EpubReaderFootnoteSelectActivity>(
+      renderer, mappedInput, std::move(page), pageOriginX(orientedMarginLeft, orientedMarginRight), orientedMarginTop,
+      verticalLayout);
   if (!selector) {
     LOG_ERR("ERA", "OOM: EpubReaderFootnoteSelectActivity");
     return;
@@ -415,7 +419,7 @@ void EpubReaderActivity::loop() {
     if (lock.ownsLock() && section && !section->isBuilding() && section->isPartial() && buildViewportWidth > 0 &&
         !partialRebuildStartFailed &&
         section->currentPage + PARTIAL_REBUILD_START_MARGIN >= static_cast<int>(section->pageCount)) {
-      const ReaderRenderSpec buildSpec = SETTINGS.readerRenderSpec(buildViewportWidth, buildViewportHeight);
+      const ReaderRenderSpec buildSpec = makeRenderSpec(buildViewportWidth, buildViewportHeight);
       if (!section->startBuild(buildSpec)) {
         partialRebuildStartFailed = true;
         LOG_ERR("ERS", "Failed to start deferred partial extension build");
@@ -457,8 +461,8 @@ void EpubReaderActivity::loop() {
     pendingReadFolderMove = false;
   }
 
-  const auto touch =
-      ReaderUtils::detectTouchPageTurn(renderer, mappedInput, ReaderUtils::isRtlBookLanguage(epub->getLanguage()));
+  const auto touch = ReaderUtils::detectTouchPageTurn(
+      renderer, mappedInput, verticalLayout || ReaderUtils::isRtlBookLanguage(epub->getLanguage()));
 
   if (showBookmarkMessage && (millis() - bookmarkMessageTime) >= ReaderUtils::BOOKMARK_MESSAGE_DURATION_MS) {
     showBookmarkMessage = false;
@@ -598,8 +602,13 @@ void EpubReaderActivity::loop() {
     int touchX = 0;
     int touchY = 0;
     if (mappedInput.wasScreenTapped(touchX, touchY)) {
-      const auto* link = EpubReaderUtils::linkAtPoint(currentPageLinks, touchX, touchY, currentPageLinkMarginLeft,
-                                                      currentPageLinkMarginTop);
+      // A vertical page stores links along and across its lines: down the screen from the
+      // top margin, and leftward from the page's right edge.
+      const auto* link =
+          verticalLayout ? EpubReaderUtils::linkAtPoint(currentPageLinks, touchY, currentPageLinkMarginLeft - touchX,
+                                                        currentPageLinkMarginTop, 0)
+                         : EpubReaderUtils::linkAtPoint(currentPageLinks, touchX, touchY, currentPageLinkMarginLeft,
+                                                        currentPageLinkMarginTop);
       if (link) {
         navigateToHref(link->href, true);
         return;
@@ -654,7 +663,7 @@ void EpubReaderActivity::loop() {
     return;
   }
 
-  auto [prevTriggered, nextTriggered, fromTilt] = ReaderUtils::detectPageTurn(mappedInput);
+  auto [prevTriggered, nextTriggered, fromTilt] = ReaderUtils::detectPageTurn(mappedInput, verticalLayout);
   prevTriggered = prevTriggered || touch.prev;
   nextTriggered = nextTriggered || touch.next;
   if (!prevTriggered && !nextTriggered) {
@@ -1012,6 +1021,20 @@ void EpubReaderActivity::applyInitialOrientation() {
   appliedOrientation = SETTINGS.orientation;
 }
 
+bool EpubReaderActivity::wantsVerticalLayout() const {
+  return SETTINGS.verticalJapanese && epub && ReaderUtils::isJapaneseBookLanguage(epub->getLanguage());
+}
+
+ReaderRenderSpec EpubReaderActivity::makeRenderSpec(const uint16_t viewportWidth, const uint16_t viewportHeight) const {
+  ReaderRenderSpec spec = SETTINGS.readerRenderSpec(viewportWidth, viewportHeight);
+  spec.verticalText = verticalLayout;
+  return spec;
+}
+
+int EpubReaderActivity::pageOriginX(const int marginLeft, const int marginRight) const {
+  return verticalLayout ? renderer.getScreenWidth() - 1 - marginRight : marginLeft;
+}
+
 void EpubReaderActivity::applyOrientation(const uint8_t orientation) {
   // Also runs when SETTINGS already holds the new value but this layout was
   // built for the old one — that is what an external change looks like here.
@@ -1189,12 +1212,29 @@ void EpubReaderActivity::renderBook() {
     orientedMarginBottom += std::max(SETTINGS.screenMargin, statusBarHeight);
   }
 
-  const uint16_t viewportWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
-  const uint16_t viewportHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
+  // The setting can change under an open book; a section paginated for the other direction
+  // must not be drawn.
+  if (const bool vertical = wantsVerticalLayout(); vertical != verticalLayout) {
+    if (section) {
+      rememberCurrentContentOffset();
+      cachedSpineIndex = currentSpineIndex;
+      cachedChapterTotalPageCount = section->pageCount;
+      nextPageNumber = section->currentPage;
+      section.reset();
+    }
+    verticalLayout = vertical;
+  }
+
+  // Vertical lines run down the screen and stack across it, so the layout sees the page
+  // area with its axes exchanged.
+  const uint16_t pageAreaWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
+  const uint16_t pageAreaHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
+  const uint16_t viewportWidth = verticalLayout ? pageAreaHeight : pageAreaWidth;
+  const uint16_t viewportHeight = verticalLayout ? pageAreaWidth : pageAreaHeight;
   buildViewportWidth = viewportWidth;
   buildViewportHeight = viewportHeight;
 
-  const ReaderRenderSpec renderSpec = SETTINGS.readerRenderSpec(viewportWidth, viewportHeight);
+  const ReaderRenderSpec renderSpec = makeRenderSpec(viewportWidth, viewportHeight);
 
   if (!section) {
     const auto filepath = epub->getSpineItem(currentSpineIndex).href;
@@ -1436,7 +1476,7 @@ void EpubReaderActivity::renderBook() {
     currentPageVisibleOffset = p->visibleTextOffset;
     currentPageFootnotes = std::move(p->footnotes);
     currentPageLinks = std::move(p->links);
-    currentPageLinkMarginLeft = orientedMarginLeft;
+    currentPageLinkMarginLeft = pageOriginX(orientedMarginLeft, orientedMarginRight);
     currentPageLinkMarginTop = orientedMarginTop;
 
     // The overlay and non-tiled grayscale renderer share the renderer's single
@@ -1558,6 +1598,9 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
                                         const int orientedMarginLeft) {
   const auto t0 = millis();
   const int fontId = SETTINGS.getReaderFontId();
+  const int pageX = pageOriginX(orientedMarginLeft, orientedMarginRight);
+  const int pageY = orientedMarginTop;
+  const bool vertical = verticalLayout;
   ImageBlock::clearRenderFailures();
 
   struct PxcSlotGuard {
@@ -1566,7 +1609,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
 
   auto* fcm = renderer.getFontCacheManager();
   auto scope = fcm->createPrewarmScope();
-  page->render(renderer, fontId, orientedMarginLeft, orientedMarginTop);
+  page->render(renderer, fontId, pageX, pageY, vertical);
   // Scan the status bar too: a CJK book/chapter title redirected to the SD
   // fallback font joins the page's single batch prewarm instead of triggering
   // its own SD pass after the scope ends.
@@ -1596,21 +1639,21 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
   const bool overlapRefresh = tiledGrayscale && grayscale.asyncBase && !pageHasImages;
   auto renderGrayscalePass = [&]() {
     if (absoluteImageGrayscale || needsTextGrayscale) {
-      page->render(renderer, fontId, orientedMarginLeft, orientedMarginTop);
+      page->render(renderer, fontId, pageX, pageY, vertical);
     } else {
-      page->renderImages(renderer, fontId, orientedMarginLeft, orientedMarginTop);
+      page->renderImages(renderer, fontId, pageX, pageY, vertical);
     }
     if (absoluteImageGrayscale) renderStatusBar();
   };
 
   if (pageHasImagesNeedingDecode) {
-    page->renderWithImagePlaceholders(renderer, fontId, orientedMarginLeft, orientedMarginTop);
+    page->renderWithImagePlaceholders(renderer, fontId, pageX, pageY, vertical);
     renderStatusBar();
     renderer.displayBuffer(HalDisplay::FAST_REFRESH);
     renderer.clearScreen();
   }
 
-  page->render(renderer, fontId, orientedMarginLeft, orientedMarginTop);
+  page->render(renderer, fontId, pageX, pageY, vertical);
   renderStatusBar();
   const auto tBwRender = millis();
 

@@ -16,18 +16,22 @@
 class DictionaryWordSelectActivity final : public Activity {
  public:
   explicit DictionaryWordSelectActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
-                                        std::unique_ptr<Page> page, int marginLeft, int marginTop)
+                                        std::unique_ptr<Page> page, int marginLeft, int marginTop,
+                                        bool vertical = false)
       : Activity("DictionaryWordSelect", renderer, mappedInput),
         page(std::move(page)),
         marginLeft(marginLeft),
-        marginTop(marginTop) {}
+        marginTop(marginTop),
+        vertical(vertical) {}
 
   void onEnter() override;
   void loop() override;
   void render(RenderLock&&) override;
 
  private:
-  // Screen box of one selectable word. `text` points into the owned Page's
+  // Screen origin of one selectable word: its top-left corner, or on a vertical
+  // page the top of its column edge (see GfxRenderer::drawTextVertical). `width`
+  // is the word's extent along its line. `text` points into the owned Page's
   // TextBlock arena (NUL-terminated), valid for this activity's lifetime.
   struct WordBox {
     int16_t x;
@@ -40,8 +44,18 @@ class DictionaryWordSelectActivity final : public Activity {
 
   enum class Popup : uint8_t { None, Busy, NotFound, Error };
 
+  struct Rect {
+    int x;
+    int y;
+    int w;
+    int h;
+  };
+
   void extractWords();
-  int closestInRow(uint16_t row, int centerX) const;
+  Rect screenBox(const WordBox& word) const;
+  // Center of a word along its line: screen x, or screen y on a vertical page.
+  int lineCenter(const WordBox& word) const { return (vertical ? word.y : word.x) + word.width / 2; }
+  int closestInRow(uint16_t row, int center) const;
   int wordAt(int x, int y) const;
   void moveVertical(int direction);
   void performLookup();
@@ -49,8 +63,10 @@ class DictionaryWordSelectActivity final : public Activity {
   void drawHints() const;
 
   std::unique_ptr<Page> page;
+  // On a vertical page marginLeft is the screen column of the page's right edge.
   const int marginLeft;
   const int marginTop;
+  const bool vertical;
   int fontId = 0;
   int lineHeight = 0;
 

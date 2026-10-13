@@ -90,6 +90,36 @@ if (parsedSize != fileSize) {
 
 ## `section.bin`
 
+### Version 50
+
+Version 50 adds one field to the header, after `thaiDictionaryRevision` and
+before the page count:
+
+- `verticalText` (`bool`): the section was laid out for vertical (tategaki)
+  text. `viewportWidth` is then the line length, which runs down the screen, and
+  `viewportHeight` the room for lines across it.
+
+It is part of the cache key. Element positions on a vertical page are stored
+along and across the lines rather than as screen x and y: `xPos` runs down the
+screen from the top of the page area and `yPos` leftward from its right edge.
+An image stays upright, so it advances the flow by its width and is centred by
+its height. Link rectangles follow the same convention.
+
+### Version 49
+
+Version 49 adds two fields to the header, after `wordSpacingPercent` and before
+the page count:
+
+- `forceBold` (`bool`): the reader's "Bold text" setting. When set, every run is
+  laid out in the bold face.
+- `thaiDictionaryRevision` (`uint16_t`): a fingerprint of the Thai user
+  dictionary (`0` when none is loaded).
+
+Both are part of the cache key. The version was also bumped because Thai text is
+now split at dictionary word boundaries, which become zero-width break
+opportunities, and because Thai vowel and tone marks no longer contribute to a
+word's measured width. Cached line breaks from version 48 no longer match.
+
 ### Version 48
 
 Version 48 keeps the version 47 serialized layout unchanged. It was bumped

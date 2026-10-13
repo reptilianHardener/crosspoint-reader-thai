@@ -10,6 +10,7 @@
 #include <limits>
 #include <string>
 
+#include "Epub/hyphenation/ThaiWordBreaker.h"
 #include "I18nKeys.h"
 #include "ReaderFontSizes.h"
 #include "SettingsList.h"
@@ -300,6 +301,8 @@ ReaderRenderSpec CrossPointSettings::readerRenderSpec(const uint16_t viewportWid
   spec.embeddedStyle = embeddedStyle != 0;
   spec.imageRendering = imageRendering;
   spec.focusReadingEnabled = focusReadingEnabled != 0;
+  spec.forceBold = readerBoldText != 0;
+  spec.thaiDictionaryRevision = ThaiWordBreaker::userDictionaryRevision();
   return spec;
 }
 

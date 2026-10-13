@@ -48,9 +48,20 @@ enum class Anchor : uint8_t {
   CenterNative,  ///< centered over the base at font-native height
   RightNative,   ///< right edges aligned, font-native height
   LeftNative,    ///< left edges aligned, font-native height
+  PenNative,     ///< drawn at the pen position after the base, as the font designed it (Thai)
 };
 
+/// Thai above/below vowels and tone marks (U+0E31, U+0E34-0E3A, U+0E47-0E4E).
+constexpr bool isThaiMark(const uint32_t cp) {
+  return cp == 0x0E31 || (cp >= 0x0E34 && cp <= 0x0E3A) || (cp >= 0x0E47 && cp <= 0x0E4E);
+}
+
 constexpr Anchor anchorFor(const uint32_t cp) {
+  // Thai fonts encode marks with zero advance and a negative left bearing, so they
+  // are already positioned relative to the pen that follows the base consonant.
+  // Centering them over the base bitmap would undo that design. Vertical placement
+  // is handled separately by ThaiMarkStack.
+  if (isThaiMark(cp)) return Anchor::PenNative;
   switch (cp) {
     case 0x05BC:  // dagesh / mapiq / shuruk dot: inside the letter body
     case 0x05BA:  // holam haser for vav: straight above the vav stem

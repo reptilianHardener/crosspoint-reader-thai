@@ -102,7 +102,11 @@ class GfxRenderer {
   // cannot render, the whole string is routed to the mapped fallback so it
   // appears at the same point size as the surrounding UI text. Populated by the
   // app-level SD font setup when an SD family is loaded. See resolveTextFontId().
-  std::map<int, int> fallbackFontMap_;
+  // Each primary font takes up to MAX_FALLBACK_FONTS fallbacks, tried in order (0 = empty
+  // slot): the reader's SD family first, then other installed families covering scripts it
+  // lacks.
+  static constexpr size_t MAX_FALLBACK_FONTS = 3;
+  std::map<int, std::array<int, MAX_FALLBACK_FONTS>> fallbackFontMap_;
 
   // If `text` contains a CJK codepoint that `fontId` cannot render and `fontId`
   // has a registered fallback, returns the fallback id; otherwise returns
@@ -123,6 +127,8 @@ class GfxRenderer {
 
   void renderChar(const EpdFontFamily& fontFamily, uint32_t cp, int* x, int* y, bool pixelState,
                   EpdFontFamily::Style style) const;
+  void drawTextRun(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style,
+                   BidiUtils::BidiBaseDir baseDir, int8_t tracking, bool vertical) const;
   void freeBwBufferChunks();
   template <Color color>
   void drawPixelDither(int x, int y) const;
@@ -193,7 +199,18 @@ class GfxRenderer {
   const std::map<int, TtfEpdFont*>& getTtfFonts() const { return ttfFonts_; }
   // Register/clear size-matched CJK UI fallbacks (see fallbackFontMap_).
   // setFallbackFont maps a primary UI font id to an SD font id of the same size.
-  void setFallbackFont(int primaryFontId, int fallbackFontId) { fallbackFontMap_[primaryFontId] = fallbackFontId; }
+  void setFallbackFont(int primaryFontId, int fallbackFontId) { fallbackFontMap_[primaryFontId][0] = fallbackFontId; }
+  // Append a further fallback, tried after those already registered. Returns false when
+  // every slot is taken.
+  bool addFallbackFont(int primaryFontId, int fallbackFontId) {
+    for (int& slot : fallbackFontMap_[primaryFontId]) {
+      if (slot == 0) {
+        slot = fallbackFontId;
+        return true;
+      }
+    }
+    return false;
+  }
   void clearFallbackFonts() { fallbackFontMap_.clear(); }
   // Ensure SD card font glyph data is loaded for the given text. Called from layout code
   // (which holds a const GfxRenderer&) before measuring word widths. Safe to call on non-SD fonts (no-op).
@@ -304,7 +321,8 @@ class GfxRenderer {
   void fillRoundedRect(int x, int y, int width, int height, int cornerRadius, bool roundTopLeft, bool roundTopRight,
                        bool roundBottomLeft, bool roundBottomRight, Color color) const;
   void drawImage(const uint8_t bitmap[], int x, int y, int width, int height) const;
-  void drawIcon(const uint8_t bitmap[], int x, int y, int size) const;
+  // black=false draws the ink of the icon in white, for icons on a filled (selected) background.
+  void drawIcon(const uint8_t bitmap[], int x, int y, int size, bool black = true) const;
   bool drawBitmap(const Bitmap& bitmap, int x, int y, int maxWidth, int maxHeight, float cropX = 0, float cropY = 0,
                   bool whiteAsTransparent = false) const;
   bool drawBitmap1Bit(const Bitmap& bitmap, int x, int y, int maxWidth, int maxHeight) const;
@@ -333,6 +351,12 @@ class GfxRenderer {
   void drawText(int fontId, int x, int y, const char* text, bool black = true,
                 EpdFontFamily::Style style = EpdFontFamily::REGULAR,
                 BidiUtils::BidiBaseDir baseDir = BidiUtils::BidiBaseDir::AUTO, int8_t tracking = 0) const;
+  // Vertical (tategaki) run: drawText() turned a quarter clockwise about (x, y). The pen moves
+  // down the screen from y and the line's top edge is the column x, so a line occupies
+  // (x - lineHeight, x]. Kana, kanji and fullwidth forms stand upright; other glyphs lie
+  // sideways along the line.
+  void drawTextVertical(int fontId, int x, int y, const char* text, bool black = true,
+                        EpdFontFamily::Style style = EpdFontFamily::REGULAR, int8_t tracking = 0) const;
   int getSpaceWidth(int fontId, EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
   /// Returns the total inter-word advance: fp4::toPixel(spaceAdvance + kern(leftCp,' ') + kern(' ',rightCp)).
   /// Using a single snap avoids the +/-1 px rounding error that arises when space advance and kern are

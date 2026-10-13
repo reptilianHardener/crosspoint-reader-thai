@@ -32,6 +32,7 @@
 #include "SilentRestart.h"
 #include "StatusBarSettingsActivity.h"
 #include "TextSettingsActivity.h"
+#include "ThaiDictionaryActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/IntervalSelectionActivity.h"
 #include "components/UITheme.h"
@@ -116,6 +117,7 @@ void SettingsActivity::rebuildSettingsLists() {
   readerSettings.insert(readerSettings.begin() + 1,
                         SettingInfo::Action(StrId::STR_MANAGE_FONTS, SettingAction::DownloadFonts));
   readerSettings.push_back(SettingInfo::Action(StrId::STR_CUSTOMISE_STATUS_BAR, SettingAction::CustomiseStatusBar));
+  readerSettings.push_back(SettingInfo::Action(StrId::STR_THAI_DICTIONARY, SettingAction::ThaiDictionary));
 
   // Update currentSettings pointer and count for the active category
   switch (selectedCategoryIndex) {
@@ -440,6 +442,13 @@ void SettingsActivity::toggleCurrentSetting() {
           startActivityForResult(std::move(activity), nullptr);
         } else {
           LOG_ERR("SETTINGS", "OOM: AboutActivity");
+        }
+        break;
+      case SettingAction::ThaiDictionary:
+        if (auto activity = makeUniqueNoThrow<ThaiDictionaryActivity>(renderer, mappedInput)) {
+          startActivityForResult(std::move(activity), nullptr);
+        } else {
+          LOG_ERR("SETTINGS", "OOM: ThaiDictionaryActivity");
         }
         break;
       case SettingAction::None:

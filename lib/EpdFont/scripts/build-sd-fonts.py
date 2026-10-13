@@ -231,6 +231,8 @@ def build_family(
 
     if family.get("force_autohint", False):
         cmd.append("--force-autohint")
+    if family.get("bridge_gaps", 0):
+        cmd.extend(["--bridge-gaps", str(family["bridge_gaps"])])
 
     # Run fontconvert_sdcard.py
     start = time.monotonic()

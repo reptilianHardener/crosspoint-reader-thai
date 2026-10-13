@@ -4,6 +4,8 @@
 
 #include <algorithm>
 
+#include "ThaiMarkStack.h"
+
 void EpdFont::getTextBounds(const char* string, const int startX, const int startY, int* minX, int* minY, int* maxX,
                             int* maxY) const {
   *minX = startX;
@@ -20,6 +22,7 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
   int lastBaseWidth = 0;
   int lastBaseTop = 0;
   int32_t prevAdvanceFP = 0;  // 12.4 fixed-point: prev glyph's advance + next kern for snap
+  ThaiMarkStack thaiStack;
   uint32_t cp;
   uint32_t prevCp = 0;
   while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&string)))) {
@@ -45,16 +48,24 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
     }
 
     const combiningMark::Anchor anchor = combiningMark::anchorFor(cp);
-    const int raiseBy = isCombining ? combiningMark::raiseAboveBase(anchor, glyph->top, glyph->height, lastBaseTop) : 0;
+    const bool isThaiMark = isCombining && anchor == combiningMark::Anchor::PenNative;
+    if (!isCombining) {
+      thaiStack.resetForBase();
+    }
+    const int raiseBy = isThaiMark    ? thaiStack.raiseFor(cp, glyph->top, glyph->height, lastBaseTop, data->advanceY)
+                        : isCombining ? combiningMark::raiseAboveBase(anchor, glyph->top, glyph->height, lastBaseTop)
+                                      : 0;
 
     if (!isCombining && prevCp != 0) {
       const auto kernFP = getKerning(prevCp, cp);  // 4.4 fixed-point kern
       lastBaseX += fp4::toPixel(prevAdvanceFP + kernFP);
     }
 
-    const int glyphBaseX = isCombining ? combiningMark::anchorOver(anchor, lastBaseX, lastBaseLeft, lastBaseWidth,
-                                                                   glyph->left, glyph->width)
-                                       : lastBaseX;
+    // Thai marks draw at the pen position that follows the base (see GfxRenderer::drawText).
+    const int glyphBaseX = isThaiMark    ? lastBaseX + fp4::toPixel(prevAdvanceFP)
+                           : isCombining ? combiningMark::anchorOver(anchor, lastBaseX, lastBaseLeft, lastBaseWidth,
+                                                                     glyph->left, glyph->width)
+                                         : lastBaseX;
     const int glyphBaseY = startY - raiseBy;
 
     *minX = std::min(*minX, glyphBaseX + glyph->left);

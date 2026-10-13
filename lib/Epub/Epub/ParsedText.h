@@ -65,6 +65,9 @@ class ParsedText {
   bool focusReadingEnabled;
   bool isNaturalAlign;
   bool hasRtlWord;
+  // Set once a Thai run was split at dictionary word boundaries; the optimal-fit breaker
+  // then weights slack more heavily (see lineBadness in ParsedText.cpp).
+  bool hasThaiWordBreaks = false;
   bool droppedWords = false;
   std::vector<std::string> reorderedWordsScratch;
   std::vector<EpdFontFamily::Style> reorderedStylesScratch;
@@ -111,8 +114,10 @@ class ParsedText {
         hasRtlWord(false) {}
   ~ParsedText() = default;
 
+  // zeroWidthBreakBefore: the source had a ZERO WIDTH SPACE (U+200B) before this word. The
+  // word renders flush against the previous one but a line may break between them.
   void addWord(std::string word, EpdFontFamily::Style fontStyle, bool underline = false, bool attachToPrevious = false,
-               uint32_t visibleTextOffset = 0, uint8_t linkId = 0);
+               uint32_t visibleTextOffset = 0, uint8_t linkId = 0, bool zeroWidthBreakBefore = false);
   uint8_t addLinkTarget(const char* href);
   bool linkTargetMatches(uint8_t linkId, const char* href) const;
   void setRubyForWordAt(size_t index, const std::string& ruby);

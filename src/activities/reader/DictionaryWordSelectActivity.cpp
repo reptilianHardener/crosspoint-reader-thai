@@ -53,7 +53,8 @@ void DictionaryWordSelectActivity::onEnter() {
   // Start on the middle row's word nearest mid-screen instead of top-left:
   // any word on the page is then at most half a page of moves away.
   if (!words.empty()) {
-    const int initial = closestInRow(rowCount / 2, renderer.getScreenWidth() / 2);
+    const int initial =
+        closestInRow(rowCount / 2, (vertical ? renderer.getScreenHeight() : renderer.getScreenWidth()) / 2);
     if (initial >= 0) selected = initial;
   }
   requestUpdate();
@@ -87,8 +88,10 @@ void DictionaryWordSelectActivity::extractWords() {
       if (!isSelectableToken(text)) continue;
 
       WordBox box;
-      box.x = static_cast<int16_t>(line->xPos + block->wordXpos(i) + marginLeft);
-      box.y = static_cast<int16_t>(line->yPos + marginTop + rubyShift);
+      const int along = line->xPos + block->wordXpos(i);
+      const int across = line->yPos + rubyShift;
+      box.x = static_cast<int16_t>(vertical ? marginLeft - across : marginLeft + along);
+      box.y = static_cast<int16_t>(vertical ? marginTop + along : marginTop + across);
       box.style = block->wordStyle(i);
       box.width = 0;  // measured below, once the advance table is ready
       box.row = rowCount;
@@ -110,28 +113,33 @@ void DictionaryWordSelectActivity::extractWords() {
   }
 }
 
+DictionaryWordSelectActivity::Rect DictionaryWordSelectActivity::screenBox(const WordBox& word) const {
+  if (vertical) return {word.x - lineHeight + 1, word.y, lineHeight, word.width};
+  return {word.x, word.y, word.width, lineHeight};
+}
+
 // Index of the word whose box (with finger-sized slop) contains the touch
 // point; -1 when the touch lands on no word. Boxes never overlap after the
 // slop grows them, at worst they touch, so first hit wins.
 int DictionaryWordSelectActivity::wordAt(const int x, const int y) const {
   constexpr int SLOP = 4;  // matches the highlight box (+2) plus finger error
   for (int i = 0; i < static_cast<int>(words.size()); i++) {
-    const WordBox& word = words[i];
-    if (x >= word.x - SLOP && x < word.x + word.width + SLOP && y >= word.y - SLOP && y < word.y + lineHeight + SLOP) {
+    const Rect box = screenBox(words[i]);
+    if (x >= box.x - SLOP && x < box.x + box.w + SLOP && y >= box.y - SLOP && y < box.y + box.h + SLOP) {
       return i;
     }
   }
   return -1;
 }
 
-// Index of the word in `row` whose horizontal center is closest to centerX;
+// Index of the word in `row` whose center along the line is closest to `center`;
 // -1 when the row has no words.
-int DictionaryWordSelectActivity::closestInRow(const uint16_t row, const int centerX) const {
+int DictionaryWordSelectActivity::closestInRow(const uint16_t row, const int center) const {
   int best = -1;
   int bestDistance = INT_MAX;
   for (int i = 0; i < static_cast<int>(words.size()); i++) {
     if (words[i].row != row) continue;
-    const int distance = std::abs(words[i].x + words[i].width / 2 - centerX);
+    const int distance = std::abs(lineCenter(words[i]) - center);
     if (distance < bestDistance) {
       bestDistance = distance;
       best = i;
@@ -145,7 +153,7 @@ void DictionaryWordSelectActivity::moveVertical(const int direction) {
   const int targetRow = static_cast<int>(current.row) + direction;
   if (targetRow < 0 || targetRow >= static_cast<int>(rowCount)) return;
 
-  const int best = closestInRow(static_cast<uint16_t>(targetRow), current.x + current.width / 2);
+  const int best = closestInRow(static_cast<uint16_t>(targetRow), lineCenter(current));
   if (best >= 0 && best != selected) {
     selected = best;
     requestUpdate();
@@ -299,10 +307,11 @@ void DictionaryWordSelectActivity::loop() {
 // next cursor move must do a full repaint.
 bool DictionaryWordSelectActivity::drawHighlightWithSnapshot() {
   const WordBox& word = words[selected];
-  int hx = word.x - 2;
-  int hy = word.y - 2;
-  int hw = word.width + 4;
-  int hh = lineHeight + 4;
+  const Rect box = screenBox(word);
+  int hx = box.x - 2;
+  int hy = box.y - 2;
+  int hw = box.w + 4;
+  int hh = box.h + 4;
   // Clamp to the panel so save, draw and restore all use the same box.
   if (hx < 0) {
     hw += hx;
@@ -324,7 +333,11 @@ bool DictionaryWordSelectActivity::drawHighlightWithSnapshot() {
   snapshotIdx = saved ? selected : -1;
 
   renderer.fillRect(hx, hy, hw, hh, true);
-  renderer.drawText(fontId, word.x, word.y, word.text, false, word.style);
+  if (vertical) {
+    renderer.drawTextVertical(fontId, word.x, word.y, word.text, false, word.style);
+  } else {
+    renderer.drawText(fontId, word.x, word.y, word.text, false, word.style);
+  }
   return saved;
 }
 
@@ -372,9 +385,9 @@ void DictionaryWordSelectActivity::render(RenderLock&&) {
   // the in-RAM glyph cache during the real draw.
   auto* fcm = renderer.getFontCacheManager();
   auto scope = fcm->createPrewarmScope();
-  page->render(renderer, fontId, marginLeft, marginTop);
+  page->render(renderer, fontId, marginLeft, marginTop, vertical);
   scope.endScanAndPrewarm();
-  page->render(renderer, fontId, marginLeft, marginTop);
+  page->render(renderer, fontId, marginLeft, marginTop, vertical);
 
   if (!words.empty()) {
     drawHighlightWithSnapshot();
