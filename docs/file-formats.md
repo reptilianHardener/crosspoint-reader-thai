@@ -537,3 +537,21 @@ make a real book disappear.
 
 `selfSize` is the expected file size. Comparing it against the real one is a free
 truncation guard: a build cut short by a power failure cannot pass.
+
+
+## `textprefs.bin` — per-book reader text settings
+
+Lives in an EPUB's cache directory next to `progress.bin`. Written the first time
+text settings are changed from inside that book; a book without the file follows
+the defaults in `settings.json`. A file of any other size or version is ignored.
+
+### Version 1 (37 bytes)
+
+| Offset | Size | Field |
+| ------ | ---- | ----- |
+| 0 | 1 | Version |
+| 1 | 1 | Built-in font family (`FONT_FAMILY`) |
+| 2 | 1 | Font point size |
+| 3 | 1 | Line spacing (`LINE_COMPRESSION`) |
+| 4 | 1 | Paragraph alignment (`PARAGRAPH_ALIGNMENT`) |
+| 5 | 32 | SD font family name, NUL-padded (empty = built-in family) |

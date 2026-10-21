@@ -404,6 +404,26 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   }
   int getReaderFontId() const;
 
+  // The reader text settings a book can carry on its own.
+  struct ReaderTextPrefs {
+    uint8_t fontFamily = NOTOSERIF;
+    uint8_t fontPointSize = DEFAULT_FONT_POINT_SIZE;
+    uint8_t lineSpacing = NORMAL;
+    uint8_t paragraphAlignment = JUSTIFIED;
+    char sdFontFamilyName[32] = "";
+
+    bool operator==(const ReaderTextPrefs& other) const;
+  };
+  ReaderTextPrefs readerTextPrefs() const;
+  void applyReaderTextPrefs(const ReaderTextPrefs& prefs);
+  // While a book override is active the live fields belong to the open book and
+  // toJson() persists the defaults captured here, so no save made while reading
+  // can leak a book's text settings into settings.json.
+  void beginBookTextOverride();
+  void endBookTextOverride();
+  bool bookTextOverrideActive = false;
+  ReaderTextPrefs defaultTextPrefs;
+
   // Drop the SD font selection and fall back to the built-in family. The reader
   // point size comes back into BUILTIN_READER_POINT_SIZES with it, since that is
   // the only set a built-in family ships — otherwise the settings UI would keep

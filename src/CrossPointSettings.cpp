@@ -91,11 +91,15 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
   doc["frontButtonRight"] = frontButtonRight;
   // Font family and size — both use dynamic getter/setters in SettingsList (the
   // option lists depend on the SD font registry), so the generic loop skips them.
-  doc["fontFamily"] = fontFamily;
-  doc["fontSize"] = fontPointSize;
+  // An open book may be overriding the text settings; the file keeps the defaults.
+  const ReaderTextPrefs text = bookTextOverrideActive ? defaultTextPrefs : readerTextPrefs();
+  doc["fontFamily"] = text.fontFamily;
+  doc["fontSize"] = text.fontPointSize;
+  doc["lineSpacing"] = text.lineSpacing;
+  doc["paragraphAlignment"] = text.paragraphAlignment;
   // SD card font family name — not in SettingsList, save manually
-  if (sdFontFamilyName[0] != '\0') {
-    doc["sdFontFamilyName"] = sdFontFamilyName;
+  if (text.sdFontFamilyName[0] != '\0') {
+    doc["sdFontFamilyName"] = text.sdFontFamilyName;
   }
   // Dictionary folder name — uses dynamic getter/setter in SettingsList, save manually
   if (dictionaryName[0] != '\0') {
@@ -387,6 +391,41 @@ void CrossPointSettings::clearSdFontFamily() {
   fontPointSize =
       snapToNearestPointSize(BUILTIN_READER_POINT_SIZES, std::size(BUILTIN_READER_POINT_SIZES), fontPointSize);
   saveToFile();
+}
+
+bool CrossPointSettings::ReaderTextPrefs::operator==(const ReaderTextPrefs& other) const {
+  return fontFamily == other.fontFamily && fontPointSize == other.fontPointSize && lineSpacing == other.lineSpacing &&
+         paragraphAlignment == other.paragraphAlignment && strcmp(sdFontFamilyName, other.sdFontFamilyName) == 0;
+}
+
+CrossPointSettings::ReaderTextPrefs CrossPointSettings::readerTextPrefs() const {
+  ReaderTextPrefs prefs;
+  prefs.fontFamily = fontFamily;
+  prefs.fontPointSize = fontPointSize;
+  prefs.lineSpacing = lineSpacing;
+  prefs.paragraphAlignment = paragraphAlignment;
+  copyToField(prefs.sdFontFamilyName, sdFontFamilyName, sizeof(prefs.sdFontFamilyName));
+  return prefs;
+}
+
+void CrossPointSettings::applyReaderTextPrefs(const ReaderTextPrefs& prefs) {
+  fontFamily = prefs.fontFamily < BUILTIN_FONT_COUNT ? prefs.fontFamily : NOTOSERIF;
+  fontPointSize = prefs.fontPointSize;
+  lineSpacing = prefs.lineSpacing < LINE_COMPRESSION_COUNT ? prefs.lineSpacing : NORMAL;
+  paragraphAlignment = prefs.paragraphAlignment < PARAGRAPH_ALIGNMENT_COUNT ? prefs.paragraphAlignment : JUSTIFIED;
+  copyToField(sdFontFamilyName, prefs.sdFontFamilyName, sizeof(sdFontFamilyName));
+}
+
+void CrossPointSettings::beginBookTextOverride() {
+  if (bookTextOverrideActive) return;
+  defaultTextPrefs = readerTextPrefs();
+  bookTextOverrideActive = true;
+}
+
+void CrossPointSettings::endBookTextOverride() {
+  if (!bookTextOverrideActive) return;
+  bookTextOverrideActive = false;
+  applyReaderTextPrefs(defaultTextPrefs);
 }
 
 int CrossPointSettings::getReaderFontId() const {
