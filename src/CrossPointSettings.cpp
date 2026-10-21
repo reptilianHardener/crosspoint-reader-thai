@@ -93,10 +93,9 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
   // option lists depend on the SD font registry), so the generic loop skips them.
   doc["fontFamily"] = fontFamily;
   doc["fontSize"] = fontPointSize;
-  // SD card font family name — not in SettingsList, save manually
-  if (sdFontFamilyName[0] != '\0') {
-    doc["sdFontFamilyName"] = sdFontFamilyName;
-  }
+  // SD card font family name — not in SettingsList, save manually. Written even when
+  // empty: a missing key reads as DEFAULT_SD_FONT_FAMILY.
+  doc["sdFontFamilyName"] = sdFontFamilyName;
   // Dictionary folder name — uses dynamic getter/setter in SettingsList, save manually
   if (dictionaryName[0] != '\0') {
     doc["dictionaryName"] = dictionaryName;
@@ -241,7 +240,7 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   }
 
   // SD card font family name — not in SettingsList, load manually
-  const char* sfn = doc["sdFontFamilyName"] | "";
+  const char* sfn = doc["sdFontFamilyName"] | DEFAULT_SD_FONT_FAMILY;
   strncpy(sdFontFamilyName, sfn, sizeof(sdFontFamilyName) - 1);
   sdFontFamilyName[sizeof(sdFontFamilyName) - 1] = '\0';
   if (storedFontFamily == LEGACY_OPENDYSLEXIC && sdFontFamilyName[0] == '\0') {
