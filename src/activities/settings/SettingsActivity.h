@@ -30,6 +30,8 @@ enum class SettingAction {
   HomeButton,
   About,
   ThaiDictionary,
+  HomeTopImage,
+  HomeMiddleImage,
 };
 
 struct SettingInfo {
@@ -221,6 +223,9 @@ class SettingsActivity final : public UiTabListActivity {
   void enterCategory(int categoryIndex);
   void toggleCurrentSetting();
   void openSleepTimeoutPicker();
+  // Banner theme image rows: pick a BMP from the SD card, or clear the current one.
+  void openHomeImageSetting(SettingAction action, StrId nameId);
+  void pickHomeImage(char* field);
   void rebuildSettingsLists();
   void syncQuickResumeTimeoutForSleepScreen(bool sleepScreenChanged, bool quickResumeTimeoutChanged);
 

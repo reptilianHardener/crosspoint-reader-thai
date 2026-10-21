@@ -310,6 +310,12 @@ class BaseTheme {
   virtual int homeExtraCoverThumbHeights(int* /*heights*/, int /*capacity*/) const { return 0; }
   // Fills `grid` and returns true when drawButtonMenu lays the home menu out as a grid.
   virtual bool homeMenuGrid(const GfxRenderer&, Rect, int /*buttonCount*/, HomeMenuGrid&) const { return false; }
+  // Vertical span of the recent-book covers inside the home cover tile, for touch
+  // hit-testing; false means the covers fill the whole tile.
+  virtual bool homeCoverBand(const GfxRenderer&, Rect /*tile*/, int& /*top*/, int& /*bottom*/) const { return false; }
+  // True when the home screen is two rows, covers above and menu below: the front
+  // Left/Right buttons move within a row and the side buttons switch rows.
+  virtual bool homeRowNavigation() const { return false; }
 
   // Shared constants and helpers for battery drawing (used by all themes)
   static constexpr int batteryPercentSpacing = 4;

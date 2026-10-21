@@ -357,9 +357,10 @@ void HomeActivity::loop() {
     return;
   }
 
-  // Cover grid home splits navigation by button group (see below); the flat
-  // next/previous cycle is for the classic list home only.
-  if (!coverGridUi) {
+  // Cover grid home splits navigation by button group (see below), as do row
+  // themes (handleRowButtons); the flat next/previous cycle is for the list home.
+  const bool rowNavigation = !coverGridUi && GUI.homeRowNavigation();
+  if (!coverGridUi && !rowNavigation) {
     buttonNavigator.onNext([this, menuCount] {
       selectorIndex = ButtonNavigator::nextIndex(selectorIndex, menuCount);
       requestUpdate();
@@ -433,10 +434,13 @@ void HomeActivity::loop() {
   const int coverColumnCount = std::max(1, metrics.homeRecentBooksCount);
   const int recentCount = std::min(static_cast<int>(recentBooks.size()), coverColumnCount);
   const int coverColumnWidth = (renderer.getScreenWidth() - 2 * metrics.contentSidePadding) / coverColumnCount;
+  int coverTop = metrics.homeTopPadding;
+  int coverBottom = metrics.homeTopPadding + metrics.homeCoverTileHeight;
+  GUI.homeCoverBand(renderer, Rect{0, metrics.homeTopPadding, renderer.getScreenWidth(), metrics.homeCoverTileHeight},
+                    coverTop, coverBottom);
   int touchedBook = -1;
   const auto coverTouch = mappedInput.colTouch(touchedBook, metrics.contentSidePadding, coverColumnWidth, recentCount,
-                                               metrics.homeTopPadding,
-                                               metrics.homeTopPadding + metrics.homeCoverTileHeight, coverColumnWidth);
+                                               coverTop, coverBottom, coverColumnWidth);
   if (coverTouch != MappedInputManager::RowTouch::None) {
     if (coverTouch == MappedInputManager::RowTouch::Down) {
       if (selectorIndex != touchedBook) {
@@ -454,11 +458,19 @@ void HomeActivity::loop() {
   const int renderedMenuCount =
       menuCount - (metrics.homeContinueReadingInMenu ? 0 : static_cast<int>(recentBooks.size()));
   int menuRow = -1;
-  // Row height from the theme, not the metrics table: RoundedRaff draws
-  // font-derived rows and the touch grid must match the visuals exactly.
-  const int menuRowHeight = GUI.getMenuRowHeight(renderer);
-  const auto menuTouch = mappedInput.rowTouch(menuRow, menuTop, menuRowHeight + metrics.menuSpacing, renderedMenuCount,
-                                              0, INT32_MAX, menuRowHeight);
+  MappedInputManager::RowTouch menuTouch;
+  HomeMenuGrid grid;
+  if (GUI.homeMenuGrid(renderer, homeMenuRect(), renderedMenuCount, grid) && grid.columns == renderedMenuCount) {
+    // A single row of menu tiles (Banner theme).
+    menuTouch = mappedInput.colTouch(menuRow, grid.left, grid.colStep, renderedMenuCount, grid.top,
+                                     grid.top + grid.tileHeight, grid.tileWidth);
+  } else {
+    // Row height from the theme, not the metrics table: RoundedRaff draws
+    // font-derived rows and the touch grid must match the visuals exactly.
+    const int menuRowHeight = GUI.getMenuRowHeight(renderer);
+    menuTouch = mappedInput.rowTouch(menuRow, menuTop, menuRowHeight + metrics.menuSpacing, renderedMenuCount, 0,
+                                     INT32_MAX, menuRowHeight);
+  }
   if (menuTouch != MappedInputManager::RowTouch::None) {
     const int touchedIndex =
         metrics.homeContinueReadingInMenu ? menuRow : menuRow + static_cast<int>(recentBooks.size());
@@ -474,9 +486,46 @@ void HomeActivity::loop() {
     return;
   }
 
+  if (rowNavigation && handleRowButtons()) return;
+
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     activateSelection();
   }
+}
+
+bool HomeActivity::handleRowButtons() {
+  const int bookCount = static_cast<int>(recentBooks.size());
+  const int menuCount = getMenuItemCount() - bookCount;
+  if (menuCount <= 0) return false;
+  const bool inBooks = selectorIndex < bookCount;
+  const int menuIndex = selectorIndex - bookCount;
+
+  const bool left = mappedInput.wasPressed(MappedInputManager::Button::Left);
+  const bool right = mappedInput.wasPressed(MappedInputManager::Button::Right);
+  if (left || right) {
+    const int dir = right ? 1 : -1;
+    if (inBooks) {
+      selectorIndex = (selectorIndex + dir + bookCount) % bookCount;
+    } else {
+      selectorIndex = bookCount + (menuIndex + dir + menuCount) % menuCount;
+    }
+    requestUpdate();
+    return true;
+  }
+
+  if (mappedInput.wasPressed(MappedInputManager::Button::Up) ||
+      mappedInput.wasPressed(MappedInputManager::Button::Down)) {
+    if (inBooks) {
+      lastBookIndex = selectorIndex;
+      selectorIndex = bookCount + std::min(lastMenuColumn, menuCount - 1);
+    } else if (bookCount > 0) {
+      lastMenuColumn = menuIndex;
+      selectorIndex = std::min(lastBookIndex, bookCount - 1);
+    }
+    requestUpdate();
+    return true;
+  }
+  return false;
 }
 
 Rect HomeActivity::homeMenuRect() const {
@@ -703,9 +752,10 @@ void HomeActivity::render(RenderLock&&) {
   // Carousel themes: Left/Right rotate the books or switch grid column, the side buttons
   // move between rows, and Back returns from the grid to the carousel.
   const bool carousel = GUI.homeIsCarousel();
+  const bool horizontal = carousel || GUI.homeRowNavigation();
   const char* backLabel = recentBooks.empty() ? "" : (carousel ? tr(STR_BOOK) : tr(STR_RESUME));
-  const auto labels = mappedInput.mapLabels(backLabel, tr(STR_SELECT), carousel ? tr(STR_DIR_LEFT) : tr(STR_DIR_UP),
-                                            carousel ? tr(STR_DIR_RIGHT) : tr(STR_DIR_DOWN));
+  const auto labels = mappedInput.mapLabels(backLabel, tr(STR_SELECT), horizontal ? tr(STR_DIR_LEFT) : tr(STR_DIR_UP),
+                                            horizontal ? tr(STR_DIR_RIGHT) : tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer(cleanInitialRefresh && !firstRenderDone ? HalDisplay::HALF_REFRESH : HalDisplay::FAST_REFRESH);

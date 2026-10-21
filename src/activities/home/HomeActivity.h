@@ -77,6 +77,8 @@ class HomeActivity final : public Activity {
   void handleCarouselInput();
   bool handleCarouselTouch(int bookCount, int menuItemCount);
   void selectIndex(int newIndex);
+  // Row themes (GUI.homeRowNavigation()): Left/Right within a row, Up/Down between rows.
+  bool handleRowButtons();
   Rect homeMenuRect() const;
   bool storeCoverBuffer();    // Store frame buffer for cover image
   bool restoreCoverBuffer();  // Restore frame buffer from stored cover

@@ -33,6 +33,7 @@
 #include "StatusBarSettingsActivity.h"
 #include "TextSettingsActivity.h"
 #include "ThaiDictionaryActivity.h"
+#include "activities/home/FileBrowserActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/IntervalSelectionActivity.h"
 #include "components/UITheme.h"
@@ -70,6 +71,10 @@ void SettingsActivity::rebuildSettingsLists() {
         continue;
       }
       displaySettings.push_back(setting);
+      if (setting.valuePtr == &CrossPointSettings::uiTheme && SETTINGS.uiTheme == CrossPointSettings::BANNER) {
+        displaySettings.push_back(SettingInfo::Action(StrId::STR_HOME_TOP_IMAGE, SettingAction::HomeTopImage));
+        displaySettings.push_back(SettingInfo::Action(StrId::STR_HOME_MIDDLE_IMAGE, SettingAction::HomeMiddleImage));
+      }
     } else if (setting.category == StrId::STR_CAT_READER) {
       // Settings merged into "Text Settings"
       // (they stay in the shared list for the web settings API)
@@ -451,6 +456,10 @@ void SettingsActivity::toggleCurrentSetting() {
           LOG_ERR("SETTINGS", "OOM: ThaiDictionaryActivity");
         }
         break;
+      case SettingAction::HomeTopImage:
+      case SettingAction::HomeMiddleImage:
+        openHomeImageSetting(setting.action, setting.nameId);
+        return;
       case SettingAction::None:
         // Do nothing
         break;
@@ -505,8 +514,56 @@ void SettingsActivity::openSleepTimeoutPicker() {
       });
 }
 
+void SettingsActivity::openHomeImageSetting(const SettingAction action, const StrId nameId) {
+  char* field = action == SettingAction::HomeTopImage ? SETTINGS.homeTopImage : SETTINGS.homeMiddleImage;
+  if (field[0] == '\0') {
+    pickHomeImage(field);
+    return;
+  }
+  static constexpr StrId OPTIONS[] = {StrId::STR_CHOOSE_IMAGE, StrId::STR_NONE_OPT};
+  optionPopup.show(nameId, OPTIONS, static_cast<int>(std::size(OPTIONS)), 0, [this, field](int idx) {
+    if (idx == 0) {
+      pickHomeImage(field);
+      return;
+    }
+    field[0] = '\0';
+    SETTINGS.saveToFile();
+    requestUpdate();
+  });
+  requestUpdate();
+}
+
+void SettingsActivity::pickHomeImage(char* field) {
+  auto picker =
+      makeUniqueNoThrow<FileBrowserActivity>(renderer, mappedInput, "/", FileBrowserActivity::Mode::PickImage);
+  if (!picker) {
+    LOG_ERR("SET", "OOM: image picker");
+    return;
+  }
+  startActivityForResult(std::move(picker), [this, field](const ActivityResult& result) {
+    const auto* path = std::get_if<FilePathResult>(&result.data);
+    if (!result.isCancelled && path) {
+      if (path->path.size() >= CrossPointSettings::HOME_IMAGE_PATH_LEN) {
+        LOG_ERR("SET", "Image path too long: %s", path->path.c_str());
+      } else {
+        strncpy(field, path->path.c_str(), CrossPointSettings::HOME_IMAGE_PATH_LEN - 1);
+        field[CrossPointSettings::HOME_IMAGE_PATH_LEN - 1] = '\0';
+        SETTINGS.saveToFile();
+      }
+    }
+    requestUpdate();
+  });
+}
+
 std::string SettingsActivity::settingValueText(const SettingInfo& setting) {
   if (setting.action == SettingAction::HomeButton) return tr(STR_CONFIGURE);
+  if (setting.action == SettingAction::HomeTopImage || setting.action == SettingAction::HomeMiddleImage) {
+    const char* path =
+        setting.action == SettingAction::HomeTopImage ? SETTINGS.homeTopImage : SETTINGS.homeMiddleImage;
+    if (path[0] == '\0') return tr(STR_NONE_OPT);
+    const char* slash = strrchr(path, '/');
+    return slash ? slash + 1 : path;
+  }
   if (setting.type == SettingType::TOGGLE && setting.valuePtr != nullptr) {
     return SETTINGS.*(setting.valuePtr) ? tr(STR_STATE_ON) : tr(STR_STATE_OFF);
   }

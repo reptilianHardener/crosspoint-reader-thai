@@ -105,6 +105,11 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
   if (dictionaryName[0] != '\0') {
     doc["dictionaryName"] = dictionaryName;
   }
+  // Banner theme images — picked through their own screen, not in SettingsList.
+  if (homeTopImage[0] != '\0') doc["homeTopImage"] = homeTopImage;
+  if (homeMiddleImage[0] != '\0') doc["homeMiddleImage"] = homeMiddleImage;
+  // Marks uiTheme as using the numbering with BANNER (see UI_THEME).
+  doc["uiThemeOrder"] = 1;
 
   // Language -- managed by LanguageSelectActivity, not in SettingsList.
   // Stored as ISO code string ("EN", "DE", ...) for stability across enum reorders.
@@ -253,6 +258,13 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   }
   // Dictionary folder name — uses dynamic getter/setter in SettingsList, load manually
   copyToField(dictionaryName, doc["dictionaryName"] | "", sizeof(dictionaryName));
+  copyToField(homeTopImage, doc["homeTopImage"] | "", sizeof(homeTopImage));
+  copyToField(homeMiddleImage, doc["homeMiddleImage"] | "", sizeof(homeMiddleImage));
+  // BANNER took value 5, which was COVER_GRID in files written before it existed.
+  if (doc["uiThemeOrder"].isNull()) {
+    if (uiTheme == BANNER) uiTheme = COVER_GRID;
+    needsResave = true;
+  }
 
   // Language -- stored as code string for stability across enum reorders.
   if (doc["language"].is<const char*>()) {

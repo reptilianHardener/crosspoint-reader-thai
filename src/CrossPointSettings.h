@@ -186,8 +186,11 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // UI Theme
   // MODERN keeps the value it has always had in this fork, so existing settings files
   // still select it. COVER_GRID stays last: the settings list hides it on boards without
-  // PSRAM by dropping the final entry.
-  enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2, MODERN = 3, ROUNDEDRAFF = 4, COVER_GRID = 5 };
+  // PSRAM by dropping the final entry. It was 5 before BANNER; fromJson() migrates files
+  // written without the "uiThemeOrder" marker.
+  enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2, MODERN = 3, ROUNDEDRAFF = 4, BANNER = 5, COVER_GRID = 6 };
+  // Banner theme images: BMP paths on the SD card (empty = section hidden).
+  static constexpr size_t HOME_IMAGE_PATH_LEN = 128;
   // Which way the home carousel advances
   enum PREVIEW_DIRECTION { PREVIEW_LEFT = 0, PREVIEW_RIGHT = 1, PREVIEW_DIRECTION_COUNT };
 
@@ -344,6 +347,9 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t readerMenuStyle = READER_MENU_LIST;
   // SD card font family name (empty = use built-in fontFamily)
   char sdFontFamilyName[32] = "";
+  // Banner theme: images shown above and below the recent books (BMP paths, empty = none)
+  char homeTopImage[HOME_IMAGE_PATH_LEN] = "";
+  char homeMiddleImage[HOME_IMAGE_PATH_LEN] = "";
   // Dictionary folder name under /dictionaries (empty = no dictionary)
   char dictionaryName[32] = "";
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)
