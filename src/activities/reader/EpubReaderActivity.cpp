@@ -20,7 +20,6 @@
 #include <limits>
 
 #include "../../util/BookmarkFile.h"
-#include "BookTextPrefs.h"
 #include "BookmarkEntry.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -206,15 +205,6 @@ bool EpubReaderActivity::loadBook() {
   });
 
   epub->setupCacheDir();
-
-  SETTINGS.beginBookTextOverride();
-  if (CrossPointSettings::ReaderTextPrefs bookPrefs; BookTextPrefs::load(epub->getCachePath(), bookPrefs)) {
-    SETTINGS.applyReaderTextPrefs(bookPrefs);
-    sdFontSystem.ensureLoaded(renderer);
-  }
-  // Taken after the font load, so a snapped size or a missing-font fallback is not
-  // mistaken for a change the user made.
-  savedTextPrefs = SETTINGS.readerTextPrefs();
 
   HalFile f;
   if (Storage.openFileForRead("ERS", epub->getCachePath() + "/progress.bin", f)) {
@@ -878,7 +868,6 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
                                  }
                                  section.reset();
                                }
-                               persistBookTextPrefs();
                                openReaderMenu();
                              });
       break;
@@ -2469,34 +2458,14 @@ void EpubReaderActivity::applyReaderTextSettings() {
   // The reader otherwise only loads SD fonts on book open, so without this an
   // in-reader font change wouldn't take effect until re-opening the book.
   sdFontSystem.ensureLoaded(renderer);
-  {
-    RenderLock lock;
-    if (section) {
-      rememberCurrentContentOffset();
-      cachedSpineIndex = currentSpineIndex;
-      cachedChapterTotalPageCount = section->pageCount;
-      nextPageNumber = section->currentPage;
-    }
-    section.reset();  // force re-pagination with the new settings
+  RenderLock lock;
+  if (section) {
+    rememberCurrentContentOffset();
+    cachedSpineIndex = currentSpineIndex;
+    cachedChapterTotalPageCount = section->pageCount;
+    nextPageNumber = section->currentPage;
   }
-  persistBookTextPrefs();
-}
-
-void EpubReaderActivity::persistBookTextPrefs() {
-  if (!epub) return;
-  const CrossPointSettings::ReaderTextPrefs current = SETTINGS.readerTextPrefs();
-  if (current == savedTextPrefs) return;
-  if (!BookTextPrefs::save(epub->getCachePath(), current)) {
-    LOG_ERR("ERS", "Failed to save book text prefs");
-    return;
-  }
-  savedTextPrefs = current;
-}
-
-// Covers text settings changed on a screen that was left without returning here.
-void EpubReaderActivity::onExit() {
-  persistBookTextPrefs();
-  ReaderActivity::onExit();
+  section.reset();  // force re-pagination with the new settings
 }
 
 // The More panel carries everything the classic list menu offers except the

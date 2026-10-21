@@ -12,7 +12,6 @@
 
 #include "BookmarkEntry.h"
 #include "ChapterPosition.h"
-#include "CrossPointSettings.h"
 #include "EpubReaderMenuActivity.h"
 #include "ProgressMapper.h"
 #include "ReaderActivity.h"
@@ -167,10 +166,6 @@ class EpubReaderActivity final : public ReaderActivity {
   // Persist the reader text settings, (re)load the selected SD font, and
   // re-paginate the current chapter so changes apply without re-opening the book.
   void applyReaderTextSettings();
-  // Text settings last written to (or loaded from) this book's textprefs.bin, or the
-  // defaults it opened with when it has none; a difference means the user changed them.
-  CrossPointSettings::ReaderTextPrefs savedTextPrefs;
-  void persistBookTextPrefs();
   // More panel rows.
   void buildMoreActions();
   std::string moreRowName(int row) const;
@@ -212,7 +207,6 @@ class EpubReaderActivity final : public ReaderActivity {
       : ReaderActivity("EpubReader", renderer, mappedInput, std::move(bookPath), allowFastInitialRefresh) {}
   ~EpubReaderActivity() override;
 
-  void onExit() override;
   void loop() override;
 
   bool pageTurn(bool isForward) override;

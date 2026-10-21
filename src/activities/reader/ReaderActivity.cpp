@@ -88,9 +88,6 @@ void ReaderActivity::rememberBookOnceRendered() {
 void ReaderActivity::onExit() {
   Activity::onExit();
 
-  // Hand the text settings back to the defaults a book may have overridden.
-  SETTINGS.endBookTextOverride();
-
   // Record how far the reader got, for the home carousel and the sleep-screen panel.
   // Once per reading session (and only when the value changed), never per page turn.
   // A reader that cannot tell right now (no section loaded) reports 0, which must not
