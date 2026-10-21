@@ -18,6 +18,10 @@
 #   styles:      Map of style name -> font source
 #                  path: relative to lib/EpdFont (for committed fonts)
 #                  url:  download URL (for fonts not in the repo)
+#                  fallback: (optional) a second source in the same form, merged in for
+#                            codepoints the first lacks, ahead of the Noto Sans fallback
+#                            every family gets. Lets one family cover scripts no single
+#                            font does. Line metrics come from the first source.
 #
 # Variable fonts:
 #   Some fonts (Bitter, Inter, Alegreya) are distributed as variable fonts.
@@ -499,3 +503,24 @@ families:
     sizes: [8, 10, 12, 14, 16, 18, 20]
     styles:
       regular: {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/itim/Itim-Regular.ttf"}
+
+  # ── Thai + Japanese ────────────────────────────────────────────────────
+  # One reader font for both scripts: Noto Sans Thai Looped, with kana, kanji
+  # and fullwidth forms merged in from Noto Sans JP. Thai and Japanese books can
+  # then share a font, and Japanese books are still set vertically.
+
+  - name: NotoSansThaiJP
+    description: "Looped Thai sans-serif with Japanese Gothic (Thai, Kana, Kanji, Latin)"
+    scripts: [thai, cjk, latin]
+    intervals: thai,cjk,latin-ext,punctuation,symbols
+    sizes: [8, 10, 12, 14, 16, 18, 20]
+    bridge_gaps: 4
+    styles:
+      regular:
+        url: "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansthailooped/NotoSansThaiLooped%5Bwdth%2Cwght%5D.ttf"
+        variable: {wght: 400, wdth: 100}
+        fallback: {url: "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf"}
+      bold:
+        url: "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansthailooped/NotoSansThaiLooped%5Bwdth%2Cwght%5D.ttf"
+        variable: {wght: 700, wdth: 100}
+        fallback: {url: "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Bold.otf"}
