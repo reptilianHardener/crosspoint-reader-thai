@@ -17,10 +17,13 @@
 
 #include "FirmwareBoardTag.h"
 #include "FirmwareFlasher.h"
+#include "FirmwareVersion.h"
 
 namespace {
 // This fork updates from its own releases; upstream builds would replace the Thai support.
-constexpr char latestReleaseUrl[] = "https://api.github.com/repos/kocha01/crosspoint-halo2-custom/releases/latest";
+// A release needs a crosspoint-<tag>-<board>.bin asset (crosspoint-<tag>-x3-x4.bin for the C3).
+constexpr char latestReleaseUrl[] =
+    "https://api.github.com/repos/reptilianHardener/crosspoint-reader-thai/releases/latest";
 }  // namespace
 
 OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
@@ -97,49 +100,20 @@ bool OtaUpdater::isUpdateNewer() const {
     return false;
   }
 
-  int currentMajor = 0, currentMinor = 0, currentPatch = 0;
-  int latestMajor = 0, latestMinor = 0, latestPatch = 0;
-
-  const auto currentVersion = CROSSPOINT_VERSION;
-
-  // semantic version check (only match on 3 segments)
-  const int latestParsed = sscanf(latestVersion.c_str(), "%d.%d.%d", &latestMajor, &latestMinor, &latestPatch);
-  const int currentParsed = sscanf(currentVersion, "%d.%d.%d", &currentMajor, &currentMinor, &currentPatch);
-
-  // A version that is not three numeric segments cannot be ordered. Offer the update
-  // rather than compare uninitialised segments and silently report "up to date".
-  if (latestParsed < 3 || currentParsed < 3) {
-    LOG_ERR("OTA", "Version parse failed (latest=%d, current=%d), allowing update", latestParsed, currentParsed);
+  firmware_version::Version latest, current;
+  // A version that cannot be ordered: offer the update rather than silently report
+  // "up to date".
+  if (!firmware_version::parse(latestVersion.c_str(), latest) ||
+      !firmware_version::parse(CROSSPOINT_VERSION, current)) {
+    LOG_ERR("OTA", "Version parse failed (latest=%s, current=%s), allowing update", latestVersion.c_str(),
+            CROSSPOINT_VERSION);
     return true;
   }
 
-  /*
-   * Compare major versions.
-   * If they differ, return true if latest major version greater than current major version
-   * otherwise return false.
-   */
-  if (latestMajor != currentMajor) return latestMajor > currentMajor;
-
-  /*
-   * Compare minor versions.
-   * If they differ, return true if latest minor version greater than current minor version
-   * otherwise return false.
-   */
-  if (latestMinor != currentMinor) return latestMinor > currentMinor;
-
-  /*
-   * Check patch versions.
-   */
-  if (latestPatch != currentPatch) return latestPatch > currentPatch;
-
-  // If we reach here, it means all segments are equal.
-  // One final check, if we're on a pre-release build (contains "-rc" or "-dev"), we should consider the latest
-  // version as newer even if the segments are equal, so such builds can always move to the matching release.
-  if (strstr(currentVersion, "-rc") != nullptr || strstr(currentVersion, "-dev") != nullptr) {
-    return true;
-  }
-
-  return false;
+  const int order = firmware_version::compare(latest, current);
+  if (order != 0) return order > 0;
+  // Same numbers: a pre-release build can always move to the matching release.
+  return firmware_version::isPreRelease(CROSSPOINT_VERSION);
 }
 
 const std::string& OtaUpdater::getLatestVersion() const { return latestVersion; }
