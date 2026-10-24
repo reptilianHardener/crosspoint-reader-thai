@@ -17,8 +17,8 @@
 #include "components/themes/banner/BannerTheme.h"
 #include "components/themes/lyra/Lyra3CoversTheme.h"
 #include "components/themes/lyra/LyraTheme.h"
-#include "components/themes/modern/ModernTheme.h"
-#include "components/themes/roundedraff/RoundedRaffTheme.h"
+#include "components/themes/shelf/ShelfTheme.h"
+#include "components/themes/tategaki/TategakiTheme.h"
 
 UITheme UITheme::instance;
 
@@ -39,16 +39,10 @@ bool UITheme::hasCoverGridHome() { return SETTINGS.uiTheme == CrossPointSettings
 void UITheme::drawCoverGridHome(CoverGridHomeUi& home) { home.renderUi(); }
 
 void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
-  if (type == CrossPointSettings::COVER_GRID && !supportsCoverGrid()) type = CrossPointSettings::LYRA;
+  if (type == CrossPointSettings::COVER_GRID && !supportsCoverGrid()) type = CrossPointSettings::LYRA_3_COVERS;
 
   switch (type) {
-    case CrossPointSettings::UI_THEME::CLASSIC:
-      LOG_DBG("UI", "Using Classic theme");
-      currentTheme = std::make_unique<BaseTheme>();
-      currentMetrics = &BaseMetrics::values;
-      break;
-    case CrossPointSettings::UI_THEME::COVER_GRID:
-    case CrossPointSettings::UI_THEME::LYRA: {
+    case CrossPointSettings::UI_THEME::COVER_GRID: {
       // The cover home owns its screen-lifetime UI state; other screens retain Lyra styling.
       auto theme = makeUniqueNoThrow<LyraTheme>();
       if (!theme) {
@@ -60,11 +54,6 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       LOG_DBG("UI", "Using Lyra theme");
       break;
     }
-    case CrossPointSettings::UI_THEME::ROUNDEDRAFF:
-      LOG_DBG("UI", "Using RoundedRaff theme");
-      currentTheme = std::make_unique<RoundedRaffTheme>();
-      currentMetrics = &RoundedRaffMetrics::values;
-      break;
     case CrossPointSettings::UI_THEME::BANNER: {
       auto theme = makeUniqueNoThrow<BannerTheme>();
       if (!theme) {
@@ -76,22 +65,33 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       LOG_DBG("UI", "Using Banner theme");
       break;
     }
+    case CrossPointSettings::UI_THEME::SHELF: {
+      auto theme = makeUniqueNoThrow<ShelfTheme>();
+      if (!theme) {
+        LOG_ERR("UI", "OOM: Shelf theme");
+        return;
+      }
+      currentTheme = std::move(theme);
+      currentMetrics = &ShelfMetrics::values;
+      LOG_DBG("UI", "Using Shelf theme");
+      break;
+    }
+    case CrossPointSettings::UI_THEME::TATEGAKI: {
+      auto theme = makeUniqueNoThrow<TategakiTheme>();
+      if (!theme) {
+        LOG_ERR("UI", "OOM: Tategaki theme");
+        return;
+      }
+      currentTheme = std::move(theme);
+      currentMetrics = &TategakiMetrics::values;
+      LOG_DBG("UI", "Using Tategaki theme");
+      break;
+    }
     case CrossPointSettings::UI_THEME::LYRA_3_COVERS:
       LOG_DBG("UI", "Using Lyra 3 Covers theme");
       currentTheme = std::make_unique<Lyra3CoversTheme>();
       currentMetrics = &Lyra3CoversMetrics::values;
       break;
-    case CrossPointSettings::UI_THEME::MODERN: {
-      auto theme = makeUniqueNoThrow<ModernTheme>();
-      if (!theme) {
-        LOG_ERR("UI", "OOM: Modern theme");
-        return;
-      }
-      currentTheme = std::move(theme);
-      currentMetrics = &ModernMetrics::values;
-      LOG_DBG("UI", "Using Modern theme");
-      break;
-    }
   }
   metricsValid = false;
 }

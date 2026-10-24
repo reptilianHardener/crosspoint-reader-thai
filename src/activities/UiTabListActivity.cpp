@@ -4,14 +4,21 @@
 
 #include <algorithm>
 #include <cassert>
+#include <string>
 
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
+#include "fontIds.h"
 
 namespace fui = freeink::ui;
 
 namespace {
 constexpr int16_t TOUCH_TAB_BAR_HEIGHT = 50;
+constexpr int VERTICAL_TAB_PAD = 12;  // label inset at each end and on each side
+constexpr int VERTICAL_TAB_GAP = 8;
+constexpr int VERTICAL_TAB_MIN_LENGTH = 56;
+constexpr int VERTICAL_TAB_RULE_GAP = 10;
+constexpr int VERTICAL_TAB_INDICATOR = 14;  // room for the sort arrow under the label
 }
 
 UiTabListActivity::UiTabListActivity(const char* name, GfxRenderer& renderer, MappedInputManager& mappedInput,
@@ -95,7 +102,77 @@ void UiTabListActivity::syncTabListViewport(UiScreen& screen, fui::ListProps& pr
   syncListViewport(screen, props, 1);
 }
 
+void UiTabListActivity::buildVerticalTabBar(UiScreen& screen) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  constexpr int MAX_TABS = 8;
+  const int count = tabCount() < MAX_TABS ? tabCount() : MAX_TABS;
+  if (count <= 0) return;
+  const int fontId = UI_12_FONT_ID;
+  const int lineHeight = renderer.getLineHeight(fontId);
+  const int columnWidth = lineHeight + 2 * VERTICAL_TAB_PAD;
+  const fui::Rect content = screen.contentRect();
+  const int columnX = content.x + content.width - metrics.contentSidePadding / 2 - columnWidth;
+  const int top = content.y + 4;
+  const int available = content.height - 8;
+
+  int lengths[MAX_TABS];
+  int total = (count - 1) * VERTICAL_TAB_GAP;
+  for (int i = 0; i < count; i++) {
+    const int indicator = tabIndicator(i) != fui::TabIndicator::None ? VERTICAL_TAB_INDICATOR : 0;
+    lengths[i] = std::max(VERTICAL_TAB_MIN_LENGTH,
+                          renderer.getTextWidth(fontId, tabLabel(i)) + 2 * VERTICAL_TAB_PAD + indicator);
+    total += lengths[i];
+  }
+  // Too long for the column: equal lengths, labels truncated to fit.
+  if (total > available) {
+    const int each = std::max(lineHeight, (available - (count - 1) * VERTICAL_TAB_GAP) / count);
+    for (int i = 0; i < count; i++) lengths[i] = each;
+  }
+
+  // Selected tab is solid while the tabs have focus, dimmed while the list does.
+  const bool tabsFocused = ringPos() == 0;
+  int y = top;
+  for (int i = 0; i < count; i++) {
+    const bool selected = activeTab() == i;
+    if (selected && tabsFocused) {
+      renderer.fillRect(columnX, y, columnWidth, lengths[i], true);
+    } else if (selected) {
+      renderer.fillRectDither(columnX, y, columnWidth, lengths[i], Color::DarkGray);
+    } else {
+      renderer.drawRect(columnX, y, columnWidth, lengths[i], 2, true);
+    }
+    const fui::TabIndicator arrow = tabIndicator(i);
+    const int indicator = arrow != fui::TabIndicator::None ? VERTICAL_TAB_INDICATOR : 0;
+    const std::string label =
+        renderer.truncatedText(fontId, tabLabel(i), lengths[i] - VERTICAL_TAB_PAD - indicator);
+    const int labelLength = renderer.getTextWidth(fontId, label.c_str());
+    const int labelY = y + (lengths[i] - labelLength - indicator) / 2;
+    renderer.drawTextVertical(fontId, columnX + (columnWidth + lineHeight) / 2, labelY, label.c_str(), !selected);
+    if (indicator > 0) {
+      const int cx = columnX + columnWidth / 2;
+      const int ay = labelY + labelLength + 4;
+      const bool up = arrow == fui::TabIndicator::Up;
+      const int xs[3] = {cx - 5, cx + 5, cx};
+      const int ys[3] = {up ? ay + 7 : ay, up ? ay + 7 : ay, up ? ay : ay + 7};
+      renderer.fillPolygon(xs, ys, 3, !selected);
+    }
+    screen.frame().hit(fui::Rect{static_cast<int16_t>(columnX), static_cast<int16_t>(y),
+                                 static_cast<int16_t>(columnWidth), static_cast<int16_t>(lengths[i])},
+                       ACTION_TAB, static_cast<int16_t>(i), fui::InputTouch);
+    y += lengths[i] + VERTICAL_TAB_GAP;
+  }
+
+  const int ruleX = columnX - VERTICAL_TAB_RULE_GAP;
+  renderer.fillRect(ruleX, top, 2, available, true);
+  const auto listRight = static_cast<int16_t>(content.x + content.width - ruleX + VERTICAL_TAB_RULE_GAP);
+  screen.insetContent(fui::Insets{0, listRight, 0, 0});
+}
+
 void UiTabListActivity::buildTabBar(UiScreen& screen) {
+  if (GUI.verticalTabs()) {
+    buildVerticalTabBar(screen);
+    return;
+  }
   const auto& metrics = UITheme::getInstance().getMetrics();
 
   // Tabs. The selected pill dims to a dither when the selection is down in

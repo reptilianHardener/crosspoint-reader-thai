@@ -185,7 +185,7 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
       // A carousel theme draws the same cover at several sizes and needs a thumbnail for
       // each: thumbnails are pre-dithered, so they cannot be rescaled at draw time.
       int thumbHeights[1 + MAX_EXTRA_THUMB_HEIGHTS] = {thumbHeight};
-      const int thumbCount = 1 + GUI.homeExtraCoverThumbHeights(thumbHeights + 1, MAX_EXTRA_THUMB_HEIGHTS);
+      const int thumbCount = 1 + GUI.homeExtraCoverThumbHeights(renderer, thumbHeights + 1, MAX_EXTRA_THUMB_HEIGHTS);
       bool missing[1 + MAX_EXTRA_THUMB_HEIGHTS] = {};
       bool anyMissing = false;
       for (int t = 0; t < thumbCount; t++) {
@@ -448,11 +448,22 @@ void HomeActivity::loop() {
   const int coverColumnWidth = (content.width - 2 * metrics.contentSidePadding) / coverColumnCount;
   int coverTop = metrics.homeTopPadding;
   int coverBottom = metrics.homeTopPadding + metrics.homeCoverTileHeight;
-  GUI.homeCoverBand(renderer, Rect{content.x, metrics.homeTopPadding, content.width, metrics.homeCoverTileHeight},
-                    coverTop, coverBottom);
+  const Rect tile{content.x, metrics.homeTopPadding, content.width, metrics.homeCoverTileHeight};
+  GUI.homeCoverBand(renderer, tile, coverTop, coverBottom);
+  HomeBookColumns columns;
+  columns.left = content.x + metrics.contentSidePadding;
+  columns.step = coverColumnWidth;
+  columns.width = coverColumnWidth;
+  columns.top = coverTop;
+  columns.bottom = coverBottom;
+  columns.count = recentCount;
+  if (GUI.homeBookColumns(renderer, tile, recentCount, columns)) columns.count = std::min(columns.count, recentCount);
   int touchedBook = -1;
-  const auto coverTouch = mappedInput.colTouch(touchedBook, content.x + metrics.contentSidePadding, coverColumnWidth,
-                                               recentCount, coverTop, coverBottom, coverColumnWidth);
+  const auto coverTouch = mappedInput.colTouch(touchedBook, columns.left, columns.step, columns.count, columns.top,
+                                               columns.bottom, columns.width);
+  if (coverTouch != MappedInputManager::RowTouch::None && columns.rightToLeft) {
+    touchedBook = columns.count - 1 - touchedBook;
+  }
   if (coverTouch != MappedInputManager::RowTouch::None) {
     if (coverTouch == MappedInputManager::RowTouch::Down) {
       if (selectorIndex != touchedBook) {
@@ -513,13 +524,22 @@ bool HomeActivity::handleRowButtons() {
   if (menuCount <= 0) return false;
   const bool inBooks = selectorIndex < bookCount;
   const int menuIndex = selectorIndex - bookCount;
+  // A theme may draw fewer books than were loaded, and may run them right to left.
+  HomeBookColumns columns;
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const Rect content = UITheme::getInstance().getContentArea(renderer);
+  const Rect tile{content.x, metrics.homeTopPadding, content.width, metrics.homeCoverTileHeight};
+  const bool themedColumns = GUI.homeBookColumns(renderer, tile, bookCount, columns);
+  const int shownBooks = themedColumns ? std::min(bookCount, columns.count) : bookCount;
 
   const bool left = mappedInput.wasPressed(MappedInputManager::Button::Left);
   const bool right = mappedInput.wasPressed(MappedInputManager::Button::Right);
   if (left || right) {
     const int dir = right ? 1 : -1;
     if (inBooks) {
-      selectorIndex = (selectorIndex + dir + bookCount) % bookCount;
+      if (shownBooks <= 0) return true;
+      const int step = columns.rightToLeft ? -dir : dir;
+      selectorIndex = (std::min(selectorIndex, shownBooks - 1) + step + shownBooks) % shownBooks;
     } else {
       selectorIndex = bookCount + (menuIndex + dir + menuCount) % menuCount;
     }
@@ -532,9 +552,9 @@ bool HomeActivity::handleRowButtons() {
     if (inBooks) {
       lastBookIndex = selectorIndex;
       selectorIndex = bookCount + std::min(lastMenuColumn, menuCount - 1);
-    } else if (bookCount > 0) {
+    } else if (shownBooks > 0) {
       lastMenuColumn = menuIndex;
-      selectorIndex = std::min(lastBookIndex, bookCount - 1);
+      selectorIndex = std::min(lastBookIndex, shownBooks - 1);
     }
     requestUpdate();
     return true;
@@ -740,6 +760,14 @@ void HomeActivity::render(RenderLock&&) {
   coverRectY = metrics.homeTopPadding;
   coverRectW = content.width;
   coverRectH = metrics.homeCoverTileHeight;
+  int snapshotTop = 0;
+  int snapshotBottom = 0;
+  if (GUI.homeSnapshotBand(renderer, Rect{content.x, metrics.homeTopPadding, content.width, coverRectH}, snapshotTop,
+                           snapshotBottom) &&
+      snapshotBottom > snapshotTop) {
+    coverRectY = snapshotTop;
+    coverRectH = snapshotBottom - snapshotTop;
+  }
 
   GUI.drawRecentBookCover(renderer, Rect{content.x, metrics.homeTopPadding, content.width, metrics.homeCoverTileHeight},
                           recentBooks, selectorIndex, coverRendered, coverBufferStored, bufferRestored,
@@ -784,7 +812,13 @@ void HomeActivity::render(RenderLock&&) {
   } else if (!recentsLoaded && !recentsLoading) {
     recentsLoading = true;
     const int themeThumbHeight = GUI.homeCoverThumbHeight(renderer);
-    loadRecentCovers(themeThumbHeight > 0 ? themeThumbHeight : metrics.homeCoverHeight);
+    if (themeThumbHeight < 0) {
+      // The theme draws no covers.
+      recentsLoaded = true;
+      recentsLoading = false;
+    } else {
+      loadRecentCovers(themeThumbHeight > 0 ? themeThumbHeight : metrics.homeCoverHeight);
+    }
   }
 }
 

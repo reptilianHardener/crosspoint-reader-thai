@@ -7,6 +7,11 @@
 
 #include "activities/UiListActivity.h"
 #include "components/OptionPopup.h"
+#include "components/themes/BaseTheme.h"
+
+namespace freeink {
+struct Icon;
+}
 
 class EpubReaderMenuActivity final : public UiListActivity {
  public:
@@ -41,10 +46,12 @@ class EpubReaderMenuActivity final : public UiListActivity {
   static void toggleBluetooth();
   static void buildMenuItems(std::vector<MenuItem>& items, bool hasFootnotes, bool hasBookmarks, bool hasClippings);
 
+  // pageOnScreen: the framebuffer still holds the reader page, so a theme's menu sheet
+  // can be drawn over it instead of on a blank screen.
   explicit EpubReaderMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& title,
                                   const int currentPage, const int totalPages, const int bookProgressPercent,
                                   const uint8_t currentOrientation, const bool hasFootnotes, bool hasBookmarks,
-                                  bool hasClippings);
+                                  bool hasClippings, std::string chapterTitle = "", bool pageOnScreen = false);
 
   void render(RenderLock&&) override;
   bool handleHomeGesture() override;
@@ -71,6 +78,47 @@ class EpubReaderMenuActivity final : public UiListActivity {
   void drawChrome() override;
 
   void closeCancelled();
+  void activateAction(MenuAction action);
+
+  // --- sheet (themes with readerMenuSheet()) ----------------------------------
+  // A sheet of six tiles at the bottom of the screen; its "More" tile shows the
+  // full list. Both share the actions above.
+  struct SheetTile {
+    MenuAction action;
+    StrId labelId;
+    const freeink::Icon* icon;
+  };
+  static constexpr int SHEET_COLUMNS = 3;
+  static constexpr int SHEET_TILES = 6;
+  // The last tile opens the full list; the others hold an action.
+  static constexpr int SHEET_MORE_TILE = SHEET_TILES - 1;
+  struct SheetLayout {
+    Rect sheet;
+    Rect bar;
+    Rect tiles[SHEET_TILES];
+    int textX = 0;
+    int textWidth = 0;
+    int chapterY = 0;
+    int bookY = 0;
+    int legendY = 0;
+  };
+  void buildSheetTiles();
+  SheetLayout sheetLayout() const;
+  // Visual column of a tile: right-to-left sheets put the first tile on the right.
+  int sheetColumn(int index) const;
+  bool handleSheetInput();
+  void renderSheet();
+  void activateSheetTile(int index);
+  StrId sheetLabel(int index) const;
+  const freeink::Icon& sheetIcon(int index) const;
+
+  bool sheetMode = false;
+  bool hasSheet = false;
+  bool pageBehind = false;
+  int sheetSelected = 0;
+  ReaderMenuSheetStyle sheetStyle;
+  SheetTile sheetTiles[SHEET_MORE_TILE]{};
+  std::string chapterTitle;
 
   // Fixed menu layout
   std::vector<MenuItem> menuItems;

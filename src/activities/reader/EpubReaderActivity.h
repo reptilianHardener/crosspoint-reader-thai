@@ -183,7 +183,8 @@ class EpubReaderActivity final : public ReaderActivity {
   // released the section.
   ChapterPosition chapterPosition() const;
   int bookPercentFor(const ChapterPosition& position) const;
-  void openReaderMenu();
+  // pageOnScreen: called from the page itself, so the framebuffer still holds it.
+  void openReaderMenu(bool pageOnScreen = false);
   // Toolbar reader menu (see Overlay above).
   bool usesToolbarMenu() const;
   void openOverlay(Overlay target);

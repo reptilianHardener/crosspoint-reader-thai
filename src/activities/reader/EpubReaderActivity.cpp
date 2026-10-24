@@ -330,7 +330,7 @@ int EpubReaderActivity::bookPercentFor(const ChapterPosition& position) const {
   return static_cast<int>(std::clamp(fraction, 0.0f, 1.0f) * 100.0f + 0.5f);
 }
 
-void EpubReaderActivity::openReaderMenu() {
+void EpubReaderActivity::openReaderMenu(const bool pageOnScreen) {
   pendingManualTurn = 0;
   if (usesToolbarMenu()) {
     // Reached from a child activity's result handler (footnotes, bookmarks,
@@ -355,7 +355,8 @@ void EpubReaderActivity::openReaderMenu() {
   startActivityForResult(
       std::make_unique<EpubReaderMenuActivity>(
           renderer, mappedInput, epub->getTitle(), position.displayPage(), position.totalPages, bookProgressPercent,
-          SETTINGS.orientation, !currentPageFootnotes.empty(), !cachedBookmarks.empty(), CLIPPINGS.hasClippings()),
+          SETTINGS.orientation, !currentPageFootnotes.empty(), !cachedBookmarks.empty(), CLIPPINGS.hasClippings(),
+          currentChapterTitle(), pageOnScreen),
       [this](const ActivityResult& result) {
         const auto& menu = std::get<MenuResult>(result.data);
 
@@ -903,7 +904,7 @@ void EpubReaderActivity::loop() {
         if (usesToolbarMenu() && section)
           openOverlay(Overlay::Toolbar);
         else
-          openReaderMenu();
+          openReaderMenu(section && !pageBufferStale);
         return;
       default:
         break;
@@ -939,7 +940,7 @@ void EpubReaderActivity::loop() {
       pendingManualTurn = 0;
       openOverlay(Overlay::Toolbar);
     } else {
-      openReaderMenu();
+      openReaderMenu(section && !pageBufferStale);
     }
     return;  // no build step before the menu shows
   }
@@ -1615,7 +1616,7 @@ bool EpubReaderActivity::remoteShortcut(const bool readerMenu) {
   } else if (usesToolbarMenu()) {
     openOverlay(Overlay::Toolbar);
   } else {
-    openReaderMenu();
+    openReaderMenu(!pageBufferStale);
   }
   return true;
 }

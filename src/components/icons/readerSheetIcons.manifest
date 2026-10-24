@@ -1,0 +1,12 @@
+# Regenerate from the repository root with:
+#   python3 freeink-sdk/libs/assets/Icons/tools/gen_icons.py \
+#     --manifest src/components/icons/readerSheetIcons.manifest \
+#     --svgdir freeink-sdk/libs/assets/Icons/lucide/icons \
+#     --sizes 24 --out src/components/icons/readerSheetIcons.h
+sheet-contents = list
+sheet-bookmark = bookmark
+sheet-lookup = search
+sheet-text = type
+sheet-rotate = rotate-cw
+sheet-goto = arrow-right
+sheet-more = ellipsis

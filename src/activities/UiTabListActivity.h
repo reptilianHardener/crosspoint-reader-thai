@@ -59,6 +59,9 @@ class UiTabListActivity : public UiListActivity {
   // The shared tab band: theme-driven pill treatment (label-hugging Lyra vs
   // full-slot RoundedRaff), Lyra focused band wash, always-on divider.
   void buildTabBar(UiScreen& screen);
+  // Themes with verticalTabs(): the tabs stack down the right edge with vertical
+  // labels, and the list takes the space to their left.
+  void buildVerticalTabBar(UiScreen& screen);
   // Ring-aware counterpart of syncListViewport: measures rows, applies the
   // one-shot follow to the remembered row, clamps, and writes
   // props.selectedIndex = ring - 1.

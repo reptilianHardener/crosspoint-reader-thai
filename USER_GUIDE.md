@@ -252,10 +252,11 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
 
 - **UI Theme**: Set which UI theme to use:
   
-  - "Classic" - The original Crosspoint theme
-  - "Lyra" - The new theme for Crosspoint featuring rounded elements and menu icons
-  - "Lyra Extended" - Lyra, but displays 3 books instead of 1 on the **[Home Screen](#31-home-screen)**
-  - "RoundedRaff" - A rounded theme with additional visual styling
+  - "Lyra Extended" (default) - Rounded elements and menu icons, with 3 books on the **[Home Screen](#31-home-screen)**
+  - "Banner" - Lyra Extended styling with your own images above and between the covers
+  - "Shelf" - A card for the highlighted book above a shelf of four covers; the EPUB reader menu opens as a sheet of tiles
+  - "Vertical" - The highlighted book's cover and vertical title beside a row of spines, read right to left, with vertical tabs and a right-to-left EPUB reader menu sheet
+  - "Cover Grid" - A grid of covers (boards with PSRAM only)
 
 - **Sunlight Fading Fix**: Configure whether to enable a software-fix for the issue where white X4 models may fade when used in direct sunlight:
   
@@ -704,6 +705,8 @@ Available options include:
 - **Delete Book Cache** – Clear the cached layout data for the current book, forcing a re-index on next open.
 
 Press **Back** at any time to close the menu and return to your current page.
+
+With the **Shelf** or **Vertical** theme (and Reader Menu Style set to List), **Confirm** opens a sheet of six tiles at the bottom of the page instead: **Contents**, **Bookmark** (bookmark this page), **Look Up** (or **Go To** a percentage when no dictionary is selected), **Text**, **Rotate**, and **More**. **More** opens the full list above; **Back** in that list returns to the sheet, and **Back** on the sheet closes the menu.
 
 ### 5.1 Chapter Selection
 

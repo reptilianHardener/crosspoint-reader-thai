@@ -199,11 +199,9 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   };
 
   // UI Theme
-  // MODERN keeps the value it has always had in this fork, so existing settings files
-  // still select it. COVER_GRID stays last: the settings list hides it on boards without
-  // PSRAM by dropping the final entry. It was 5 before BANNER; fromJson() migrates files
-  // written without the "uiThemeOrder" marker.
-  enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2, MODERN = 3, ROUNDEDRAFF = 4, BANNER = 5, COVER_GRID = 6 };
+  // COVER_GRID stays last: the settings list hides it on boards without PSRAM by dropping
+  // the final entry. fromJson() migrates older numberings by the "uiThemeOrder" marker.
+  enum UI_THEME { LYRA_3_COVERS = 0, BANNER = 1, SHELF = 2, TATEGAKI = 3, COVER_GRID = 4 };
   // Banner theme images: BMP paths on the SD card (empty = section hidden).
   static constexpr size_t HOME_IMAGE_PATH_LEN = 128;
   // Which way the home carousel advances
@@ -349,7 +347,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // Defaults to Disabled so shortcut-based bookmark toggling remains opt-in.
   uint8_t longPressMenuFunction = LP_MENU_DISABLED;
   // UI Theme
-  uint8_t uiTheme = LYRA;
+  uint8_t uiTheme = LYRA_3_COVERS;
   // Home carousel direction (Modern theme)
   uint8_t previewDirection = PREVIEW_RIGHT;
   // Sunlight fading compensation

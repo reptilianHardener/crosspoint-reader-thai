@@ -163,6 +163,25 @@ struct HomeMenuGrid {
   int tileHeight = 0;
 };
 
+// Recent-book slots of a home screen whose covers sit in equal columns that do not
+// span the whole content width. Shared with HomeActivity for touch and for which way
+// the front buttons step.
+struct HomeBookColumns {
+  int left = 0;  // x of the leftmost column
+  int step = 0;  // column pitch
+  int width = 0;
+  int top = 0;
+  int bottom = 0;
+  int count = 0;             // books actually drawn
+  bool rightToLeft = false;  // book 0 is the rightmost column
+};
+
+// Reader menu drawn as a sheet over the page (see EpubReaderMenuActivity).
+struct ReaderMenuSheetStyle {
+  int radius = 0;            // sheet top corners and tile corners
+  bool rightToLeft = false;  // tiles and progress run right to left
+};
+
 // Default theme implementation (Classic Theme)
 // Additional themes can inherit from this and override methods as needed
 
@@ -322,7 +341,7 @@ class BaseTheme {
   virtual void onHomeEnter() const {}
   // Further thumbnail heights the home screen draws besides homeCoverThumbHeight()
   // (the carousel's smaller side covers). Writes up to `capacity` heights, returns the count.
-  virtual int homeExtraCoverThumbHeights(int* /*heights*/, int /*capacity*/) const { return 0; }
+  virtual int homeExtraCoverThumbHeights(const GfxRenderer&, int* /*heights*/, int /*capacity*/) const { return 0; }
   // Fills `grid` and returns true when drawButtonMenu lays the home menu out as a grid.
   virtual bool homeMenuGrid(const GfxRenderer&, Rect, int /*buttonCount*/, HomeMenuGrid&) const { return false; }
   // Vertical span of the recent-book covers inside the home cover tile, for touch
@@ -331,6 +350,19 @@ class BaseTheme {
   // True when the home screen is two rows, covers above and menu below: the front
   // Left/Right buttons move within a row and the side buttons switch rows.
   virtual bool homeRowNavigation() const { return false; }
+  // Fills `columns` when the recent books are not the default equal split of the tile.
+  virtual bool homeBookColumns(const GfxRenderer&, Rect /*tile*/, int /*count*/, HomeBookColumns&) const {
+    return false;
+  }
+  // Vertical span of the home tile kept in the cover snapshot; false means the whole tile.
+  // Parts of the tile outside it are redrawn every frame.
+  virtual bool homeSnapshotBand(const GfxRenderer&, Rect /*tile*/, int& /*top*/, int& /*bottom*/) const {
+    return false;
+  }
+  // Fills `style` and returns true when the list reader menu opens as a sheet of tiles.
+  virtual bool readerMenuSheet(ReaderMenuSheetStyle&) const { return false; }
+  // Settings tabs as a column down the right edge, labels written vertically.
+  virtual bool verticalTabs() const { return false; }
 
   // Shared constants and helpers for battery drawing (used by all themes)
   static constexpr int batteryPercentSpacing = 4;
