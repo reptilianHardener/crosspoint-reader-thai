@@ -2,6 +2,20 @@
 
 #include <Arduino.h>
 #include <Logging.h>
+
+// The phone writes the time to a GATT server here, which needs NimBLE's peripheral role.
+// The page-turner build turns that role off to save RAM, so sync() is then a no-op.
+#if defined(CONFIG_BT_NIMBLE_ROLE_PERIPHERAL_DISABLED)
+
+bool BleTimeSync::sync(uint32_t /*timeoutMs*/) {
+  LOG_DBG("BLE", "Time sync unavailable: NimBLE peripheral role disabled");
+  return false;
+}
+
+bool BleTimeSync::isSynced() { return false; }
+
+#else
+
 #include <NimBLEDevice.h>
 #include <sys/time.h>
 
@@ -95,3 +109,5 @@ bool BleTimeSync::sync(const uint32_t timeoutMs) {
 }
 
 bool BleTimeSync::isSynced() { return sSynced; }
+
+#endif  // CONFIG_BT_NIMBLE_ROLE_PERIPHERAL_DISABLED

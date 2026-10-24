@@ -4,77 +4,42 @@
 #include <I18n.h>
 
 #include <memory>
-#include <vector>
+#include <string>
 
 #include "activities/Activity.h"
 #include "util/Dictionary.h"
 
-// Word selection over the current reader page: Left/Right step through words
-// in reading order, Up/Down jump rows, Confirm looks the word up and opens
-// DictionaryDefinitionActivity, Back returns to the reader. On touch devices a
-// touch-down moves the highlight and a tap on a word looks it up directly.
+// Controller for dictionary lookup: renders the background page, runs the
+// lookup against the active StarDict dictionary, and either opens
+// DictionaryDefinitionActivity or displays a status popup (Looking up,
+// Indexing, Not found, Error).
 class DictionaryWordSelectActivity final : public Activity {
  public:
   explicit DictionaryWordSelectActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                         std::unique_ptr<Page> page, int marginLeft, int marginTop,
-                                        bool vertical = false)
+                                        std::string lookupText = {})
       : Activity("DictionaryWordSelect", renderer, mappedInput),
         page(std::move(page)),
         marginLeft(marginLeft),
         marginTop(marginTop),
-        vertical(vertical) {}
+        lookupText(std::move(lookupText)) {}
 
   void onEnter() override;
   void loop() override;
   void render(RenderLock&&) override;
 
  private:
-  // Screen origin of one selectable word: its top-left corner, or on a vertical
-  // page the top of its column edge (see GfxRenderer::drawTextVertical). `width`
-  // is the word's extent along its line. `text` points into the owned Page's
-  // TextBlock arena (NUL-terminated), valid for this activity's lifetime.
-  struct WordBox {
-    int16_t x;
-    int16_t y;
-    int16_t width;
-    uint16_t row;
-    const char* text;
-    EpdFontFamily::Style style;
-  };
-
   enum class Popup : uint8_t { None, Busy, NotFound, Error };
 
-  struct Rect {
-    int x;
-    int y;
-    int w;
-    int h;
-  };
-
-  void extractWords();
-  Rect screenBox(const WordBox& word) const;
-  // Center of a word along its line: screen x, or screen y on a vertical page.
-  int lineCenter(const WordBox& word) const { return (vertical ? word.y : word.x) + word.width / 2; }
-  int closestInRow(uint16_t row, int center) const;
-  int wordAt(int x, int y) const;
-  void moveVertical(int direction);
   void performLookup();
-  bool drawHighlightWithSnapshot();
-  void drawHints() const;
 
   std::unique_ptr<Page> page;
-  // On a vertical page marginLeft is the screen column of the page's right edge.
   const int marginLeft;
   const int marginTop;
-  const bool vertical;
   int fontId = 0;
-  int lineHeight = 0;
 
-  std::vector<WordBox> words;
-  int selected = 0;
-  uint16_t rowCount = 0;
-  unsigned long lastHorizontalMoveTime = 0;
-
+  std::string lookupText;
+  bool lookupPending = false;
   Dictionary dict;
   bool dictOpenAttempted = false;
   bool dictOpenOk = false;
@@ -83,18 +48,4 @@ class DictionaryWordSelectActivity final : public Activity {
   Popup popup = Popup::None;
   StrId popupMsg = StrId::STR_DICT_NOT_FOUND;
   unsigned long popupTime = 0;
-
-  // Differential highlight repaint: the pixels under the current highlight
-  // box, so a cursor move restores them and repaints only the two affected
-  // boxes instead of re-running the full two-pass page render (which also
-  // reloads every SD-font glyph on the page). snapshotIdx is the word whose
-  // under-pixels are saved; -1 means the framebuffer no longer holds a clean
-  // page (popup drawn, sub-activity shown) and the next render must be full.
-  static constexpr size_t SNAPSHOT_CAPACITY = 4096;
-  std::unique_ptr<uint8_t[]> snapshot;
-  int16_t snapshotX = 0;
-  int16_t snapshotY = 0;
-  int16_t snapshotW = 0;
-  int16_t snapshotH = 0;
-  int snapshotIdx = -1;
 };

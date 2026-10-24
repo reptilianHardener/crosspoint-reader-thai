@@ -29,9 +29,10 @@ std::vector<Line> layout(const std::vector<Word>& words, const bool hyphenation,
   BlockStyle style;
   style.alignment = alignment;
   style.textIndentDefined = true;
-  ParsedText text(false, hyphenation, false, style);
+  ParsedText text(hyphenation, false, style, /*paragraphIndentSpaces=*/0);
   for (const auto& word : words) {
-    text.addWord(word.text, EpdFontFamily::REGULAR, false, word.attachToPrevious, 0, 0, word.zeroWidthBreakBefore);
+    text.addWord(word.text, EpdFontFamily::REGULAR, false, word.attachToPrevious, 0, 0, 0, false,
+                 word.zeroWidthBreakBefore);
   }
   std::vector<Line> lines;
   text.layoutAndExtractLines(renderer, 0, width, [&](std::unique_ptr<TextBlock> block, auto) {
