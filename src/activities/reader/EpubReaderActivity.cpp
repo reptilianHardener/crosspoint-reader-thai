@@ -1396,7 +1396,23 @@ bool EpubReaderActivity::wantsVerticalLayout() const {
 ReaderRenderSpec EpubReaderActivity::makeRenderSpec(const uint16_t viewportWidth, const uint16_t viewportHeight) const {
   ReaderRenderSpec spec = SETTINGS.readerRenderSpec(viewportWidth, viewportHeight);
   spec.verticalText = verticalLayout;
+  spec.lineCompression *= japaneseLineScale(spec.fontId);
   return spec;
+}
+
+// A font that also carries Thai (NotoSansThaiJP) takes its line height from the Thai
+// design, which leaves room for stacked tone marks. Japanese text sets tighter: in a
+// Japanese book, lines are brought down to JAPANESE_LINE_PITCH_EM times the width of a
+// kanji, the proportion of Noto Sans JP's own metrics. Never loosens a font's spacing.
+float EpubReaderActivity::japaneseLineScale(const int fontId) const {
+  if (!epub || !ReaderUtils::isJapaneseBookLanguage(epub->getLanguage())) return 1.0f;
+  int32_t advanceFP = 0;
+  int top = 0;
+  if (!renderer.getCodepointMetrics(fontId, 0x4E00, EpdFontFamily::REGULAR, advanceFP, top)) return 1.0f;
+  const int lineHeight = renderer.getLineHeight(fontId);
+  const int kanjiWidth = fp4::toPixel(advanceFP);
+  if (lineHeight <= 0 || kanjiWidth <= 0) return 1.0f;
+  return std::min(1.0f, JAPANESE_LINE_PITCH_EM * static_cast<float>(kanjiWidth) / static_cast<float>(lineHeight));
 }
 
 int EpubReaderActivity::pageOriginX(const int marginLeft, const int marginRight) const {

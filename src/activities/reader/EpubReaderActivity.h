@@ -114,6 +114,9 @@ class EpubReaderActivity final : public ReaderActivity {
   bool verticalLayout = false;
   bool wantsVerticalLayout() const;
   ReaderRenderSpec makeRenderSpec(uint16_t viewportWidth, uint16_t viewportHeight) const;
+  // Line spacing factor for Japanese books (1 for others); see the definition.
+  static constexpr float JAPANESE_LINE_PITCH_EM = 1.45f;
+  float japaneseLineScale(int fontId) const;
   // Screen position the page's elements are drawn from: its top-left corner, or on a
   // vertical page its top-right one (see PageElement::render).
   int pageOriginX(int marginLeft, int marginRight) const;
