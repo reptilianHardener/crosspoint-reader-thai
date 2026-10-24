@@ -9,18 +9,37 @@ namespace {
 
 template <typename Predicate>
 void renderFilteredPageElements(const std::vector<std::unique_ptr<PageElement>>& elements, GfxRenderer& renderer,
-                                const int fontId, const int xOffset, const int yOffset, Predicate&& predicate) {
+                                const int fontId, const int xOffset, const int yOffset, const bool vertical,
+                                Predicate&& predicate) {
   for (const auto& element : elements) {
     if (predicate(*element)) {
-      element->render(renderer, fontId, xOffset, yOffset);
+      element->render(renderer, fontId, xOffset, yOffset, vertical);
     }
   }
 }
 
+// Screen position of an upright image on a vertical page. The image's height lies along the
+// lines (xPos) and its width across them (yPos).
+struct ImageOrigin {
+  int x;
+  int y;
+};
+
+ImageOrigin imageOrigin(const ImageBlock& image, const int xPos, const int yPos, const int xOffset, const int yOffset,
+                        const bool vertical) {
+  if (vertical) return {xOffset - yPos - image.getWidth() + 1, yOffset + xPos};
+  return {xPos + xOffset, yPos + yOffset};
+}
+
 }  // namespace
 
-void PageLine::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset) {
-  block->render(renderer, fontId, xPos + xOffset, yPos + yOffset);
+void PageLine::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
+                      const bool vertical) {
+  if (vertical) {
+    block->render(renderer, fontId, xOffset - yPos, yOffset + xPos, true);
+  } else {
+    block->render(renderer, fontId, xPos + xOffset, yPos + yOffset);
+  }
 }
 
 bool PageLine::serialize(HalFile& file) {
@@ -51,13 +70,17 @@ std::unique_ptr<PageLine> PageLine::deserialize(HalFile& file) {
   return line;
 }
 
-void PageImage::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset) {
+void PageImage::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
+                       const bool vertical) {
   // Images don't use fontId or text rendering
-  imageBlock->render(renderer, xPos + xOffset, yPos + yOffset);
+  const auto origin = imageOrigin(*imageBlock, xPos, yPos, xOffset, yOffset, vertical);
+  imageBlock->render(renderer, origin.x, origin.y);
 }
 
-void PageImage::renderPlaceholder(GfxRenderer& renderer, const int xOffset, const int yOffset) const {
-  imageBlock->renderPlaceholder(renderer, xPos + xOffset, yPos + yOffset);
+void PageImage::renderPlaceholder(GfxRenderer& renderer, const int xOffset, const int yOffset,
+                                  const bool vertical) const {
+  const auto origin = imageOrigin(*imageBlock, xPos, yPos, xOffset, yOffset, vertical);
+  imageBlock->renderPlaceholder(renderer, origin.x, origin.y);
 }
 
 bool PageImage::serialize(HalFile& file) {
@@ -87,12 +110,17 @@ std::unique_ptr<PageImage> PageImage::deserialize(HalFile& file) {
   return image;
 }
 
-void PageHorizontalRule::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset) {
+void PageHorizontalRule::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
+                                const bool vertical) {
   (void)fontId;
   if (width == 0 || thickness == 0) {
     return;
   }
 
+  if (vertical) {
+    renderer.fillRect(xOffset - yPos - thickness + 1, yOffset + xPos, thickness, width, true);
+    return;
+  }
   renderer.drawLine(xPos + xOffset, yPos + yOffset, xPos + xOffset + width - 1, yPos + yOffset, thickness, true);
 }
 
@@ -128,22 +156,25 @@ std::unique_ptr<PageHorizontalRule> PageHorizontalRule::deserialize(HalFile& fil
   return rule;
 }
 
-void Page::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset) const {
-  renderFilteredPageElements(elements, renderer, fontId, xOffset, yOffset, [](const PageElement&) { return true; });
+void Page::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
+                  const bool vertical) const {
+  renderFilteredPageElements(elements, renderer, fontId, xOffset, yOffset, vertical,
+                             [](const PageElement&) { return true; });
 }
 
-void Page::renderImages(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset) const {
-  renderFilteredPageElements(elements, renderer, fontId, xOffset, yOffset,
+void Page::renderImages(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
+                        const bool vertical) const {
+  renderFilteredPageElements(elements, renderer, fontId, xOffset, yOffset, vertical,
                              [](const PageElement& element) { return element.getTag() == TAG_PageImage; });
 }
 
-void Page::renderWithImagePlaceholders(GfxRenderer& renderer, const int fontId, const int xOffset,
-                                       const int yOffset) const {
+void Page::renderWithImagePlaceholders(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
+                                       const bool vertical) const {
   for (const auto& element : elements) {
     if (element->getTag() == TAG_PageImage) {
-      static_cast<const PageImage&>(*element).renderPlaceholder(renderer, xOffset, yOffset);
+      static_cast<const PageImage&>(*element).renderPlaceholder(renderer, xOffset, yOffset, vertical);
     } else {
-      element->render(renderer, fontId, xOffset, yOffset);
+      element->render(renderer, fontId, xOffset, yOffset, vertical);
     }
   }
 }

@@ -10,6 +10,7 @@
 #include <limits>
 #include <string>
 
+#include "Epub/hyphenation/ThaiWordBreaker.h"
 #include "I18nKeys.h"
 #include "ReaderFontSizes.h"
 #include "SettingsList.h"
@@ -92,14 +93,18 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
   // option lists depend on the SD font registry), so the generic loop skips them.
   doc["fontFamily"] = fontFamily;
   doc["fontSize"] = fontPointSize;
-  // SD card font family name — not in SettingsList, save manually
-  if (sdFontFamilyName[0] != '\0') {
-    doc["sdFontFamilyName"] = sdFontFamilyName;
-  }
+  // SD card font family name — not in SettingsList, save manually. Written even when
+  // empty: a missing key reads as DEFAULT_SD_FONT_FAMILY.
+  doc["sdFontFamilyName"] = sdFontFamilyName;
   // Dictionary folder name — uses dynamic getter/setter in SettingsList, save manually
   if (dictionaryName[0] != '\0') {
     doc["dictionaryName"] = dictionaryName;
   }
+  // Banner theme images — picked through their own screen, not in SettingsList.
+  if (homeTopImage[0] != '\0') doc["homeTopImage"] = homeTopImage;
+  if (homeMiddleImage[0] != '\0') doc["homeMiddleImage"] = homeMiddleImage;
+  // Marks uiTheme as using the numbering with BANNER (see UI_THEME).
+  doc["uiThemeOrder"] = 1;
 
   // Language -- managed by LanguageSelectActivity, not in SettingsList.
   // Stored as ISO code string ("EN", "DE", ...) for stability across enum reorders.
@@ -235,7 +240,7 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   }
 
   // SD card font family name — not in SettingsList, load manually
-  const char* sfn = doc["sdFontFamilyName"] | "";
+  const char* sfn = doc["sdFontFamilyName"] | DEFAULT_SD_FONT_FAMILY;
   strncpy(sdFontFamilyName, sfn, sizeof(sdFontFamilyName) - 1);
   sdFontFamilyName[sizeof(sdFontFamilyName) - 1] = '\0';
   if (storedFontFamily == LEGACY_OPENDYSLEXIC && sdFontFamilyName[0] == '\0') {
@@ -248,6 +253,13 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   }
   // Dictionary folder name — uses dynamic getter/setter in SettingsList, load manually
   copyToField(dictionaryName, doc["dictionaryName"] | "", sizeof(dictionaryName));
+  copyToField(homeTopImage, doc["homeTopImage"] | "", sizeof(homeTopImage));
+  copyToField(homeMiddleImage, doc["homeMiddleImage"] | "", sizeof(homeMiddleImage));
+  // BANNER took value 5, which was COVER_GRID in files written before it existed.
+  if (doc["uiThemeOrder"].isNull()) {
+    if (uiTheme == BANNER) uiTheme = COVER_GRID;
+    needsResave = true;
+  }
 
   // Language -- stored as code string for stability across enum reorders.
   if (doc["language"].is<const char*>()) {
@@ -300,6 +312,8 @@ ReaderRenderSpec CrossPointSettings::readerRenderSpec(const uint16_t viewportWid
   spec.embeddedStyle = embeddedStyle != 0;
   spec.imageRendering = imageRendering;
   spec.focusReadingEnabled = focusReadingEnabled != 0;
+  spec.forceBold = readerBoldText != 0;
+  spec.thaiDictionaryRevision = ThaiWordBreaker::userDictionaryRevision();
   return spec;
 }
 

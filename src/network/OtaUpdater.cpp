@@ -19,7 +19,8 @@
 #include "FirmwareFlasher.h"
 
 namespace {
-constexpr char latestReleaseUrl[] = "https://api.github.com/repos/crosspoint-reader/crosspoint-reader/releases/latest";
+// This fork updates from its own releases; upstream builds would replace the Thai support.
+constexpr char latestReleaseUrl[] = "https://api.github.com/repos/kocha01/crosspoint-halo2-custom/releases/latest";
 }  // namespace
 
 OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
@@ -90,14 +91,21 @@ bool OtaUpdater::isUpdateNewer() const {
     return false;
   }
 
-  int currentMajor, currentMinor, currentPatch;
-  int latestMajor, latestMinor, latestPatch;
+  int currentMajor = 0, currentMinor = 0, currentPatch = 0;
+  int latestMajor = 0, latestMinor = 0, latestPatch = 0;
 
   const auto currentVersion = CROSSPOINT_VERSION;
 
   // semantic version check (only match on 3 segments)
-  sscanf(latestVersion.c_str(), "%d.%d.%d", &latestMajor, &latestMinor, &latestPatch);
-  sscanf(currentVersion, "%d.%d.%d", &currentMajor, &currentMinor, &currentPatch);
+  const int latestParsed = sscanf(latestVersion.c_str(), "%d.%d.%d", &latestMajor, &latestMinor, &latestPatch);
+  const int currentParsed = sscanf(currentVersion, "%d.%d.%d", &currentMajor, &currentMinor, &currentPatch);
+
+  // A version that is not three numeric segments cannot be ordered. Offer the update
+  // rather than compare uninitialised segments and silently report "up to date".
+  if (latestParsed < 3 || currentParsed < 3) {
+    LOG_ERR("OTA", "Version parse failed (latest=%d, current=%d), allowing update", latestParsed, currentParsed);
+    return true;
+  }
 
   /*
    * Compare major versions.
@@ -119,9 +127,9 @@ bool OtaUpdater::isUpdateNewer() const {
   if (latestPatch != currentPatch) return latestPatch > currentPatch;
 
   // If we reach here, it means all segments are equal.
-  // One final check, if we're on an RC build (contains "-rc"), we should consider the latest version as newer even if
-  // the segments are equal, since RC builds are pre-release versions.
-  if (strstr(currentVersion, "-rc") != nullptr) {
+  // One final check, if we're on a pre-release build (contains "-rc" or "-dev"), we should consider the latest
+  // version as newer even if the segments are equal, so such builds can always move to the matching release.
+  if (strstr(currentVersion, "-rc") != nullptr || strstr(currentVersion, "-dev") != nullptr) {
     return true;
   }
 

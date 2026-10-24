@@ -200,8 +200,13 @@ def build_family(
     # Resolve all font file paths (downloads as needed)
     try:
         resolved_styles = {}
+        resolved_fallbacks = {}
         for style_name, style_spec in styles.items():
             resolved_styles[style_name] = resolve_font_path(style_spec, name, style_name)
+            if "fallback" in style_spec:
+                resolved_fallbacks[style_name] = [
+                    resolve_font_path(style_spec["fallback"], name, f"{style_name}-fallback")
+                ]
     except (FileNotFoundError, RuntimeError) as e:
         return name, False, str(e)
 
@@ -215,14 +220,16 @@ def build_family(
         # Multi-style mode
         for style_name, font_path in resolved_styles.items():
             cmd.extend([f"--{style_name}", str(font_path)])
-            cmd.extend([f"--fallback-{style_name}", str(DEFAULT_FALLBACK_FONT)])
+            for fallback in resolved_fallbacks.get(style_name, []) + [DEFAULT_FALLBACK_FONT]:
+                cmd.extend([f"--fallback-{style_name}", str(fallback)])
     else:
         # Single-style mode
         style_name = next(iter(resolved_styles))
         font_path = resolved_styles[style_name]
         cmd.append(str(font_path))
         cmd.extend(["--style", style_name])
-        cmd.extend([f"--fallback-{style_name}", str(DEFAULT_FALLBACK_FONT)])
+        for fallback in resolved_fallbacks.get(style_name, []) + [DEFAULT_FALLBACK_FONT]:
+            cmd.extend([f"--fallback-{style_name}", str(fallback)])
 
     cmd.extend(["--intervals", intervals])
     cmd.extend(["--sizes", sizes])
@@ -231,6 +238,8 @@ def build_family(
 
     if family.get("force_autohint", False):
         cmd.append("--force-autohint")
+    if family.get("bridge_gaps", 0):
+        cmd.extend(["--bridge-gaps", str(family["bridge_gaps"])])
 
     # Run fontconvert_sdcard.py
     start = time.monotonic()

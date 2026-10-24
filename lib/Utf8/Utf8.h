@@ -96,10 +96,83 @@ inline bool utf8IsCjkCodepoint(const uint32_t cp) {
          || (cp >= 0x30000 && cp <= 0x323AF);  // CJK Extensions G-H
 }
 
+// Glyph orientation in vertical (tategaki) lines, after UAX #50. Upright codepoints stand
+// as they do in horizontal text. Everything else is set sideways with the line: Latin and
+// digits, and also brackets, dashes and the long vowel mark, for which a quarter turn is the
+// vertical form.
+inline bool utf8IsVerticalUpright(const uint32_t cp) {
+  if (cp < 0x1100) return false;
+  if ((cp >= 0x3008 && cp <= 0x3011) || (cp >= 0x3014 && cp <= 0x301F)) return false;  // brackets, wave dash
+  if (cp == 0x3030 || cp == 0x30A0 || cp == 0x30FC) return false;  // wavy dash, double hyphen, long vowel mark
+  if (cp >= 0xFF00 && cp <= 0xFFEF) {
+    if (cp == 0xFF08 || cp == 0xFF09 || cp == 0xFF0D || cp == 0xFF3B || cp == 0xFF3D || cp == 0xFF3F) return false;
+    if (cp >= 0xFF1A && cp <= 0xFF1E) return false;  // colon, semicolon, comparison signs
+    if (cp >= 0xFF5B && cp <= 0xFFDF) return false;  // braces, tilde, halfwidth forms
+    return cp != 0xFFE3 && cp <= 0xFFE7;
+  }
+  return utf8IsCjkCodepoint(cp) || cp == 0x203B  // reference mark
+         || (cp >= 0x2460 && cp <= 0x24FF)       // enclosed alphanumerics
+         || (cp >= 0x25A0 && cp <= 0x27BF);      // shapes, symbols, dingbats
+}
+
+// Where an upright glyph sits in its vertical cell when that differs from the horizontal cell.
+enum class VerticalGlyphShift : uint8_t {
+  None,
+  Corner,  // ideographic comma and full stop: lower left of the cell becomes upper right
+  Small,   // small kana: nudged toward the upper right
+};
+
+inline VerticalGlyphShift utf8VerticalGlyphShift(uint32_t cp) {
+  if (cp == 0x3001 || cp == 0x3002 || cp == 0xFF0C || cp == 0xFF0E) return VerticalGlyphShift::Corner;
+  if (cp >= 0x30A1 && cp <= 0x30F6) cp -= 0x60;  // katakana mirrors the hiragana block
+  switch (cp) {
+    case 0x3041:
+    case 0x3043:
+    case 0x3045:
+    case 0x3047:
+    case 0x3049:
+    case 0x3063:
+    case 0x3083:
+    case 0x3085:
+    case 0x3087:
+    case 0x308E:
+    case 0x3095:
+    case 0x3096:
+      return VerticalGlyphShift::Small;
+    default:
+      return VerticalGlyphShift::None;
+  }
+}
+
+// Thai (U+0E00-U+0E7F). Thai is written without spaces between words and stacks up to two
+// marks above a consonant, so layout and rendering both need to classify its codepoints.
+inline bool utf8IsThaiCodepoint(const uint32_t cp) { return cp >= 0x0E00 && cp <= 0x0E7F; }
+
+// Below-base vowels (sara u, sara uu) and phinthu.
+inline bool utf8IsThaiLowerCombiningMark(const uint32_t cp) { return cp >= 0x0E38 && cp <= 0x0E3A; }
+
+// First tier above the base: upper vowels, mai han akat, mai tai khu, nikhahit.
+inline bool utf8IsThaiUpperLevelTwoMark(const uint32_t cp) {
+  return cp == 0x0E31 || (cp >= 0x0E34 && cp <= 0x0E37) || cp == 0x0E47 || cp == 0x0E4D;
+}
+
+// Second tier above the base: tone marks, thanthakhat, yamakkan. These sit on top of a
+// level-two mark when one is present.
+inline bool utf8IsThaiUpperLevelThreeMark(const uint32_t cp) { return (cp >= 0x0E48 && cp <= 0x0E4C) || cp == 0x0E4E; }
+
+inline bool utf8IsThaiUpperCombiningMark(const uint32_t cp) {
+  return utf8IsThaiUpperLevelTwoMark(cp) || utf8IsThaiUpperLevelThreeMark(cp);
+}
+
+inline bool utf8IsThaiCombiningMark(const uint32_t cp) {
+  return utf8IsThaiLowerCombiningMark(cp) || utf8IsThaiUpperCombiningMark(cp);
+}
+
 // Returns true for Unicode combining diacritical marks that should not advance the cursor.
 inline bool utf8IsCombiningMark(const uint32_t cp) {
-  return (cp >= 0x0300 && cp <= 0x036F)      // Combining Diacritical Marks
-         || (cp >= 0x1DC0 && cp <= 0x1DFF)   // Combining Diacritical Marks Supplement
-         || (cp >= 0x20D0 && cp <= 0x20FF)   // Combining Diacritical Marks for Symbols
-         || (cp >= 0xFE20 && cp <= 0xFE2F);  // Combining Half Marks
+  return (cp >= 0x0300 && cp <= 0x036F)     // Combining Diacritical Marks
+         || (cp >= 0x1DC0 && cp <= 0x1DFF)  // Combining Diacritical Marks Supplement
+         || (cp >= 0x20D0 && cp <= 0x20FF)  // Combining Diacritical Marks for Symbols
+         || (cp >= 0xFE20 && cp <= 0xFE2F)  // Combining Half Marks
+         || utf8IsThaiCombiningMark(cp);    // Thai above/below vowels and tone marks
 }

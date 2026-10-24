@@ -16,6 +16,7 @@
 #include "../Memory/Memory.h"
 #include "FontCacheManager.h"
 #include "GlyphBitmap.h"
+#include "ThaiMarkStack.h"
 
 namespace {
 constexpr int trackingBetween(const uint32_t leftCp, const uint32_t rightCp, const int8_t tracking) {
@@ -264,14 +265,16 @@ int GfxRenderer::resolveTextFontId(const int fontId, const char* text, const Epd
   if (fbIt == fallbackFontMap_.end()) {
     return fontId;  // no fallback registered for this font
   }
-  const int fallbackFontId = fbIt->second;
   const auto fontIt = fontMap.find(fontId);
-  const auto fallbackIt = fontMap.find(fallbackFontId);
-  if (fontIt == fontMap.end() || fallbackIt == fontMap.end()) {
-    return fontId;  // unknown primary or fallback not loaded — let the caller handle it
+  if (fontIt == fontMap.end()) {
+    return fontId;  // unknown primary — let the caller handle it
   }
   const EpdFontFamily& primary = fontIt->second;
-  const EpdFontFamily& fallback = fallbackIt->second;
+  const EpdFontFamily* fallbacks[MAX_FALLBACK_FONTS] = {};
+  for (size_t i = 0; i < MAX_FALLBACK_FONTS; i++) {
+    const auto fallbackIt = fbIt->second[i] != 0 ? fontMap.find(fbIt->second[i]) : fontMap.end();
+    if (fallbackIt != fontMap.end()) fallbacks[i] = &fallbackIt->second;
+  }
   const char* cursor = text;
   uint32_t cp;
   while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&cursor)))) {
@@ -281,8 +284,9 @@ int GfxRenderer::resolveTextFontId(const int fontId, const char* text, const Epd
     // skipped outright (every registered font covers it), keeping Latin
     // strings on the fast path, and a partial-coverage fallback is not worth
     // dragging the whole string into for glyphs it would also miss.
-    if (cp >= 0x80 && !primary.hasCodepoint(cp, style) && fallback.hasCodepoint(cp, style)) {
-      return fallbackFontId;
+    if (cp < 0x80 || primary.hasCodepoint(cp, style)) continue;
+    for (size_t i = 0; i < MAX_FALLBACK_FONTS; i++) {
+      if (fallbacks[i] && fallbacks[i]->hasCodepoint(cp, style)) return fbIt->second[i];
     }
   }
   return fontId;
@@ -454,27 +458,18 @@ enum class TextRotation { None, Rotated90CW };
 //
 // The advance width is also halved in drawText() so layout reserves exactly the right
 // horizontal space for the scaled glyph.
-static void renderCharScaled(const GfxRenderer& renderer, GfxRenderer::RenderMode renderMode,
-                             const EpdFontFamily& fontFamily, const uint32_t cp, int cursorX, int cursorY,
-                             const bool pixelState, const EpdFontFamily::Style style) {
-  if (renderer.grayPlanesAreAbsolute()) renderMode = GfxRenderer::BW;
-  const EpdGlyph* glyph = fontFamily.getGlyph(cp, style);
-  if (!glyph) return;
-
-  const EpdFontData* fontData = fontFamily.getData(style);
-  const uint8_t* bitmap = renderer.getGlyphBitmap(fontData, glyph);
-  if (!bitmap) return;
-
-  const int srcW = glyph->width;
-  const int srcH = glyph->height;
+//
+// frame places destination pixel (0, 0) and gives the step along each glyph axis.
+static void drawGlyphHalfScale(const GfxRenderer& renderer, const uint8_t* bitmap, const int srcW, const int srcH,
+                               const bool is2Bit, const glyphBitmap::Frame& frame, const bool pixelState) {
   const int dstW = (srcW + 1) / 2;  // ceil so odd-width glyphs aren't clipped
   const int dstH = (srcH + 1) / 2;
-  // Scale the glyph bearing by the same factor so the scaled glyph sits at the correct
-  // pixel offset from the (already-shifted) cursor position.
-  const int baseX = cursorX + glyph->left / 2;
-  const int baseY = cursorY - glyph->top / 2;
+  const auto plot = [&](const int dstX, const int dstY) {
+    renderer.drawPixel(frame.x + dstX * frame.dxX + dstY * frame.dyX, frame.y + dstX * frame.dxY + dstY * frame.dyY,
+                       pixelState);
+  };
 
-  if (fontData->is2Bit) {
+  if (is2Bit) {
     // 2-bit packed format: 4 pixels per byte, MSB first, 2 bits per pixel.
     // raw value: 0=white, 1=light-gray, 2=dark-gray, 3=black.
     for (int dstY = 0; dstY < dstH; dstY++) {
@@ -493,7 +488,7 @@ static void renderCharScaled(const GfxRenderer& renderer, GfxRenderer::RenderMod
           }
         }
         if (maxRaw >= 2 || coverage >= 2) {
-          renderer.drawPixel(baseX + dstX, baseY + dstY, pixelState);
+          plot(dstX, dstY);
         }
       }
     }
@@ -515,10 +510,86 @@ static void renderCharScaled(const GfxRenderer& renderer, GfxRenderer::RenderMod
           }
         }
         if (hasInk) {
-          renderer.drawPixel(baseX + dstX, baseY + dstY, pixelState);
+          plot(dstX, dstY);
         }
       }
     }
+  }
+}
+
+static void renderCharScaled(const GfxRenderer& renderer, GfxRenderer::RenderMode renderMode,
+                             const EpdFontFamily& fontFamily, const uint32_t cp, int cursorX, int cursorY,
+                             const bool pixelState, const EpdFontFamily::Style style) {
+  const EpdGlyph* glyph = fontFamily.getGlyph(cp, style);
+  if (!glyph) return;
+
+  const EpdFontData* fontData = fontFamily.getData(style);
+  const uint8_t* bitmap = renderer.getGlyphBitmap(fontData, glyph);
+  if (!bitmap) return;
+
+  // Scale the glyph bearing by the same factor so the scaled glyph sits at the correct
+  // pixel offset from the (already-shifted) cursor position.
+  const glyphBitmap::Frame frame{cursorX + glyph->left / 2, cursorY - glyph->top / 2, 1, 0, 0, 1};
+  drawGlyphHalfScale(renderer, bitmap, glyph->width, glyph->height, fontData->is2Bit, frame, pixelState);
+}
+
+// Placement of a glyph in a vertical line: the baseline is the screen column baselineX, the
+// line's top faces right, and the pen moves down from penY. Metrics are in pixels.
+static glyphBitmap::Frame verticalGlyphFrame(const uint32_t cp, const int left, const int top, const int width,
+                                             const int height, const int advance, const int baselineX, const int penY) {
+  if (!utf8IsVerticalUpright(cp)) {
+    // Sideways: glyph x runs down the screen, glyph y runs to the left.
+    return {baselineX + top - 1, penY + left, 0, 1, -1, 0};
+  }
+
+  // Upright: the glyph keeps its place in its em box. The box spans the advance along the
+  // line and, across it, rests on the ideographic baseline 12% of an em below the Latin one.
+  const int descent = (advance * 12 + 50) / 100;
+  const int boxLeft = baselineX - descent + 1;
+  int x = boxLeft + left;
+  int y = penY + advance - descent - top;
+  switch (utf8VerticalGlyphShift(cp)) {
+    case VerticalGlyphShift::Corner:
+      x = boxLeft + advance - left - width;
+      y = penY + descent + top - height;
+      break;
+    case VerticalGlyphShift::Small:
+      x += advance / 8;
+      y -= advance / 8;
+      break;
+    case VerticalGlyphShift::None:
+      break;
+  }
+  return {x, y, 1, 0, 0, 1};
+}
+
+static void renderCharVertical(const GfxRenderer& renderer, GfxRenderer::RenderMode renderMode,
+                               const EpdFontFamily& fontFamily, const uint32_t cp, const int baselineX, const int penY,
+                               const bool pixelState, const EpdFontFamily::Style style, const bool halfScale) {
+  if (renderer.grayPlanesAreAbsolute()) renderMode = GfxRenderer::BW;
+  const EpdGlyph* glyph = fontFamily.getGlyph(cp, style);
+  if (!glyph) return;
+
+  const EpdFontData* fontData = fontFamily.getData(style);
+  const int div = halfScale ? 2 : 1;
+  const int width = (glyph->width + div - 1) / div;
+  const int height = (glyph->height + div - 1) / div;
+  const glyphBitmap::Frame frame = verticalGlyphFrame(cp, glyph->left / div, glyph->top / div, width, height,
+                                                      fp4::toPixel(glyph->advanceX) / div, baselineX, penY);
+
+  // Band culling on the glyph's two opposite corners, before the bitmap decode.
+  if (!renderer.glyphIntersectsStrip(frame.x, frame.y, frame.x + (width - 1) * frame.dxX + (height - 1) * frame.dyX,
+                                     frame.y + (width - 1) * frame.dxY + (height - 1) * frame.dyY)) {
+    return;
+  }
+
+  const uint8_t* bitmap = renderer.getGlyphBitmap(fontData, glyph);
+  if (!bitmap) return;
+
+  if (halfScale) {
+    drawGlyphHalfScale(renderer, bitmap, glyph->width, glyph->height, fontData->is2Bit, frame, pixelState);
+  } else {
+    renderer.drawGlyphBitmap(bitmap, glyph->width, glyph->height, frame, fontData->is2Bit, renderMode, pixelState);
   }
 }
 
@@ -683,6 +754,17 @@ void GfxRenderer::drawCenteredText(const int fontId, const int y, const char* te
 void GfxRenderer::drawText(const int fontId, const int x, const int y, const char* text, const bool black,
                            const EpdFontFamily::Style style, const BidiUtils::BidiBaseDir baseDir,
                            const int8_t tracking) const {
+  drawTextRun(fontId, x, y, text, black, style, baseDir, tracking, false);
+}
+
+void GfxRenderer::drawTextVertical(const int fontId, const int x, const int y, const char* text, const bool black,
+                                   const EpdFontFamily::Style style, const int8_t tracking) const {
+  drawTextRun(fontId, x, y, text, black, style, BidiUtils::BidiBaseDir::AUTO, tracking, true);
+}
+
+void GfxRenderer::drawTextRun(const int fontId, const int x, const int y, const char* text, const bool black,
+                              const EpdFontFamily::Style style, const BidiUtils::BidiBaseDir baseDir,
+                              const int8_t tracking, const bool vertical) const {
   // cannot draw a NULL / empty string
   if (text == nullptr || *text == '\0') {
     return;
@@ -704,7 +786,10 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
   if (resolvedFontId != fontId) {
     yPos += (getLineHeight(fontId) - getLineHeight(resolvedFontId)) / 2;
   }
-  int lastBaseX = x;
+  // A vertical run is the horizontal one turned a quarter clockwise about (x, y): the pen
+  // (lastBaseX) moves down the screen from y, and the distance below the line top (yPos - y)
+  // is measured leftward from x.
+  int lastBaseX = vertical ? y : x;
   int lastBaseLeft = 0;
   int lastBaseWidth = 0;
   int lastBaseTop = 0;
@@ -727,8 +812,18 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
     return;
   }
   const auto& font = fontIt->second;
+  const auto drawGlyph = [&](const uint32_t glyphCp, const int pen, const int glyphY, const bool halfScale) {
+    if (vertical) {
+      renderCharVertical(*this, renderMode, font, glyphCp, x - (glyphY - y), pen, black, style, halfScale);
+    } else if (halfScale) {
+      renderCharScaled(*this, renderMode, font, glyphCp, pen, glyphY, black, style);
+    } else {
+      renderCharImpl<TextRotation::None>(*this, renderMode, font, glyphCp, pen, glyphY, black, style);
+    }
+  };
 
   const char* textCursor = renderedText;
+  ThaiMarkStack thaiStack;
   uint32_t cp;
   uint32_t prevCp = 0;
   while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&textCursor)))) {
@@ -743,15 +838,31 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
       const EpdGlyph* combiningGlyph = font.getGlyph(cp, style);
       if (!combiningGlyph) continue;
       const auto anchor = combiningMark::anchorFor(cp);
+      if (anchor == combiningMark::Anchor::PenNative) {
+        // Thai mark: horizontally where the font put it (relative to the pen after the
+        // base), vertically raised only as far as needed to clear what is stacked below.
+        if (utf8IsThaiUpperLevelThreeMark(cp) && !thaiStack.hasStacked) {
+          const auto* peek = reinterpret_cast<const uint8_t*>(textCursor);
+          if (utf8NextCodepoint(&peek) == 0x0E33) {
+            if (const EpdGlyph* saraAm = font.getGlyph(0x0E33, style)) thaiStack.seedFromSaraAm(saraAm->top);
+          }
+        }
+        const int raiseBy = thaiStack.raiseFor(cp, combiningGlyph->top, combiningGlyph->height, lastBaseTop,
+                                               font.getData(style)->advanceY);
+        const int penX = lastBaseX + fp4::toPixel(prevAdvanceFP);
+        drawGlyph(cp, penX, yPos - raiseBy, false);
+        continue;
+      }
       const int raiseBy =
           combiningMark::raiseAboveBase(anchor, combiningGlyph->top, combiningGlyph->height, lastBaseTop);
       const int combiningX = combiningMark::anchorOver(anchor, lastBaseX, lastBaseLeft, lastBaseWidth,
                                                        combiningGlyph->left, combiningGlyph->width);
-      renderCharImpl<TextRotation::None>(*this, renderMode, font, cp, combiningX, yPos - raiseBy, black, style);
+      drawGlyph(cp, combiningX, yPos - raiseBy, false);
       continue;
     }
 
     cp = font.applyLigatures(cp, textCursor, style);
+    thaiStack.resetForBase();
 
     // Differential rounding: snap (previous advance + current kern) as one unit so
     // identical character pairs always produce the same pixel step regardless of
@@ -775,12 +886,8 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
       prevAdvanceFP = (prevAdvanceFP + 1) / 2;
     }
 
-    if (isSupSub) {
-      // yPos already carries the vertical offset applied by TextBlock::render().
-      renderCharScaled(*this, renderMode, font, cp, lastBaseX, yPos, black, style);
-    } else {
-      renderCharImpl<TextRotation::None>(*this, renderMode, font, cp, lastBaseX, yPos, black, style);
-    }
+    // For SUP/SUB, yPos already carries the vertical offset applied by TextBlock::render().
+    drawGlyph(cp, lastBaseX, yPos, isSupSub);
     prevCp = cp;
   }
 }
@@ -1374,7 +1481,7 @@ void GfxRenderer::drawImage(const uint8_t bitmap[], const int x, const int y, co
   display.drawImage(bitmap, rotatedX, rotatedY, width, height);
 }
 
-void GfxRenderer::drawIcon(const uint8_t bitmap[], const int x, const int y, const int size) const {
+void GfxRenderer::drawIcon(const uint8_t bitmap[], const int x, const int y, const int size, const bool black) const {
   // Plot the icon pixel-by-pixel through drawPixel (which applies the orientation
   // transform) instead of the byte-aligned framebuffer blit. The blit snaps the
   // icon's position to 8px (one byte) along the rotated axis, which prevents it
@@ -1388,7 +1495,7 @@ void GfxRenderer::drawIcon(const uint8_t bitmap[], const int x, const int y, con
       const uint8_t byte = bitmap[row * rowBytes + (col >> 3)];
       const bool ink = ((byte >> (7 - (col & 7))) & 1) == 0;
       if (ink) {
-        drawPixel(x + (size - 1 - row), y + col, true);
+        drawPixel(x + (size - 1 - row), y + col, black);
       }
     }
   }
@@ -2131,6 +2238,11 @@ int GfxRenderer::getTextAdvanceX(const int fontId, const char* text, EpdFontFami
       if (BidiUtils::isTransparentMark(cp)) {
         continue;
       }
+      // Thai marks are zero-advance overlays in drawText regardless of what the font's
+      // advance table says, so they must not widen the measured run either.
+      if (utf8IsThaiCombiningMark(cp)) {
+        continue;
+      }
       int32_t advFP = sdIt->second->getAdvance(cp, styleIdx);
       if (!utf8IsCombiningMark(cp)) {
         if (advFP == 0) {
@@ -2244,6 +2356,7 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
   int lastBaseWidth = 0;
   int lastBaseTop = 0;
   int32_t prevAdvanceFP = 0;  // 12.4 fixed-point: prev glyph's advance + next kern for snap
+  ThaiMarkStack thaiStack;
 
   uint32_t cp;
   uint32_t prevCp = 0;
@@ -2259,6 +2372,20 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
       const EpdGlyph* combiningGlyph = font.getGlyph(cp, style);
       if (!combiningGlyph) continue;
       const auto anchor = combiningMark::anchorFor(cp);
+      if (anchor == combiningMark::Anchor::PenNative) {
+        // Thai mark: see drawText. The pen runs along -Y in this rotation.
+        if (utf8IsThaiUpperLevelThreeMark(cp) && !thaiStack.hasStacked) {
+          const auto* peek = reinterpret_cast<const uint8_t*>(text);
+          if (utf8NextCodepoint(&peek) == 0x0E33) {
+            if (const EpdGlyph* saraAm = font.getGlyph(0x0E33, style)) thaiStack.seedFromSaraAm(saraAm->top);
+          }
+        }
+        const int raiseBy = thaiStack.raiseFor(cp, combiningGlyph->top, combiningGlyph->height, lastBaseTop,
+                                               font.getData(style)->advanceY);
+        const int penY = lastBaseY - fp4::toPixel(prevAdvanceFP);
+        renderCharImpl<TextRotation::Rotated90CW>(*this, renderMode, font, cp, x - raiseBy, penY, black, style);
+        continue;
+      }
       const int raiseBy =
           combiningMark::raiseAboveBase(anchor, combiningGlyph->top, combiningGlyph->height, lastBaseTop);
       const int combiningX = x - raiseBy;
@@ -2269,6 +2396,7 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
     }
 
     cp = font.applyLigatures(cp, text, style);
+    thaiStack.resetForBase();
 
     // Differential rounding: snap (previous advance + current kern) as one unit,
     // subtracting for the rotated coordinate direction.

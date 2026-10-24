@@ -14,8 +14,10 @@
 #include "RecentBooksStore.h"
 #include "components/CoverGridHomeUi.h"
 #include "components/themes/BaseTheme.h"
+#include "components/themes/banner/BannerTheme.h"
 #include "components/themes/lyra/Lyra3CoversTheme.h"
 #include "components/themes/lyra/LyraTheme.h"
+#include "components/themes/modern/ModernTheme.h"
 #include "components/themes/roundedraff/RoundedRaffTheme.h"
 
 UITheme UITheme::instance;
@@ -63,11 +65,33 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       currentTheme = std::make_unique<RoundedRaffTheme>();
       currentMetrics = &RoundedRaffMetrics::values;
       break;
+    case CrossPointSettings::UI_THEME::BANNER: {
+      auto theme = makeUniqueNoThrow<BannerTheme>();
+      if (!theme) {
+        LOG_ERR("UI", "OOM: Banner theme");
+        return;
+      }
+      currentTheme = std::move(theme);
+      currentMetrics = &BannerMetrics::values;
+      LOG_DBG("UI", "Using Banner theme");
+      break;
+    }
     case CrossPointSettings::UI_THEME::LYRA_3_COVERS:
       LOG_DBG("UI", "Using Lyra 3 Covers theme");
       currentTheme = std::make_unique<Lyra3CoversTheme>();
       currentMetrics = &Lyra3CoversMetrics::values;
       break;
+    case CrossPointSettings::UI_THEME::MODERN: {
+      auto theme = makeUniqueNoThrow<ModernTheme>();
+      if (!theme) {
+        LOG_ERR("UI", "OOM: Modern theme");
+        return;
+      }
+      currentTheme = std::move(theme);
+      currentMetrics = &ModernMetrics::values;
+      LOG_DBG("UI", "Using Modern theme");
+      break;
+    }
   }
   metricsValid = false;
 }

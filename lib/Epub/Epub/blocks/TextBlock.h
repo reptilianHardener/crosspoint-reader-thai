@@ -105,7 +105,9 @@ class TextBlock final : public Block {
   const std::vector<std::string>& getRubyTexts() const { return rubyTexts; }
   std::vector<LinkSpan> takeLinkSpans() { return std::move(linkSpans); }
 
-  void render(const GfxRenderer& renderer, int fontId, int x, int y) const;
+  // vertical: draw the line as a tategaki column. (x, y) is then the screen position of the
+  // line's start at its top edge, which faces right; see GfxRenderer::drawTextVertical.
+  void render(const GfxRenderer& renderer, int fontId, int x, int y, bool vertical = false) const;
   BlockType getType() override { return TEXT_BLOCK; }
   bool serialize(HalFile& file) const;
   static std::unique_ptr<TextBlock> deserialize(HalFile& file);

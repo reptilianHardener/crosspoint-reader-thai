@@ -16,11 +16,13 @@
 class EpubReaderFootnoteSelectActivity final : public Activity {
  public:
   explicit EpubReaderFootnoteSelectActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
-                                            std::unique_ptr<Page> page, int marginLeft, int marginTop)
+                                            std::unique_ptr<Page> page, int marginLeft, int marginTop,
+                                            bool vertical = false)
       : Activity("EpubReaderFootnoteSelect", renderer, mappedInput),
         page(std::move(page)),
         marginLeft(marginLeft),
-        marginTop(marginTop) {}
+        marginTop(marginTop),
+        vertical(vertical) {}
 
  private:
   void onEnter() override;
@@ -34,8 +36,10 @@ class EpubReaderFootnoteSelectActivity final : public Activity {
   void drawHints() const;
 
   std::unique_ptr<Page> page;
+  // On a vertical page marginLeft is the screen column of the page's right edge.
   const int marginLeft;
   const int marginTop;
+  const bool vertical;
 
   struct FootnoteLink {
     const PageLink* link;

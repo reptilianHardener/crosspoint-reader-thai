@@ -133,12 +133,27 @@ bool TextBlock::hasRuby() const {
   return false;
 }
 
-void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int x, const int y) const {
+void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int x, const int y,
+                       const bool vertical) const {
   if (!isValid) {
     LOG_ERR("TXB", "Render skipped: invalid block");
     return;
   }
   const int8_t tracking = blockStyle.characterSpacing;
+
+  // A vertical line is positioned in line-local coordinates (ox = oy = 0) and turned a quarter
+  // clockwise about (x, y) as it is drawn: along the line runs down the screen, and the
+  // distance below the line top runs leftward.
+  const int ox = vertical ? 0 : x;
+  const int oy = vertical ? 0 : y;
+  const auto drawWord = [&](const int lx, const int ly, const char* text, const EpdFontFamily::Style style,
+                            const BidiUtils::BidiBaseDir dir) {
+    if (vertical) {
+      renderer.drawTextVertical(fontId, x - ly, y + lx, text, true, style, tracking);
+    } else {
+      renderer.drawText(fontId, lx, ly, text, true, style, dir, tracking);
+    }
+  };
 
   const bool scanning = renderer.isFontCacheScanning();
   const int ascender = renderer.getFontAscenderSize(fontId);
@@ -165,7 +180,7 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
           groupActualWidth += renderer.getTextAdvanceX(fontId, wordText(i + k), wordStyle(i + k), tracking);
         }
         const int rubyWidth = renderer.getTextAdvanceX(fontId, rubyTexts[i].c_str(), EpdFontFamily::SUP, tracking);
-        const int leaderWordX = xposArr[i] + x;
+        const int leaderWordX = xposArr[i] + ox;
         const auto baseDir =
             static_cast<BidiUtils::BidiBaseDir>(BidiUtils::detectParagraphLevel(wordText(i), blockStyle.isRtl ? 1 : 0));
         rubies[i] = {leaderWordX - (rubyWidth - groupActualWidth) / 2, rubyTexts[i], baseDir};
@@ -196,7 +211,11 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
 
   const auto flushDecoration = [&](DecorationLineTracker& line) {
     if (line.active()) {
-      renderer.drawLine(line.startX, line.yPos, line.endX, line.yPos, 2, true);
+      if (vertical) {
+        renderer.fillRect(x - line.yPos - 1, y + line.startX, 2, line.endX - line.startX + 1, true);
+      } else {
+        renderer.drawLine(line.startX, line.yPos, line.endX, line.yPos, 2, true);
+      }
       line.reset();
     }
   };
@@ -212,7 +231,7 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
 
   for (uint16_t i = 0; i < numWords; i++) {
     const char* word = wordText(i);
-    const int wordX = xposArr[i] + x;
+    const int wordX = xposArr[i] + ox;
     const EpdFontFamily::Style currentStyle = wordStyle(i);
     const auto baseDir =
         static_cast<BidiUtils::BidiBaseDir>(BidiUtils::detectParagraphLevel(word, blockStyle.isRtl ? 1 : 0));
@@ -222,7 +241,7 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
     // drawText, so these offsets are chosen relative to the full-size ascender:
     //   SUP: raise by 40% of ascender — sits clearly above the cap-height
     //   SUB: lower by 25% of ascender — descends below baseline without clashing with ascenders below
-    int wordY = y + rubyShift;
+    int wordY = oy + rubyShift;
     if ((currentStyle & EpdFontFamily::SUP) != 0) {
       wordY -= ascender * 2 / 5;
     } else if ((currentStyle & EpdFontFamily::SUB) != 0) {
@@ -245,19 +264,18 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
           std::min<size_t>({static_cast<size_t>(boundary), static_cast<size_t>(wordTextLen(i)), sizeof(boldBuf) - 1});
       memcpy(boldBuf, word, boldLen);
       boldBuf[boldLen] = '\0';
-      renderer.drawText(fontId, drawX, wordY, boldBuf, true, boldStyle, baseDir, tracking);
+      drawWord(drawX, wordY, boldBuf, boldStyle, baseDir);
       const int suffixX = drawX + focusSuffixXArr[i];
-      renderer.drawText(fontId, suffixX, wordY, word + boldLen, true, currentStyle, baseDir, tracking);
+      drawWord(suffixX, wordY, word + boldLen, currentStyle, baseDir);
     } else {
-      renderer.drawText(fontId, drawX, wordY, word, true, currentStyle, baseDir, tracking);
+      drawWord(drawX, wordY, word, currentStyle, baseDir);
     }
 
     // Horizontal ruby text rendering
     if (blockHasRuby && i < rubyTexts.size() && !rubyTexts[i].empty() &&
         (wordStyle(i) & EpdFontFamily::RUBY_CONTINUE) == 0) {
       const int rubyY = wordY - ascender;
-      renderer.drawText(fontId, rubies[i].x, rubyY, rubies[i].text.c_str(), true, EpdFontFamily::SUP, rubies[i].baseDir,
-                        tracking);
+      drawWord(rubies[i].x, rubyY, rubies[i].text.c_str(), EpdFontFamily::SUP, rubies[i].baseDir);
     }
 
     if (scanning) {

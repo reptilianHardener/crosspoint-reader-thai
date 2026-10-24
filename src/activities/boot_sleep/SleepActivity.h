@@ -5,6 +5,7 @@
 
 class Bitmap;
 class HalFile;
+struct RecentBook;
 
 class SleepActivity final : public Activity {
  public:
@@ -16,7 +17,11 @@ class SleepActivity final : public Activity {
   void renderDefaultSleepScreen() const;
   void renderCustomSleepScreen() const;
   void renderCoverSleepScreen() const;
-  void renderBitmapSleepScreen(const Bitmap& bitmap, bool preserveBackground = false) const;
+  // infoPanelBook: when set, the "Halo 2 Cover" layout: the image always fills the screen
+  // and a panel with this book's title and reading progress is drawn over its bottom edge.
+  void renderBitmapSleepScreen(const Bitmap& bitmap, bool preserveBackground = false,
+                               const RecentBook* infoPanelBook = nullptr) const;
+  void drawSleepInfoPanel(const RecentBook& book) const;
   bool renderSleepOverlayFile(HalFile& file, const char* pathForLog) const;
   bool renderTransparentOverlayPng(const std::string& path) const;
   bool renderSleepOverlayPath(const std::string& path) const;

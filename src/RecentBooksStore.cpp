@@ -17,6 +17,9 @@ void RecentBooksStore::toJson(JsonDocument& doc) const {
     obj["title"] = book.title;
     obj["author"] = book.author;
     obj["coverBmpPath"] = book.coverBmpPath;
+    if (book.progressPercent > 0) {
+      obj["progressPercent"] = book.progressPercent;
+    }
   }
 }
 
@@ -33,6 +36,7 @@ bool RecentBooksStore::fromJson(JsonVariantConst doc) {
     book.title = obj["title"] | "";
     book.author = obj["author"] | "";
     book.coverBmpPath = obj["coverBmpPath"] | "";
+    book.progressPercent = std::min<uint8_t>(obj["progressPercent"] | static_cast<uint8_t>(0), 100);
     recentBooks.push_back(book);
   }
 
@@ -48,12 +52,15 @@ void RecentBooksStore::addBook(const std::string& path, const std::string& title
   // Remove existing entry if present
   auto it =
       std::find_if(recentBooks.begin(), recentBooks.end(), [&](const RecentBook& book) { return book.path == path; });
+  // Re-opening a book moves it to the front; its recorded progress moves with it.
+  uint8_t progressPercent = 0;
   if (it != recentBooks.end()) {
+    progressPercent = it->progressPercent;
     recentBooks.erase(it);
   }
 
   // Add to front
-  recentBooks.insert(recentBooks.begin(), {path, title, author, coverBmpPath});
+  recentBooks.insert(recentBooks.begin(), {path, title, author, coverBmpPath, progressPercent});
 
   // Trim to max size
   if (recentBooks.size() > MAX_RECENT_BOOKS) {
@@ -74,6 +81,17 @@ void RecentBooksStore::updateBook(const std::string& path, const std::string& ti
     book.coverBmpPath = coverBmpPath;
     saveToFile();
   }
+}
+
+void RecentBooksStore::updateProgress(const std::string& path, const uint8_t progressPercent) {
+  auto it =
+      std::find_if(recentBooks.begin(), recentBooks.end(), [&](const RecentBook& book) { return book.path == path; });
+  const uint8_t clamped = std::min<uint8_t>(progressPercent, 100);
+  if (it == recentBooks.end() || it->progressPercent == clamped) {
+    return;
+  }
+  it->progressPercent = clamped;
+  saveToFile();
 }
 
 bool RecentBooksStore::removeByPath(const std::string& path) {

@@ -61,6 +61,45 @@ constexpr const char* LINETHROUGH_TAGS[] = {"del", "s", "strike"};
 constexpr const char* IMAGE_TAGS[] = {"img", "image"};
 bool isWhitespace(const char c) { return c == ' ' || c == '\r' || c == '\n' || c == '\t'; }
 
+// Longest Thai cluster carried across a buffer-overflow split: leading vowel + consonant +
+// up to four marks/vowels, three UTF-8 bytes each.
+constexpr int THAI_CLUSTER_CARRY_MAX_BYTES = 18;
+
+// Given a buffer of complete UTF-8 sequences, returns the length to keep so the cut does not
+// fall inside a trailing Thai cluster (leading vowel, consonant, then marks and following
+// vowels). Returns len unchanged when the tail is not Thai or the cluster would not fit
+// the carry buffer. Thai is three bytes per codepoint: 0xE0 0xB8/0xB9 xx.
+int thaiClusterSafeLen(const char* buf, const int len) {
+  const auto thaiAt = [&](const int pos) -> uint32_t {
+    if (pos < 0 || pos + 3 > len) return 0;
+    const auto b0 = static_cast<uint8_t>(buf[pos]);
+    const auto b1 = static_cast<uint8_t>(buf[pos + 1]);
+    const auto b2 = static_cast<uint8_t>(buf[pos + 2]);
+    if (b0 != 0xE0 || (b1 != 0xB8 && b1 != 0xB9) || (b2 & 0xC0) != 0x80) return 0;
+    return 0x0E00u | (static_cast<uint32_t>(b1 & 0x03) << 6) | (b2 & 0x3F);
+  };
+  const auto attachesToBase = [](const uint32_t cp) {
+    return utf8IsThaiCombiningMark(cp) || cp == 0x0E30 || cp == 0x0E32 || cp == 0x0E33;
+  };
+
+  int pos = len - 3;
+  uint32_t cp = thaiAt(pos);
+  if (cp == 0) return len;
+  // Walk back over marks and following vowels to the base they attach to.
+  while (attachesToBase(cp)) {
+    const uint32_t prev = thaiAt(pos - 3);
+    if (prev == 0) return len;
+    pos -= 3;
+    cp = prev;
+  }
+  // A leading vowel (U+0E40-0E44) is written before the consonant it belongs to.
+  const uint32_t before = thaiAt(pos - 3);
+  if (before >= 0x0E40 && before <= 0x0E44) pos -= 3;
+
+  if (pos <= 0 || len - pos > THAI_CLUSTER_CARRY_MAX_BYTES) return len;
+  return pos;
+}
+
 std::string trimAndNormalize(const std::string& str) {
   if (str.empty()) return "";
   size_t start = 0;
@@ -329,11 +368,12 @@ void ChapterHtmlSlimParser::flushPartWordBuffer() {
   if (!currentTextBlock) {
     partWordBufferIndex = 0;
     nextWordContinues = false;
+    nextWordZeroWidthBreak = false;
     return;
   }
 
   // Determine font style from depth-based tracking and CSS effective style
-  const bool isBold = boldUntilDepth < depth || effectiveBold;
+  const bool isBold = forceBold || boldUntilDepth < depth || effectiveBold;
   const bool isItalic = italicUntilDepth < depth || effectiveItalic;
 
   // Combine style flags using bitwise OR
@@ -365,7 +405,9 @@ void ChapterHtmlSlimParser::flushPartWordBuffer() {
     }
     linkId = currentFootnoteLinkId;
   }
-  currentTextBlock->addWord(partWordBuffer, fontStyle, false, nextWordContinues, partWordVisibleOffset, linkId);
+  currentTextBlock->addWord(partWordBuffer, fontStyle, false, nextWordContinues, partWordVisibleOffset, linkId,
+                            nextWordZeroWidthBreak);
+  nextWordZeroWidthBreak = false;
   if (insideTableCell && !tableRowStacked) {
     tableCellTextBytes += wordBytes;
     if (currentTextBlock->size() > MAX_GRID_TABLE_CELL_WORDS) {
@@ -1055,21 +1097,24 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                     containerWidth = self->viewportWidth - inset;
                   }
                 }
+                // On a vertical page the image stays upright while the page axes are turned:
+                // its width lies across the lines and its height along them.
+                const int maxImageHeight = self->verticalText ? self->viewportWidth : self->viewportHeight;
+                if (self->verticalText) containerWidth = self->viewportHeight;
 
                 if (hasCssHeight && hasCssWidth && dims.width > 0 && dims.height > 0) {
                   // Both CSS height and width set: resolve both, then clamp to viewport preserving requested ratio
                   displayHeight = static_cast<int>(
-                      imgStyle.imageHeight.toPixels(emSize, static_cast<float>(self->viewportHeight)) + 0.5f);
+                      imgStyle.imageHeight.toPixels(emSize, static_cast<float>(maxImageHeight)) + 0.5f);
                   displayWidth =
                       static_cast<int>(imgStyle.imageWidth.toPixels(emSize, static_cast<float>(containerWidth)) + 0.5f);
                   if (displayHeight < 1) displayHeight = 1;
                   if (displayWidth < 1) displayWidth = 1;
-                  if (displayWidth > containerWidth || displayHeight > self->viewportHeight) {
+                  if (displayWidth > containerWidth || displayHeight > maxImageHeight) {
                     float scaleX =
                         (displayWidth > containerWidth) ? static_cast<float>(containerWidth) / displayWidth : 1.0f;
-                    float scaleY = (displayHeight > self->viewportHeight)
-                                       ? static_cast<float>(self->viewportHeight) / displayHeight
-                                       : 1.0f;
+                    float scaleY =
+                        (displayHeight > maxImageHeight) ? static_cast<float>(maxImageHeight) / displayHeight : 1.0f;
                     float scale = (scaleX < scaleY) ? scaleX : scaleY;
                     displayWidth = static_cast<int>(displayWidth * scale + 0.5f);
                     displayHeight = static_cast<int>(displayHeight * scale + 0.5f);
@@ -1080,12 +1125,12 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                 } else if (hasCssHeight && !hasCssWidth && dims.width > 0 && dims.height > 0) {
                   // Use CSS height (resolve % against viewport height) and derive width from aspect ratio
                   displayHeight = static_cast<int>(
-                      imgStyle.imageHeight.toPixels(emSize, static_cast<float>(self->viewportHeight)) + 0.5f);
+                      imgStyle.imageHeight.toPixels(emSize, static_cast<float>(maxImageHeight)) + 0.5f);
                   if (displayHeight < 1) displayHeight = 1;
                   displayWidth =
                       static_cast<int>(displayHeight * (static_cast<float>(dims.width) / dims.height) + 0.5f);
-                  if (displayHeight > self->viewportHeight) {
-                    displayHeight = self->viewportHeight;
+                  if (displayHeight > maxImageHeight) {
+                    displayHeight = maxImageHeight;
                     // Rescale width to preserve aspect ratio when height is clamped
                     displayWidth =
                         static_cast<int>(displayHeight * (static_cast<float>(dims.width) / dims.height) + 0.5f);
@@ -1108,8 +1153,8 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                   if (displayWidth < 1) displayWidth = 1;
                   displayHeight =
                       static_cast<int>(displayWidth * (static_cast<float>(dims.height) / dims.width) + 0.5f);
-                  if (displayHeight > self->viewportHeight) {
-                    displayHeight = self->viewportHeight;
+                  if (displayHeight > maxImageHeight) {
+                    displayHeight = maxImageHeight;
                     // Rescale width to preserve aspect ratio when height is clamped
                     displayWidth =
                         static_cast<int>(displayHeight * (static_cast<float>(dims.width) / dims.height) + 0.5f);
@@ -1120,7 +1165,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                 } else {
                   // Scale to fit container while maintaining aspect ratio
                   int maxWidth = containerWidth;
-                  int maxHeight = self->viewportHeight;
+                  int maxHeight = maxImageHeight;
                   float scaleX = (dims.width > maxWidth) ? (float)maxWidth / dims.width : 1.0f;
                   float scaleY = (dims.height > maxHeight) ? (float)maxHeight / dims.height : 1.0f;
                   float scale = (scaleX < scaleY) ? scaleX : scaleY;
@@ -1154,10 +1199,13 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                   }
                 }
 
+                // Extent the image takes in the flow of lines, and across it.
+                const int flowExtent = self->verticalText ? displayWidth : displayHeight;
+                const int crossExtent = self->verticalText ? displayHeight : displayWidth;
+
                 // Create page for image - only break if image won't fit remaining space
                 if (self->currentPage && !self->currentPage->elements.empty() &&
-                    (self->currentPageNextY + imageMarginTop + displayHeight + imageMarginBottom >
-                     self->viewportHeight)) {
+                    (self->currentPageNextY + imageMarginTop + flowExtent + imageMarginBottom > self->viewportHeight)) {
                   self->completePageFn(std::move(self->currentPage), self->xpathParagraphIndex,
                                        self->xpathListItemIndex, self->currentPageVisibleOffset);
                   self->completedPageCount++;
@@ -1186,8 +1234,8 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                 // bar / big screen margin) absorbs that overflow silently, but with a
                 // thin reserve it crosses the physical screen edge and fails
                 // ImageBlock::render's bounds check, dropping the image entirely.
-                if (self->currentPageNextY + imageMarginTop + displayHeight > self->viewportHeight) {
-                  const int room = self->viewportHeight - displayHeight - self->currentPageNextY;
+                if (self->currentPageNextY + imageMarginTop + flowExtent > self->viewportHeight) {
+                  const int room = self->viewportHeight - flowExtent - self->currentPageNextY;
                   imageMarginTop = static_cast<int16_t>(room > 0 ? room : 0);
                 }
                 self->currentPageNextY += imageMarginTop;
@@ -1198,7 +1246,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                   LOG_ERR("EHP", "Failed to create ImageBlock");
                   return;
                 }
-                int xPos = (self->viewportWidth - displayWidth) / 2;
+                int xPos = (self->viewportWidth - crossExtent) / 2;
                 auto pageImage = makeUniqueNoThrow<PageImage>(std::move(imageBlock), xPos, self->currentPageNextY);
                 if (!pageImage) {
                   LOG_ERR("EHP", "Failed to create PageImage");
@@ -1206,7 +1254,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                 }
                 self->currentPage->elements.push_back(std::move(pageImage));
                 self->setCurrentPageVisibleOffset(self->visibleTextOffset);
-                self->currentPageNextY += displayHeight + imageMarginBottom;
+                self->currentPageNextY += flowExtent + imageMarginBottom;
 
                 // The image consumed the empty block's accumulated vertical spacing.
                 // Reset the block so the Vertical merge in startNewTextBlock doesn't
@@ -1654,6 +1702,8 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
       }
       // Whitespace is a real word boundary — reset continuation state
       self->nextWordContinues = false;
+      self->nextWordZeroWidthBreak = false;
+      self->spaceBeforeZeroWidthBreak = true;
       // Skip the whitespace char
       continue;
     }
@@ -1714,6 +1764,31 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
       continue;
     }
 
+    // Zero Width Space (U+200B) = 0xE2 0x80 0x8B: "break allowed, no visible gap". It ends
+    // the current word and marks the next one as a zero-width break opportunity. Thai books
+    // are often pre-segmented this way.
+    if (static_cast<uint8_t>(s[i]) == 0xE2 && i + 2 < len && static_cast<uint8_t>(s[i + 1]) == 0x80 &&
+        static_cast<uint8_t>(s[i + 2]) == 0x8B) {
+      if (self->partWordBufferIndex > 0) {
+        self->flushPartWordBuffer();
+      }
+      // Directly after real whitespace the ZWSP adds nothing; honouring it would replace
+      // the visible space with a zero-width boundary.
+      if (!self->spaceBeforeZeroWidthBreak) {
+        self->nextWordContinues = false;
+        self->nextWordZeroWidthBreak = true;
+      }
+      i += 2;
+      continue;
+    }
+
+    // Word Joiner (U+2060) = 0xE2 0x81 0xA0: an invisible control, never part of a word.
+    if (static_cast<uint8_t>(s[i]) == 0xE2 && i + 2 < len && static_cast<uint8_t>(s[i + 1]) == 0x81 &&
+        static_cast<uint8_t>(s[i + 2]) == 0xA0) {
+      i += 2;
+      continue;
+    }
+
     // Skip Zero Width No-Break Space / BOM (U+FEFF) = 0xEF 0xBB 0xBF
     const XML_Char FEFF_BYTE_1 = static_cast<XML_Char>(0xEF);
     const XML_Char FEFF_BYTE_2 = static_cast<XML_Char>(0xBB);
@@ -1735,9 +1810,13 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
     // decoder can't interpret.
     if (self->partWordBufferIndex >= MAX_WORD_SIZE) {
       int safeLen = utf8SafeTruncateBuffer(self->partWordBuffer, self->partWordBufferIndex);
+      // Thai has no spaces, so a paragraph routinely fills the buffer. Cutting between a
+      // consonant and its vowel or tone mark would draw the mark without its base, so
+      // carry the trailing Thai cluster over to the next word instead.
+      safeLen = thaiClusterSafeLen(self->partWordBuffer, safeLen);
 
       if (safeLen < self->partWordBufferIndex && safeLen > 0) {
-        // Incomplete UTF-8 sequence at the end — save it before flushing
+        // Incomplete UTF-8 sequence or Thai cluster at the end — save it before flushing
         int overflow = self->partWordBufferIndex - safeLen;
         uint32_t overflowVisibleOffset = self->partWordVisibleOffset;
         const unsigned char* offsetPtr = reinterpret_cast<const unsigned char*>(self->partWordBuffer);
@@ -1746,7 +1825,7 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
           utf8NextCodepoint(&offsetPtr);
           overflowVisibleOffset++;
         }
-        char saved[4];
+        char saved[THAI_CLUSTER_CARRY_MAX_BYTES + 4];
         for (int j = 0; j < overflow; j++) {
           saved[j] = self->partWordBuffer[safeLen + j];
         }
@@ -1767,6 +1846,8 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
     if (self->partWordBufferIndex == 0) {
       self->partWordVisibleOffset = codepointOffset;
     }
+    // A visible character: any whitespace before it has been consumed as a word boundary.
+    self->spaceBeforeZeroWidthBreak = false;
     self->partWordBuffer[self->partWordBufferIndex++] = s[i];
   }
 

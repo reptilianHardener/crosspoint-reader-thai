@@ -25,6 +25,8 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     BLANK = 5,
     QUICK_RESUME = 6,
     TRANSPARENT_CUSTOM = 7,
+    // Cropped cover with a title and reading-progress panel along the bottom edge.
+    HALO2_COVER = 8,
     SLEEP_SCREEN_MODE_COUNT
   };
   enum SLEEP_SCREEN_COVER_MODE { FIT = 0, CROP = 1, SLEEP_SCREEN_COVER_MODE_COUNT };
@@ -114,6 +116,10 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // slot; fromJson() folds that range up (see LEGACY_FONT_SIZE_MAX).
   static constexpr uint8_t LEGACY_FONT_SIZE_MAX = 3;
   static constexpr uint8_t DEFAULT_FONT_POINT_SIZE = 14;
+  // SD family the reader starts on: it carries Thai, kana, kanji and Latin, and the UI
+  // borrows its Thai and Japanese glyphs. Boot falls back to the built-in family (and
+  // clears this) when the family is not on the card.
+  static constexpr char DEFAULT_SD_FONT_FAMILY[] = "NotoSansThaiJP";
   enum LINE_COMPRESSION { TIGHT = 0, NORMAL = 1, WIDE = 2, EXTRA_WIDE = 3, LINE_COMPRESSION_COUNT };
   enum PARAGRAPH_ALIGNMENT {
     JUSTIFIED = 0,
@@ -182,7 +188,15 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   };
 
   // UI Theme
-  enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2, ROUNDEDRAFF = 3, COVER_GRID = 4 };
+  // MODERN keeps the value it has always had in this fork, so existing settings files
+  // still select it. COVER_GRID stays last: the settings list hides it on boards without
+  // PSRAM by dropping the final entry. It was 5 before BANNER; fromJson() migrates files
+  // written without the "uiThemeOrder" marker.
+  enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2, MODERN = 3, ROUNDEDRAFF = 4, BANNER = 5, COVER_GRID = 6 };
+  // Banner theme images: BMP paths on the SD card (empty = section hidden).
+  static constexpr size_t HOME_IMAGE_PATH_LEN = 128;
+  // Which way the home carousel advances
+  enum PREVIEW_DIRECTION { PREVIEW_LEFT = 0, PREVIEW_RIGHT = 1, PREVIEW_DIRECTION_COUNT };
 
   // Image rendering in EPUB reader
   enum IMAGE_RENDERING { IMAGES_DISPLAY = 0, IMAGES_PLACEHOLDER = 1, IMAGES_SUPPRESS = 2, IMAGE_RENDERING_COUNT };
@@ -264,7 +278,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   int8_t getCharacterSpacing() const { return static_cast<int8_t>(characterSpacing - CHARACTER_SPACING_OFFSET); }
   uint8_t textAntiAliasing = 1;
   // Short power button click behaviour
-  uint8_t shortPwrBtn = IGNORE;
+  uint8_t shortPwrBtn = SLEEP;
   // X4 Pro: double-click power toggles the frontlight. Disabling frees the
   // power button for shortPwrBtn actions without the double-click wait.
   uint8_t doubleClickPwrLight = 1;
@@ -320,6 +334,8 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t longPressMenuFunction = LP_MENU_DISABLED;
   // UI Theme
   uint8_t uiTheme = LYRA;
+  // Home carousel direction (Modern theme)
+  uint8_t previewDirection = PREVIEW_RIGHT;
   // Sunlight fading compensation
   uint8_t fadingFix = 0;
   // Power button return from footnotes (1 = enabled, 0 = disabled)
@@ -328,9 +344,16 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t embeddedStyle = 1;
   // Focus Reading - emphasizes the first part of words with bold
   uint8_t focusReadingEnabled = 0;
+  // Bold text - lays out the whole book in the bold face (0 = as marked up, 1 = all bold)
+  uint8_t readerBoldText = 0;
+  // Set Japanese-language EPUBs vertically (tategaki), pages advancing leftward (1 = enabled)
+  uint8_t verticalJapanese = 1;
   uint8_t readerMenuStyle = READER_MENU_LIST;
   // SD card font family name (empty = use built-in fontFamily)
-  char sdFontFamilyName[32] = "";
+  char sdFontFamilyName[32] = "NotoSansThaiJP";
+  // Banner theme: images shown above and below the recent books (BMP paths, empty = none)
+  char homeTopImage[HOME_IMAGE_PATH_LEN] = "";
+  char homeMiddleImage[HOME_IMAGE_PATH_LEN] = "";
   // Dictionary folder name under /dictionaries (empty = no dictionary)
   char dictionaryName[32] = "";
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)

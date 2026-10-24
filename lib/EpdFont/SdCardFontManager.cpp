@@ -94,6 +94,23 @@ int SdCardFontManager::loadFamilyExtraSize(const SdCardFontFamilyInfo& family, G
   return loadFile(*file, family.name.c_str(), renderer);
 }
 
+int SdCardFontManager::loadFallbackFile(const SdCardFontFamilyInfo& family, GfxRenderer& renderer,
+                                        const uint8_t pointSize) {
+  const SdCardFontFileInfo* file = family.findFile(pointSize);
+  if (!file) return 0;
+  return loadFile(*file, family.name.c_str(), renderer);
+}
+
+void SdCardFontManager::unloadFont(const int fontId, GfxRenderer& renderer) {
+  for (auto it = loaded_.begin(); it != loaded_.end(); ++it) {
+    if (it->fontId != fontId) continue;
+    renderer.removeFont(fontId);
+    delete it->font;
+    loaded_.erase(it);
+    return;
+  }
+}
+
 void SdCardFontManager::unloadAll(GfxRenderer& renderer) {
   // Drop UI CJK fallbacks before the SD fonts they point at are freed.
   renderer.clearFallbackFonts();
