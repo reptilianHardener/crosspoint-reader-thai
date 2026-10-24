@@ -17,11 +17,12 @@ class DictionaryWordSelectActivity final : public Activity {
  public:
   explicit DictionaryWordSelectActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                         std::unique_ptr<Page> page, int marginLeft, int marginTop,
-                                        std::string lookupText = {})
+                                        std::string lookupText = {}, bool vertical = false)
       : Activity("DictionaryWordSelect", renderer, mappedInput),
         page(std::move(page)),
         marginLeft(marginLeft),
         marginTop(marginTop),
+        vertical(vertical),
         lookupText(std::move(lookupText)) {}
 
   void onEnter() override;
@@ -34,8 +35,9 @@ class DictionaryWordSelectActivity final : public Activity {
   void performLookup();
 
   std::unique_ptr<Page> page;
-  const int marginLeft;
+  const int marginLeft;  // page origin: the right edge on a vertical page
   const int marginTop;
+  const bool vertical;
   int fontId = 0;
 
   std::string lookupText;

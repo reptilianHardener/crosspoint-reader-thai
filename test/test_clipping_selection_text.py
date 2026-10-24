@@ -26,6 +26,7 @@ def method(name, next_name, text=source):
     return text[start:text.index(next_name, signature)].rstrip()
 
 extract_words = method("bool ClipSelectionActivity::extractWords", "int ClipSelectionActivity::closestInRow")
+word_text = method("void ClipSelectionActivity::drawWordText", "void ClipSelectionActivity::drawWordClean")
 clean_draw = method("void ClipSelectionActivity::drawWordClean", "void ClipSelectionActivity::drawWordHighlight")
 highlight_draw = method("void ClipSelectionActivity::drawWordHighlight", "bool ClipSelectionActivity::renderIncremental")
 selection_draw = method("void ClipSelectionActivity::drawSelection", "void ClipSelectionActivity::render(")
@@ -148,6 +149,7 @@ struct Renderer {
                 BidiUtils::BidiBaseDir = BidiUtils::BidiBaseDir::AUTO, int8_t tracking = 0) const {
     draws.push_back({x, getTextAdvanceX(font, text, style, tracking), tracking});
   }
+  void drawTextVertical(int, int, int, const char*, bool, EpdFontFamily::Style, int8_t = 0) const {}
   void fillRect(int x, int, int width, int, bool) const { fills.push_back({x, width, 0}); }
   void fillRectDither(int x, int, int width, int, Color) const { fills.push_back({x, width, 0}); }
   void drawRect(int, int, int, int, bool) const {}
@@ -207,6 +209,8 @@ struct ClipSelectionActivity {
   int fontId = 0, lineHeight = 16, marginLeft = 0, marginTop = 0;
   int selected = 0, rangeStart = -1, currentPageOffset = 0;
   bool touchDragSelecting = false;
+  bool vertical = false;
+  void drawWordText(const WordBox& word, int offsetX, int offset) const;
   bool buildSelectedText(int first, int last, std::string& text) const;
   bool extractWords();
   void drawWordClean(int, int, int) const;
@@ -220,14 +224,15 @@ struct ClipSelectionActivity {
   Rect handleRect(int, bool) const { return {}; }
   Rect actionRect() const { return {}; }
 };
-""" + build_text + extract_words + clean_draw + highlight_draw + selection_draw + r"""
+""" + build_text + extract_words + word_text + clean_draw + highlight_draw + selection_draw + r"""
 struct EpubReaderActivity {
   Renderer& renderer;
   explicit EpubReaderActivity(Renderer& renderer) : renderer(renderer) {}
   struct Section { int currentPage = 0, pageCount = 1; } sectionData;
   Section* section = &sectionData;
   int currentSpineIndex = 0, buildViewportWidth = 480, buildViewportHeight = 800;
-  bool verticalLayout = false;  // tategaki pages have no clippings
+  bool verticalLayout = false;
+  int pageOriginX(int marginLeft, int) const { return marginLeft; }
   int clippingAtPoint(const Page&, int, int) const;
   void drawClippingHighlights(const Page&, int, int, int) const;
 };
@@ -298,6 +303,24 @@ int main() {
     assert(cold.pages[0] && cold.pages[1] && cold.pages[2]);
     HalMemory::stats = {8192, 4096};
     assert(!cold.extractWords());
+  }
+  {
+    // Tategaki: marginLeft is the page's right edge. Words run down a column whose top edge
+    // is (right edge - line.yPos); the box is one line wide and as tall as the word is long.
+    ClipSelectionActivity tall;
+    tall.vertical = true;
+    tall.marginLeft = 400;
+    tall.marginTop = 20;
+    auto page = std::make_unique<Page>();
+    auto line = std::make_unique<PageLine>();
+    line->xPos = 10;
+    line->yPos = 30;
+    page->elements.push_back(std::move(line));
+    tall.pages.push_back(std::move(page));
+    assert(tall.extractWords() && tall.wordCount == 1);
+    const auto& word = tall.words[0];
+    assert(word.textX == 370 && word.textY == 30);
+    assert(word.x == 370 - 16 + 1 && word.y == 30 && word.width == 16 && word.height == 24);
   }
   HalMemory::stats = {5908, 3444};  // Physical X3 crash workload.
   assert(selectionLowMemory(0, 0));

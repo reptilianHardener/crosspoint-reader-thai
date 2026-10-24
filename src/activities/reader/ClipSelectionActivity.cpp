@@ -47,14 +47,15 @@ const char* cleanWordStart(const char* text) {
 ClipSelectionActivity::ClipSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                              std::vector<std::unique_ptr<Page>> pages, const int marginLeft,
                                              const int marginTop, const int initialX, const int initialY,
-                                             const Mode mode)
+                                             const Mode mode, const bool vertical)
     : Activity("ClipSelection", renderer, mappedInput),
       pages(std::move(pages)),
       marginLeft(marginLeft),
       marginTop(marginTop),
       initialX(initialX),
       initialY(initialY),
-      mode(mode) {}
+      mode(mode),
+      vertical(vertical) {}
 
 ClipSelectionActivity::ClipSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                              std::span<const std::unique_ptr<Page>> borrowedPages, const int marginLeft,
@@ -91,7 +92,8 @@ void ClipSelectionActivity::onEnter() {
     if (word.pageOffset != 0) break;
     firstPageRows = std::max<uint16_t>(firstPageRows, static_cast<uint16_t>(word.row + 1));
   }
-  const int middle = closestInRow(firstPageRows / 2, renderer.getScreenWidth() / 2);
+  const int middle =
+      closestInRow(firstPageRows / 2, (vertical ? renderer.getScreenHeight() : renderer.getScreenWidth()) / 2);
   if (middle >= 0) selected = middle;
   if (initialSelection.valid) {
     for (size_t i = 0; i < wordCount; ++i) {
@@ -188,10 +190,23 @@ bool ClipSelectionActivity::extractWords() {
 
         WordBox& word = isRtl ? words[lineStart + (rtlWordCount < remaining ? rtlWordCount : rtlWordCount % remaining)]
                               : words[wordCount++];
-        word.x = static_cast<int16_t>(marginLeft + line.xPos + block->wordXpos(i));
-        word.y = static_cast<int16_t>(marginTop + line.yPos + rubyShift + block->wordYOffset(renderer, fontId, i));
-        word.width = static_cast<int16_t>(width);
-        word.height = static_cast<int16_t>(renderer.getLineHeight(wordFont));
+        const int along = line.xPos + block->wordXpos(i);
+        const int across = line.yPos + rubyShift + block->wordYOffset(renderer, fontId, i);
+        const int wordLineHeight = renderer.getLineHeight(wordFont);
+        if (vertical) {
+          // A vertical line occupies (columnX - wordLineHeight, columnX], running down from textY.
+          word.textX = static_cast<int16_t>(marginLeft - across);
+          word.textY = static_cast<int16_t>(marginTop + along);
+          word.x = static_cast<int16_t>(word.textX - wordLineHeight + 1);
+          word.y = word.textY;
+          word.width = static_cast<int16_t>(wordLineHeight);
+          word.height = static_cast<int16_t>(width);
+        } else {
+          word.x = word.textX = static_cast<int16_t>(marginLeft + along);
+          word.y = word.textY = static_cast<int16_t>(marginTop + across);
+          word.width = static_cast<int16_t>(width);
+          word.height = static_cast<int16_t>(wordLineHeight);
+        }
         word.fontId = wordFont;
         word.row = rowCount;
         word.pageOffset = static_cast<uint8_t>(pageOffset);
@@ -238,12 +253,12 @@ bool ClipSelectionActivity::extractWords() {
   return true;
 }
 
-int ClipSelectionActivity::closestInRow(const uint16_t row, const int centerX) const {
+int ClipSelectionActivity::closestInRow(const uint16_t row, const int center) const {
   int best = -1;
   int bestDistance = INT_MAX;
   for (int i = 0; i < static_cast<int>(wordCount); ++i) {
     if (words[i].row != row) continue;
-    const int distance = std::abs(words[i].x + words[i].width / 2 - centerX);
+    const int distance = std::abs(alongStart(words[i]) + alongLength(words[i]) / 2 - center);
     if (distance < bestDistance) {
       bestDistance = distance;
       best = i;
@@ -287,13 +302,20 @@ bool ClipSelectionActivity::selectionContains(const int x, const int y) const {
   for (int i = std::min(rangeStart, selected); i <= std::max(rangeStart, selected); ++i) {
     const WordBox& word = words[i];
     if (word.pageOffset != currentPageOffset) continue;
+    // The word and, on the same line, the gap back to the previous one.
     int left = word.x;
     int right = word.x + word.width;
+    int top = word.y;
+    int bottom = word.y + word.height;
     if (previous && previous->row == word.row) {
       left = std::min(left, static_cast<int>(previous->x));
       right = std::max(right, previous->x + previous->width);
+      if (vertical) {
+        top = std::min(top, static_cast<int>(previous->y));
+        bottom = std::max(bottom, previous->y + previous->height);
+      }
     }
-    if (selectionGeometry::contains(Rect{left, word.y + offset, right - left, word.height}, x, y)) return true;
+    if (selectionGeometry::contains(Rect{left, top + offset, right - left, bottom - top}, x, y)) return true;
     previous = &word;
   }
   return false;
@@ -324,7 +346,8 @@ bool ClipSelectionActivity::isWithinCurrentPageEndDwellSlop(const int x, const i
 void ClipSelectionActivity::moveVertical(const int direction) {
   const int targetRow = static_cast<int>(words[selected].row) + direction;
   if (targetRow < 0 || targetRow >= rowCount) return;
-  const int next = closestInRow(static_cast<uint16_t>(targetRow), words[selected].x + words[selected].width / 2);
+  const int next = closestInRow(static_cast<uint16_t>(targetRow),
+                                alongStart(words[selected]) + alongLength(words[selected]) / 2);
   if (next >= 0 && next != selected) {
     selectIndex(next);
   }
@@ -621,6 +644,19 @@ bool ClipSelectionActivity::handleButtons(const uint8_t buttons) {
     return true;
   }
 
+  if (vertical) {
+    // Up/Down step along the column, Left/Right move between columns (the next one is to the left).
+    if (buttons & Input::INPUT_UP) {
+      selectIndex(selected - 1);
+    } else if (buttons & Input::INPUT_DOWN) {
+      selectIndex(selected + 1);
+    } else if (buttons & Input::INPUT_LEFT) {
+      moveVertical(1);
+    } else if (buttons & Input::INPUT_RIGHT) {
+      moveVertical(-1);
+    }
+    return false;
+  }
   const int next =
       selectionGeometry::horizontalIndex(selected, static_cast<int>(wordCount), buttons & Input::INPUT_LEFT,
                                          buttons & Input::INPUT_RIGHT, words[selected].isRtl);
@@ -638,6 +674,12 @@ Rect ClipSelectionActivity::handleRect(const int index, const bool start) const 
   const WordBox& word = words[index];
   const Rect safe = UITheme::getInstance().getScreenSafeArea(renderer, true, false);
   const int size = std::max(24, UITheme::getInstance().getMetrics().verticalSpacing * 2);
+  if (vertical) {
+    // Left of the column, above its first word or below its last.
+    const int y = start ? word.y + textOffset() - size : word.y + textOffset() + word.height;
+    return Rect{std::clamp(word.x - size, safe.x, safe.x + safe.width - size),
+                std::clamp(y, safe.y, safe.y + safe.height - size), size, size};
+  }
   const bool left = start != word.isRtl;
   const int edge = left ? word.x : word.x + word.width;
   return Rect{std::clamp(edge - (left ? size : 0), safe.x, safe.x + safe.width - size),
@@ -710,23 +752,38 @@ void ClipSelectionActivity::prewarmWord(const int index) const {
   }
 }
 
-void ClipSelectionActivity::ditherGapBetween(const WordBox& a, const WordBox& b, const int offsetX,
-                                             const int offset) const {
-  if (a.row != b.row || a.pageOffset != b.pageOffset) return;
+// The space between two words on the same line, along that line; empty when they touch.
+Rect ClipSelectionActivity::gapBetween(const WordBox& a, const WordBox& b) const {
+  if (a.row != b.row || a.pageOffset != b.pageOffset) return Rect{};
+  if (vertical) {
+    const int upperEnd = std::min(a.y + a.height, b.y + b.height);
+    const int lowerStart = std::max(a.y, b.y);
+    return upperEnd < lowerStart ? Rect{a.x, upperEnd, a.width, lowerStart - upperEnd} : Rect{};
+  }
   const int leftRight = std::min(a.x + a.width, b.x + b.width);
   const int rightLeft = std::max(a.x, b.x);
-  if (leftRight < rightLeft) {
-    renderer.fillRectDither(leftRight + offsetX, a.y + offset, rightLeft - leftRight, a.height, Color::LightGray);
-  }
+  return leftRight < rightLeft ? Rect{leftRight, a.y, rightLeft - leftRight, a.height} : Rect{};
+}
+
+void ClipSelectionActivity::ditherGapBetween(const WordBox& a, const WordBox& b, const int offsetX,
+                                             const int offset) const {
+  const Rect gap = gapBetween(a, b);
+  if (gap.width > 0) renderer.fillRectDither(gap.x + offsetX, gap.y + offset, gap.width, gap.height, Color::LightGray);
 }
 
 void ClipSelectionActivity::clearGapBetween(const WordBox& a, const WordBox& b, const int offsetX,
                                             const int offset) const {
-  if (a.row != b.row || a.pageOffset != b.pageOffset) return;
-  const int leftRight = std::min(a.x + a.width, b.x + b.width);
-  const int rightLeft = std::max(a.x, b.x);
-  if (leftRight < rightLeft) {
-    renderer.fillRect(leftRight + offsetX, a.y + offset, rightLeft - leftRight, a.height, false);
+  const Rect gap = gapBetween(a, b);
+  if (gap.width > 0) renderer.fillRect(gap.x + offsetX, gap.y + offset, gap.width, gap.height, false);
+}
+
+void ClipSelectionActivity::drawWordText(const WordBox& word, const int offsetX, const int offset) const {
+  if (vertical) {
+    renderer.drawTextVertical(word.fontId, word.textX + offsetX, word.textY + offset, word.text, true, word.style,
+                              word.characterSpacing);
+  } else {
+    renderer.drawText(word.fontId, word.textX + offsetX, word.textY + offset, word.text, true, word.style,
+                      BidiUtils::BidiBaseDir::AUTO, word.characterSpacing);
   }
 }
 
@@ -746,8 +803,7 @@ void ClipSelectionActivity::drawWordClean(const int index, const int offsetX, co
     clearGapBetween(word, words[index + 1], offsetX, offset);
   }
 
-  renderer.drawText(word.fontId, word.x + offsetX, word.y + offset, word.text, true, word.style,
-                    BidiUtils::BidiBaseDir::AUTO, word.characterSpacing);
+  drawWordText(word, offsetX, offset);
 }
 
 void ClipSelectionActivity::drawWordHighlight(const int index, const int firstSelected, const int lastSelected,
@@ -766,8 +822,7 @@ void ClipSelectionActivity::drawWordHighlight(const int index, const int firstSe
   }
 
   renderer.fillRectDither(word.x + offsetX, word.y + offset, word.width, word.height, Color::LightGray);
-  renderer.drawText(word.fontId, word.x + offsetX, word.y + offset, word.text, true, word.style,
-                    BidiUtils::BidiBaseDir::AUTO, word.characterSpacing);
+  drawWordText(word, offsetX, offset);
 }
 
 bool ClipSelectionActivity::renderIncremental() {
@@ -863,8 +918,7 @@ void ClipSelectionActivity::drawSelection() const {
     if (word.pageOffset != currentPageOffset) continue;
     if (previous) ditherGapBetween(*previous, word, offsetX, offset);
     renderer.fillRectDither(word.x + offsetX, word.y + offset, word.width, word.height, Color::LightGray);
-    renderer.drawText(word.fontId, word.x + offsetX, word.y + offset, word.text, true, word.style,
-                      BidiUtils::BidiBaseDir::AUTO, word.characterSpacing);
+    drawWordText(word, offsetX, offset);
     previous = &word;
   }
   if (rangeStart >= 0 && mappedInput.hasTouch()) {
@@ -897,9 +951,9 @@ void ClipSelectionActivity::render(RenderLock&&) {
   renderer.setClipRect(safe.x, safe.y, safe.width, safe.height);
   auto* fcm = renderer.getFontCacheManager();
   auto scope = fcm->createPrewarmScope();
-  pageAt(currentPageOffset).render(renderer, fontId, marginLeft + offsetX, marginTop + offset);
+  pageAt(currentPageOffset).render(renderer, fontId, marginLeft + offsetX, marginTop + offset, vertical);
   scope.endScanAndPrewarm();
-  pageAt(currentPageOffset).render(renderer, fontId, marginLeft + offsetX, marginTop + offset);
+  pageAt(currentPageOffset).render(renderer, fontId, marginLeft + offsetX, marginTop + offset, vertical);
   if (wordCount != 0) drawSelection();
   renderer.setClipRect(clip[0], clip[1], clip[2], clip[3]);
 

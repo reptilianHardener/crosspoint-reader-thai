@@ -80,7 +80,9 @@ int clippingWordFont(const GfxRenderer& renderer, const int fontId, const TextBl
 }
 
 Rect clippingWordRect(const GfxRenderer& renderer, const int fontId, const PageLine& line, const uint16_t i,
-                      const int top, const int left, const int wordWidth) {
+                      const int top, const int left, const int wordWidth, const bool vertical) {
+  // The word's box on screen. left is the page origin from pageOriginX(): on a vertical page
+  // its right edge, from which lines stack leftward while words run down them.
   const auto& block = line.getBlock();
   const int wordFont = clippingWordFont(renderer, fontId, *block, i);
   const char* text = block->wordText(i);
@@ -92,10 +94,12 @@ Rect clippingWordRect(const GfxRenderer& renderer, const int fontId, const PageL
     width = std::min(width, static_cast<int>(block->wordXpos(i + 1) - block->wordXpos(i) - skipX));
   }
   const int lineFont = TextBlock::renderFontId(renderer, block->blockFontId(fontId), fontId);
-  return Rect{left + line.xPos + block->wordXpos(i) + skipX,
-              top + line.yPos + block->getRubyShift(renderer.getFontAscenderSize(lineFont)) +
-                  block->wordYOffset(renderer, fontId, i),
-              width, renderer.getLineHeight(wordFont)};
+  const int along = line.xPos + block->wordXpos(i) + skipX;
+  const int across = line.yPos + block->getRubyShift(renderer.getFontAscenderSize(lineFont)) +
+                     block->wordYOffset(renderer, fontId, i);
+  const int lineHeight = renderer.getLineHeight(wordFont);
+  if (vertical) return Rect{left - across - lineHeight + 1, top + along, lineHeight, width};
+  return Rect{left + along, top + across, width, lineHeight};
 }
 
 int clampPercent(int percent) {
@@ -456,13 +460,6 @@ void EpubReaderActivity::openDictionaryWordSelect() {
 void EpubReaderActivity::startClipSelection(const int initialX, const int initialY,
                                             const ClipSelectionActivity::Mode mode) {
   if (!section || !epub || section->currentPage < 0 || section->currentPage >= section->pageCount) return;
-  // Selection (and so clipping and dictionary lookup) works on horizontal lines only;
-  // a tategaki page stores its words along and across vertical columns.
-  if (verticalLayout) {
-    LOG_INF("CLIP", "Text selection is not available on vertical pages");
-    requestUpdate();
-    return;
-  }
 
   const int pageNumber = section->currentPage;
   const uint16_t pageCount = section->pageCount;
@@ -506,6 +503,8 @@ void EpubReaderActivity::startClipSelection(const int initialX, const int initia
   renderer.getOrientedViewableTRBL(&marginTop, &marginRight, &marginBottom, &marginLeft);
   marginTop += SETTINGS.screenMargin;
   marginLeft += SETTINGS.screenMargin;
+  marginRight += SETTINGS.screenMargin;
+  const int pageX = pageOriginX(marginLeft, marginRight);
 
   std::string chapterTitle;
   const int tocIndex = epub->getTocIndexForSpineIndex(currentSpineIndex);
@@ -513,8 +512,8 @@ void EpubReaderActivity::startClipSelection(const int initialX, const int initia
   std::string bookTitle = epub->getTitle();
   std::string author = epub->getAuthor();
 
-  auto activity = makeUniqueNoThrow<ClipSelectionActivity>(renderer, mappedInput, std::move(pages), marginLeft,
-                                                           marginTop, initialX, initialY, mode);
+  auto activity = makeUniqueNoThrow<ClipSelectionActivity>(renderer, mappedInput, std::move(pages), pageX, marginTop,
+                                                           initialX, initialY, mode, verticalLayout);
   if (!activity) {
     LOG_ERR("CLIP", "Failed to allocate clipping selection activity");
     requestUpdate();
@@ -550,9 +549,10 @@ void EpubReaderActivity::startClipSelection(const int initialX, const int initia
       }
       int top, right, bottom, left;
       renderer.getOrientedViewableTRBL(&top, &right, &bottom, &left);
-      auto lookup = makeUniqueNoThrow<DictionaryWordSelectActivity>(renderer, mappedInput, std::move(page),
-                                                                    left + SETTINGS.screenMargin,
-                                                                    top + SETTINGS.screenMargin, clipping.text);
+      auto lookup = makeUniqueNoThrow<DictionaryWordSelectActivity>(
+          renderer, mappedInput, std::move(page),
+          pageOriginX(left + SETTINGS.screenMargin, right + SETTINGS.screenMargin), top + SETTINGS.screenMargin,
+          clipping.text, verticalLayout);
       if (!lookup) {
         LOG_ERR("CLIP", "OOM: dictionary lookup activity");
         requestUpdate();
@@ -2139,7 +2139,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
   const bool overlapRefresh = tiledGrayscale && grayscale.asyncBase && !pageHasImages;
   auto renderGrayscalePass = [&]() {
     // A4 gray planes replace the full page, including its clipping highlights.
-    if (BoardConfig::isEegoA4()) drawClippingHighlights(*page, fontId, orientedMarginTop, orientedMarginLeft);
+    if (BoardConfig::isEegoA4()) drawClippingHighlights(*page, fontId, pageY, pageX);
     if (absoluteImageGrayscale || needsTextGrayscale) {
       page->render(renderer, fontId, pageX, pageY, vertical);
     } else {
@@ -2156,7 +2156,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
     renderer.clearScreen();
   }
 
-  drawClippingHighlights(*page, fontId, orientedMarginTop, orientedMarginLeft);
+  drawClippingHighlights(*page, fontId, pageY, pageX);
   page->render(renderer, fontId, pageX, pageY, vertical);
   renderStatusBar();
   const auto tBwRender = millis();
@@ -2349,6 +2349,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
 int EpubReaderActivity::clippingAtPoint(const Page& page, const int x, const int y) const {
   int top, right, bottom, left;
   renderer.getOrientedViewableTRBL(&top, &right, &bottom, &left);
+  const int pageX = pageOriginX(left + SETTINGS.screenMargin, right + SETTINGS.screenMargin);
   const int fontId = SETTINGS.getReaderFontId();
   const uint32_t signature =
       readerRenderSpecSignature(SETTINGS.readerRenderSpec(buildViewportWidth, buildViewportHeight));
@@ -2367,7 +2368,7 @@ int EpubReaderActivity::clippingAtPoint(const Page& page, const int x, const int
       if (width <= 0) continue;
       const uint16_t index = wordIndex++;
       const Rect rect =
-          clippingWordRect(renderer, fontId, line, i, top + SETTINGS.screenMargin, left + SETTINGS.screenMargin, width);
+          clippingWordRect(renderer, fontId, line, i, top + SETTINGS.screenMargin, pageX, width, verticalLayout);
       if (x < rect.x || x >= rect.x + rect.width || y < rect.y || y >= rect.y + rect.height) continue;
       const auto range = block->wordSourceRange(i);
       for (size_t j = 0; j < CLIPPINGS.clippingCount(); ++j) {
@@ -2380,9 +2381,8 @@ int EpubReaderActivity::clippingAtPoint(const Page& page, const int x, const int
   return -1;
 }
 
-void EpubReaderActivity::drawClippingHighlights(const Page& page, const int fontId, const int orientedMarginTop,
-                                                const int orientedMarginLeft) const {
-  if (verticalLayout) return;  // clippings are only made on horizontal pages
+void EpubReaderActivity::drawClippingHighlights(const Page& page, const int fontId, const int pageTop,
+                                                const int pageLeft) const {
   if (!section || !CLIPPINGS.hasClippings() || section->currentPage < 0 || section->currentPage >= section->pageCount) {
     return;
   }
@@ -2426,6 +2426,7 @@ void EpubReaderActivity::drawClippingHighlights(const Page& page, const int font
     const auto& line = static_cast<const PageLine&>(*element);
     const auto& block = line.getBlock();
     if (!block || !block->valid()) continue;
+    // The previous highlighted word on this line, as a span along it (screen x, or y when vertical).
     bool hasPreviousHighlight = false;
     int previousHighlightX = 0;
     int previousHighlightWidth = 0;
@@ -2442,19 +2443,28 @@ void EpubReaderActivity::drawClippingHighlights(const Page& page, const int font
         continue;
       }
 
-      const Rect rect = clippingWordRect(renderer, fontId, line, i, orientedMarginTop, orientedMarginLeft, width);
-      const int x = rect.x;
-      const int y = rect.y;
-      width = rect.width;
+      const Rect rect = clippingWordRect(renderer, fontId, line, i, pageTop, pageLeft, width, verticalLayout);
+      // x/width run along the line; y/thickness across it, mapped to the screen by fillAlong.
+      const int x = verticalLayout ? rect.y : rect.x;
+      const int y = verticalLayout ? rect.x : rect.y;
+      const int thickness = renderer.getLineHeight(fontId);
+      const auto fillAlong = [&](const int start, const int length) {
+        if (verticalLayout) {
+          fillHighlight(y + rect.width - thickness, start, thickness, length);
+        } else {
+          fillHighlight(start, y, length, thickness);
+        }
+      };
+      width = verticalLayout ? rect.height : rect.width;
       if (width > 0) {
         const int highlightRight = x + width;
         const int previousHighlightRight = previousHighlightX + previousHighlightWidth;
         if (hasPreviousHighlight && previousHighlightRight < x) {
-          fillHighlight(previousHighlightRight, y, x - previousHighlightRight, renderer.getLineHeight(fontId));
+          fillAlong(previousHighlightRight, x - previousHighlightRight);
         } else if (hasPreviousHighlight && highlightRight < previousHighlightX) {
-          fillHighlight(highlightRight, y, previousHighlightX - highlightRight, renderer.getLineHeight(fontId));
+          fillAlong(highlightRight, previousHighlightX - highlightRight);
         }
-        fillHighlight(x, y, width, renderer.getLineHeight(fontId));
+        fillAlong(x, width);
         previousHighlightX = x;
         previousHighlightWidth = width;
         hasPreviousHighlight = true;

@@ -47,8 +47,8 @@ int main() {
     void renderImages(GfxRenderer&, int, int, int, bool) { assert(++order == 2); }
   };
   auto page = std::make_unique<Page>(order);
-  const int fontId = 0, orientedMarginTop = 0, orientedMarginLeft = 0;
-  // The page origin and tategaki flag the reader passes to Page::render.
+  const int fontId = 0;
+  // The page origin and tategaki flag the reader passes to Page::render and the highlights.
   const int pageX = 0, pageY = 0;
   const bool vertical = false;
   const bool absoluteImageGrayscale = false;

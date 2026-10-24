@@ -27,9 +27,10 @@ class ClipSelectionActivity final : public Activity {
     bool valid = false;
   };
 
+  // vertical: the pages are tategaki; marginLeft is then the page's right edge (see Page::render).
   ClipSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                         std::vector<std::unique_ptr<Page>> pages, int marginLeft, int marginTop, int initialX = -1,
-                        int initialY = -1, Mode mode = Mode::Clip);
+                        int initialY = -1, Mode mode = Mode::Clip, bool vertical = false);
 
   // The definition viewer retains these pages until this child exits.
   ClipSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
@@ -43,11 +44,15 @@ class ClipSelectionActivity final : public Activity {
   bool handleHomeGesture() override;
 
  private:
+  // x, y, width, height: the word's box on screen. textX, textY: where it is drawn from,
+  // the top-left corner, or on a vertical page the top of its column edge.
   struct WordBox {
     int16_t x = 0;
     int16_t y = 0;
     int16_t width = 0;
     int16_t height = 0;
+    int16_t textX = 0;
+    int16_t textY = 0;
     uint16_t row = 0;
     uint8_t pageOffset = 0;
     int8_t characterSpacing = 0;
@@ -69,7 +74,12 @@ class ClipSelectionActivity final : public Activity {
   const Page& pageAt(size_t index) const { return *(borrowedPages.empty() ? pages[index] : borrowedPages[index]); }
   bool isLookup() const { return mode != Mode::Clip; }
   int actionAt(int x, int y) const;
-  int closestInRow(uint16_t row, int centerX) const;
+  // Position along a word's line: screen x, or screen y on a vertical page.
+  int alongStart(const WordBox& word) const { return vertical ? word.y : word.x; }
+  int alongLength(const WordBox& word) const { return vertical ? word.height : word.width; }
+  int closestInRow(uint16_t row, int center) const;
+  void drawWordText(const WordBox& word, int offsetX, int offset) const;
+  Rect gapBetween(const WordBox& a, const WordBox& b) const;
   int wordAt(int x, int y) const;
   int dragWordAt(int x, int y) const;
   bool selectionContains(int x, int y) const;
@@ -104,6 +114,7 @@ class ClipSelectionActivity final : public Activity {
   const int initialX;
   const int initialY;
   const Mode mode;
+  const bool vertical = false;
   OptionPopup actionPopup;
   // ponytail: retain 16 button frames during refresh; increase only if overflow is observed.
   std::array<uint8_t, 16> pendingButtons{};

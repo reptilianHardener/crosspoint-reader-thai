@@ -143,9 +143,9 @@ void DictionaryWordSelectActivity::render(RenderLock&&) {
 
   auto* fcm = renderer.getFontCacheManager();
   auto scope = fcm->createPrewarmScope();
-  if (page) page->render(renderer, fontId, marginLeft, marginTop);
+  if (page) page->render(renderer, fontId, marginLeft, marginTop, vertical);
   scope.endScanAndPrewarm();
-  if (page) page->render(renderer, fontId, marginLeft, marginTop);
+  if (page) page->render(renderer, fontId, marginLeft, marginTop, vertical);
 
   if (popup != Popup::None) {
     GUI.drawPopup(renderer, I18N.get(popupMsg));
