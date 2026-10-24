@@ -90,6 +90,16 @@ class LibraryListActivity final : public UiTabListActivity {
   void promptDeleteBook(int entry);
   void promptDeleteBookByPath(const std::string& path, const std::string& title);
   bool collapseGroups(int bookEntry);
+  // Series tab: the list of series (groupsCollapsed, one group per series), and
+  // one series opened from it (seriesGroup >= 0) showing only its books.
+  bool buildSeriesGroups();
+  void showSeriesList();
+  void openSeries(int group);
+  void closeSeries();
+  int seriesGroupEnd(int group) const;
+  // Series name for a row of the series order, and the subtitle for a book in it.
+  bool seriesNameForRow(int row, std::string& out);
+  void formatSeriesSubtitle(const library::ClixRecord& record, const std::string& author, std::string& out);
   void expandGroup(int groupEntry);
   void restoreExpandedList();
   void selectTab(int index, bool toggleIfActive);
@@ -109,7 +119,10 @@ class LibraryListActivity final : public UiTabListActivity {
   int rowFor(int entry) const;
   // fileName, when asked for, is the on-card name the row's icon derives from
   // (the display title may come from metadata and carry no extension).
-  bool rowTextFor(int entry, std::string& title, std::string& author, std::string* fileName = nullptr);
+  // record, when asked for, receives the index record the row was read from (zeroed
+  // for pinned Recent rows).
+  bool rowTextFor(int entry, std::string& title, std::string& author, std::string* fileName = nullptr,
+                  library::ClixRecord* record = nullptr);
   uint32_t titleInitialFor(int entry);
   bool buildGroupStarts();
   int groupForBook(int bookEntry) const;
@@ -169,6 +182,16 @@ class LibraryListActivity final : public UiTabListActivity {
   uint16_t groupCount = 0;
   bool groupsCollapsed = false;
   freeink::ui::ListNav expandedNav;
+  // Open series, as an index into groupStarts; -1 shows the list of series.
+  int seriesGroup = -1;
+  // The series list is built once per index: groupStarts keeps it while the other
+  // tabs leave it alone. seriesRowTotal is the series order's length at that time.
+  bool seriesGroupsCached = false;
+  uint16_t seriesGroupTotal = 0;
+  uint16_t seriesRowTotal = 0;
+  // Header title while a series is open; stable for the render task.
+  std::string seriesTitle;
+  freeink::ui::ListNav seriesListNav;
 
   // Visible-window row storage, reused across renders (buildRows). Bounded by
   // the densest page, never by the library. Headings get their own storage:

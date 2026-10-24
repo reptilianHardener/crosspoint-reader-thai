@@ -651,12 +651,22 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss) {
   return true;
 }
 
-bool Epub::loadMetadata(std::string& title, std::string& author) {
+bool Epub::loadMetadata(std::string& title, std::string& author, SyncMetadata* package) {
   title.clear();
   author.clear();
+  if (package) *package = {};
 
   if (Txt::isTxtOrMd(filepath)) {
     title = utf8ComposeNfc(FsHelpers::getFileNameWithoutExtension(filepath));
+    return true;
+  }
+
+  // book.bin holds no package metadata (series, identifiers): read content.opf.
+  if (package) {
+    if (!readPackageMetadata(*package, &title, &author)) return false;
+    title = utf8ComposeNfc(title);
+    author = utf8ComposeNfc(author);
+    package->series = utf8ComposeNfc(package->series);
     return true;
   }
 
@@ -687,7 +697,9 @@ bool Epub::loadMetadata(std::string& title, std::string& author) {
   return true;
 }
 
-bool Epub::loadSyncMetadata(SyncMetadata& metadata) {
+bool Epub::loadSyncMetadata(SyncMetadata& metadata) { return readPackageMetadata(metadata, nullptr, nullptr); }
+
+bool Epub::readPackageMetadata(SyncMetadata& metadata, std::string* title, std::string* author) {
   metadata = {};
 
   ZipFile zip(filepath);
@@ -723,6 +735,8 @@ bool Epub::loadSyncMetadata(SyncMetadata& metadata) {
   metadata.asin = std::move(parser.asin);
   metadata.series = std::move(parser.series);
   metadata.seriesIndex = parser.seriesIndex;
+  if (title) *title = std::move(parser.title);
+  if (author) *author = std::move(parser.author);
   return true;
 }
 

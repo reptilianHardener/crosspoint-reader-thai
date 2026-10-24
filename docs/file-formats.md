@@ -629,7 +629,8 @@ Written by `lib/LibraryIndex/LibraryBuilder.cpp`, read by `LibraryIndexFile`. On
 file describing every book on the card, so the shelf can sort and search
 thousands of titles without opening any of them.
 
-Format version 2. An index written by another version fails validation on open
+Format version 3 (version 3 added the series order and the two series fields
+of the name blob). An index written by another version fails validation on open
 and is rebuilt; that is the entire migration mechanism.
 
 ### Layout
@@ -639,8 +640,16 @@ and is rebuilt; that is the entire migration mechanism.
 | Header | 0 | 64 bytes, `ClixHeader` |
 | Folders | `folderStart` | length-prefixed paths, one per folder |
 | Records | `recordStart` | `bookCount` × 128-byte `ClixRecord` |
-| Permutations | `permStart` | `bookCount` u16 author order, then `bookCount` u16 arrival order |
-| Name blob | `nameStart` | per record: path hash, name, canonical author, title, source author (see below) |
+| Permutations | `permStart` | `bookCount` u16 author order, `bookCount` u16 arrival order, then `seriesCount` u16 series order |
+| Name blob | `nameStart` | per record: path hash, name, canonical author, title, source author, series, series index (see below) |
+
+The series order lists only the books whose metadata names a series
+(`seriesCount`, stored in the header): grouped by the folded series name, then
+by series index, with unnumbered books last in title order. The builder sorts
+it before the author and arrival orders and keeps only the 2-byte result per
+series book. Its scratch is 16 bytes per series book (a 6-byte fold prefix, a
+hash of the whole fold, and the index in hundredths); if it cannot be
+allocated, `seriesCount` is 0 and the `SERIES_DEGRADED` header flag is set.
 
 The arrival permutation runs oldest first, keyed by the record's FAT
 modification time (when the file landed on the card); `firstSeen` — the
@@ -682,6 +691,8 @@ Per record, at `nameStart + nameOff`:
 [u8][author]     display author, one spelling chosen per authorKey across the library
 [u8][title]      the book's own title, or length 0 if it never gave one
 [u8][source]     cleaned author spelling before the library-wide spelling vote
+[u8][series]     series name from the book's metadata, or length 0
+[u8][index]      length 4 and a little-endian float series index, or length 0
 ```
 
 The filename must stay the first textual field and stay the filename: `readPath`

@@ -127,10 +127,10 @@ The Browse Files screen acts as a file and folder browser. The full path to the 
 
 The Library indexes up to 4,096 supported books on the SD card and shows their titles and authors without requiring you to remember their folders. Its four tabs provide different views. An arrow beside an indexed tab shows the sort direction:
 
-- **Recent** lists the ten books you opened most recently. Hold a book to remove it from this list.
-- **Added** keeps books in the order in which the Library first discovered them. Down shows newest additions first; up shows oldest first.
+- **Recent** lists the ten books you opened most recently, then the rest by when they arrived on the card. Hold a book to remove it from this list.
 - **Title** groups books by the first letter of the title. Up sorts A-Z and down sorts Z-A. Titles beginning with numbers or punctuation appear under `#`; letters from non-English scripts, including Hebrew, have their own groups.
 - **Author** groups books by author. Up sorts A-Z and down sorts Z-A.
+- **Series** lists the series named in the books' metadata, with how many books each has. Select a series to see its books in volume order; **Back** returns to the series list. Books with no volume number come last. Series has no sort direction, and a search from this tab looks only through books that are in a series. Needs **Use book metadata** turned on.
 
 On a button-only device:
 
@@ -140,9 +140,9 @@ On a button-only device:
 - While the tabs are focused, hold **Confirm** to open Search.
 - In the Title or Author views, hold **Confirm** on a book to collapse the list to its letter or author groups. The matching group remains selected. Press **Confirm** to enter a group, or **Back** to restore the exact book and position you came from.
 
-On a touch device, tap tabs, books, and the Search icon directly. Tap an active indexed tab again to reverse its sort direction. Swipe to scroll. Long-press a book in the Recent view to remove it from the list. Long-press a book in a Title or Author view to collapse to the group list, then tap a group to expand it. The **Added** view is not grouped; tapping or long-pressing a book opens it.
+On a touch device, tap tabs, books, and the Search icon directly. Tap an active indexed tab again to reverse its sort direction. Swipe to scroll. Long-press a book in the Recent view to remove it from the list. Long-press a book in a Title or Author view to collapse to the group list, then tap a group to expand it. In the Series view, tap a series to open it; long-press a book inside a series to delete it.
 
-The index is created automatically the first time the Library is opened. To pick up later file changes or updated metadata, use **Settings → System → Rebuild library index**. The **Use book metadata** setting controls whether the index reads titles and authors stored inside books.
+The index is created automatically the first time the Library is opened. To pick up later file changes or updated metadata, use **Settings → System → Rebuild library index**. The **Use book metadata** setting controls whether the index reads titles, authors, and series stored inside books.
 
 ### 3.5 File Transfer Screen
 
@@ -342,7 +342,7 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
 
 - **Clear Reading Cache** (**Settings → Reader**): Clear the internal SD card cache.
 
-- **Use book metadata**: Read the title and author stored inside each book when the Library index is rebuilt. When disabled or unavailable, the Library uses the filename.
+- **Use book metadata**: Read the title, author, and series stored inside each book when the Library index is rebuilt. When disabled or unavailable, the Library uses the filename.
 
 - **Rebuild library index**: Rescan the SD card for books while preserving the arrival history of books already in the index.
 

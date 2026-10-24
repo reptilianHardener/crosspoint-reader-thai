@@ -56,6 +56,7 @@ struct BuildStats {
   bool indexReplaced = false;
   bool ranksDegraded = false;
   bool dedupDegraded = false;
+  bool seriesDegraded = false;  // books name a series, but the series order could not be built
 };
 
 // Walk `rootPath`, write `/.crosspoint/library.idx`, and report what happened.

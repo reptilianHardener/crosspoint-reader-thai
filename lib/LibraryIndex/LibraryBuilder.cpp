@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
+#include <cmath>
+#include <optional>
 
 #include "LibraryIndexFile.h"
 #include "LibraryText.h"
@@ -41,6 +43,18 @@ constexpr size_t STAGE_NAME_BYTES = 255;
 constexpr size_t STAGE_AUTHOR_BYTES = 128;
 // A folder path is stored behind one length byte in the folder section.
 constexpr size_t FOLDER_PATH_BYTES = 255;
+// Series sort fields of a staged book. key is a prefix of the folded series name
+// and hash covers the whole fold, so two series sharing a prefix stay apart.
+// volume is the series index in hundredths, NO_SERIES_VOLUME when absent.
+constexpr uint32_t NO_SERIES_VOLUME = 0xFFFFFFFF;
+struct SeriesStage {
+  uint8_t len;  // stored series name length; 0 = not in a series
+  uint8_t hasIndex;
+  char key[6];
+  uint32_t hash;
+  uint32_t volume;
+};
+
 struct StagedEntry {
   ClixRecord record;
   uint64_t pathHash;
@@ -56,8 +70,32 @@ struct StagedEntry {
   // title on the other.
   uint8_t titleLen;
   char title[STAGE_NAME_BYTES];
+  // Series from the book's metadata. The sort fields sit together so the series
+  // sort reads them in one go.
+  SeriesStage seriesSort;
+  char series[STAGE_AUTHOR_BYTES];
+  float seriesIndex;
 };
 constexpr size_t STAGE_STRIDE = sizeof(StagedEntry);
+
+// Series sort element: series key, then position in the series, then title order.
+// No larger than SortKey's footprint after padding, so it never needs a bigger
+// block than the title and author sorts.
+struct SeriesSortKey {
+  uint32_t hash;
+  uint32_t volume;
+  char key[sizeof(SeriesStage::key)];
+  uint16_t ordinal;
+};
+static_assert(sizeof(SeriesSortKey) <= 16, "series sort scratch is the largest per-series-book cost");
+
+bool seriesKeyLess(const SeriesSortKey& a, const SeriesSortKey& b) {
+  const int cmp = memcmp(a.key, b.key, sizeof(a.key));
+  if (cmp != 0) return cmp < 0;
+  if (a.hash != b.hash) return a.hash < b.hash;
+  if (a.volume != b.volume) return a.volume < b.volume;
+  return a.ordinal < b.ordinal;
+}
 
 // Sort array element. Holding a 12-byte key prefix rather than the whole fold
 // keeps this at 14 bytes per book; ties fall back to the ordinal, so the order
@@ -263,6 +301,7 @@ struct WalkState {
   PriorEntry* prior = nullptr;
   uint16_t priorCount = 0;
   uint16_t reused = 0;
+  uint16_t seriesBooks = 0;  // staged books with a series
   uint32_t serviceUnits = 0;
 };
 
@@ -296,6 +335,9 @@ int findPrior(WalkState& st, const uint64_t pathHash) {
   // and a name pulled out of one by pattern is a guess wearing a fact's clothes.
   std::string title = stemOf(name);
   std::string author;
+  Epub::SyncMetadata package;
+  std::string& series = package.series;
+  std::optional<float>& seriesIndex = package.seriesIndex;
   bool titleFromBook = false;
   bool authorFromBook = false;
 
@@ -328,6 +370,12 @@ int findPrior(WalkState& st, const uint64_t pathHash) {
       st.failed = true;
       return false;
     }
+    if (!st.previous->readSeries(priorRecord, series) && st.previous->ioFailed()) {
+      st.failed = true;
+      return false;
+    }
+    float previousIndex = 0;
+    if (!series.empty() && st.previous->readSeriesIndex(priorRecord, previousIndex)) seriesIndex = previousIndex;
     entry.record = priorRecord;
     authorFromBook = !author.empty();
     if (hasBookTitle) {
@@ -338,9 +386,9 @@ int findPrior(WalkState& st, const uint64_t pathHash) {
     st.stats->metadataReused++;
   }
 
-  // Prefer the reader's existing cache. For an unopened book, loadMetadata()
-  // reuses the same EPUB parser but stops before the manifest, so this never
-  // builds spine, TOC, CSS, cover, or section caches during the library walk.
+  // Asking for the series makes loadMetadata() parse content.opf even when the
+  // reader has a cache (book.bin keeps no series). The parse stops at the end of
+  // <metadata>, so it never builds spine, TOC, CSS, cover, or section caches.
   if (!reuseMetadata && extractionExpected) {
     st.stats->parsed++;
     std::string bookTitle;
@@ -356,7 +404,7 @@ int findPrior(WalkState& st, const uint64_t pathHash) {
       }
     } else {
       Epub epub(fullPath, CACHE_DIR);
-      loaded = epub.loadMetadata(bookTitle, author);
+      loaded = epub.loadMetadata(bookTitle, author, &package);
     }
     if (loaded) {
       entry.record.metadataStatus = CLIX_METADATA_EXTRACTED;
@@ -423,6 +471,25 @@ int findPrior(WalkState& st, const uint64_t pathHash) {
   const std::string displayAuthor = cleanPersonName(author);
   entry.authorLen = static_cast<uint8_t>(std::min(displayAuthor.size(), STAGE_AUTHOR_BYTES));
   memcpy(entry.author, displayAuthor.data(), entry.authorLen);
+
+  // Keyed on the name as stored, so a book reused from the previous index (which
+  // holds the cut name) sorts with a freshly parsed one of the same series.
+  series.resize(static_cast<size_t>(
+      utf8SafeTruncateBuffer(series.data(), static_cast<int>(std::min(series.size(), STAGE_AUTHOR_BYTES)))));
+  const std::string seriesFold = fold(series);
+  if (!seriesFold.empty()) {
+    SeriesStage& s = entry.seriesSort;
+    s.len = static_cast<uint8_t>(series.size());
+    memcpy(entry.series, series.data(), s.len);
+    s.hasIndex = seriesIndex.has_value() ? 1 : 0;
+    entry.seriesIndex = seriesIndex.value_or(0.0f);
+    // Clamped as a float first, so lround never sees a value outside its range.
+    s.volume = s.hasIndex ? static_cast<uint32_t>(std::llround(std::clamp(*seriesIndex * 100.0f, 0.0f, 4.0e9f)))
+                          : NO_SERIES_VOLUME;
+    memcpy(s.key, seriesFold.data(), std::min(seriesFold.size(), sizeof(s.key)));
+    s.hash = fnv1a32(seriesFold.data(), seriesFold.size());
+    st.seriesBooks++;
+  }
 
   st.stageOut->write(&entry, STAGE_STRIDE);
   st.books++;
@@ -561,7 +628,47 @@ void walk(WalkState& st, const std::string& path, const int depth) {
 // truth.
 uint32_t blobBytesFor(const StagedEntry& entry, const StagedEntry& canonical) {
   return sizeof(entry.pathHash) + entry.record.nameLen + 1u + canonical.authorLen + 1u + entry.titleLen + 1u +
-         entry.authorLen;
+         entry.authorLen + 1u + entry.seriesSort.len + 1u +
+         (entry.seriesSort.hasIndex ? sizeof(entry.seriesIndex) : 0u);
+}
+
+// Title-order ordinals of the books in a series, grouped by series and ordered by
+// series index. Built before the other sorts so only the compact result (2 bytes
+// per series book) is held while they run. False on an allocation or read
+// failure; the index is then written without a series order.
+template <typename ReadStage>
+bool buildSeriesOrder(const uint16_t n, const uint16_t* order, const uint16_t staged, ReadStage& readStageAt,
+                      std::unique_ptr<uint16_t[]>& seriesOrder, uint16_t& seriesCount, uint32_t& serviceUnits) {
+  seriesCount = 0;
+  if (staged == 0) return true;
+
+  auto keys = makeUniqueNoThrow<SeriesSortKey[]>(staged);
+  seriesOrder = makeUniqueNoThrow<uint16_t[]>(staged);
+  if (!keys || !seriesOrder) {
+    LOG_ERR("LIBIDX", "OOM: series order for %u books", static_cast<unsigned>(staged));
+    seriesOrder.reset();
+    return false;
+  }
+  uint16_t filled = 0;
+  for (uint16_t i = 0; i < n && filled < staged; i++) {
+    serviceBuilder(serviceUnits);
+    SeriesStage stage{};
+    if (!readStageAt(static_cast<uint64_t>(order[i]) * STAGE_STRIDE + offsetof(StagedEntry, seriesSort), &stage,
+                     sizeof(stage)))
+      return false;
+    if (stage.len == 0) continue;
+    SeriesSortKey& key = keys[filled++];
+    memcpy(key.key, stage.key, sizeof(key.key));
+    key.hash = stage.hash;
+    key.volume = stage.volume;
+    key.ordinal = i;
+  }
+  delay(1);
+  std::sort(keys.get(), keys.get() + filled, seriesKeyLess);
+  delay(1);
+  for (uint16_t k = 0; k < filled; k++) seriesOrder[k] = keys[k].ordinal;
+  seriesCount = filled;
+  return true;
 }
 
 bool emitIndex(const char* folderStagePath, WalkState& st, const uint16_t* order, const uint16_t* resolvedFirstSeen,
@@ -631,6 +738,21 @@ bool emitIndex(const char* folderStagePath, WalkState& st, const uint16_t* order
     }
     return true;
   };
+
+  // The series order is sorted first and only its result kept, so its scratch is
+  // gone before the author and arrival sorts allocate theirs.
+  std::unique_ptr<uint16_t[]> seriesOrder;
+  uint16_t seriesCount = 0;
+  if (coreSortsAvailable &&
+      !buildSeriesOrder(n, order, st.seriesBooks, readStageAt, seriesOrder, seriesCount, serviceUnits)) {
+    seriesOrder.reset();
+    seriesCount = 0;
+    stats.seriesDegraded = true;
+  } else if (!coreSortsAvailable && st.seriesBooks > 0) {
+    stats.seriesDegraded = true;
+  }
+  header.seriesCount = seriesCount;
+  layoutSections(header, st.folderBytes, 0);
 
   // Header placeholder; rewritten below once the sorts have run.
   put(&header, sizeof(header));
@@ -991,6 +1113,10 @@ bool emitIndex(const char* folderStagePath, WalkState& st, const uint16_t* order
     const uint16_t ordinal = arrivalOrder[k];
     put(&ordinal, sizeof(ordinal));
   }
+  for (uint16_t k = 0; k < seriesCount; k++) {
+    serviceBuilder(serviceUnits);
+    put(&seriesOrder[k], sizeof(uint16_t));
+  }
   padTo(header.nameStart);
 
   uint32_t blobWritten = 0;
@@ -1008,6 +1134,11 @@ bool emitIndex(const char* folderStagePath, WalkState& st, const uint16_t* order
     if (entry.titleLen > 0) put(entry.title, entry.titleLen);
     put(&entry.authorLen, 1);
     if (entry.authorLen > 0) put(entry.author, entry.authorLen);
+    put(&entry.seriesSort.len, 1);
+    if (entry.seriesSort.len > 0) put(entry.series, entry.seriesSort.len);
+    const uint8_t indexLen = entry.seriesSort.hasIndex ? sizeof(entry.seriesIndex) : 0;
+    put(&indexLen, 1);
+    if (indexLen > 0) put(&entry.seriesIndex, indexLen);
     blobWritten += blobBytesFor(entry, canonical);
   }
   header.nameLen = blobWritten;
@@ -1020,8 +1151,9 @@ bool emitIndex(const char* folderStagePath, WalkState& st, const uint16_t* order
   const uint32_t written = static_cast<uint32_t>(outBuffer.position());
   if (!outBuffer.flush()) ioFailed = true;
 
-  header.flags =
-      (stats.ranksDegraded ? CLIX_FLAG_RANKS_DEGRADED : 0) | (stats.dedupDegraded ? CLIX_FLAG_DEDUP_DEGRADED : 0);
+  header.flags = (stats.ranksDegraded ? CLIX_FLAG_RANKS_DEGRADED : 0) |
+                 (stats.dedupDegraded ? CLIX_FLAG_DEDUP_DEGRADED : 0) |
+                 (stats.seriesDegraded ? CLIX_FLAG_SERIES_DEGRADED : 0);
 
   if (!out.seekSet(0)) {
     ioFailed = true;

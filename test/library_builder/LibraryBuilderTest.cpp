@@ -452,3 +452,106 @@ TEST_F(LibraryBuilderTest, SortAllocationFailureProducesValidDegradedIndex) {
   ASSERT_TRUE(index.open(INDEX));
   EXPECT_EQ(index.bookCount(), 513);
 }
+
+TEST_F(LibraryBuilderTest, SeriesOrderGroupsBySeriesThenVolume) {
+  fake::add("/c.epub");
+  fake::add("/d.epub");
+  // a.epub and b.epub (from SetUp) are part of the same series, out of order;
+  // d.epub is in a second series; c.epub is in none.
+  bookMetadata["/a.epub"] = {"Moon Volume Two", "Writer", true, "Moon", 2.0f};
+  bookMetadata["/b.epub"] = {"Moon Volume One", "Writer", true, "Moon", 1.0f};
+  bookMetadata["/c.epub"] = {"Standalone", "Writer", true};
+  bookMetadata["/d.epub"] = {"Arrow", "Writer", true, "Arrows", 1.5f};
+  initial();
+
+  LibraryIndexFile index;
+  ASSERT_TRUE(index.open(INDEX));
+  ASSERT_EQ(index.seriesCount(), 3u);
+  EXPECT_EQ(index.rowCount(SortOrder::Series), 3u);
+  EXPECT_EQ(pathAt(index, SortOrder::Series, 0), "/d.epub");
+  EXPECT_EQ(pathAt(index, SortOrder::Series, 1), "/b.epub");
+  EXPECT_EQ(pathAt(index, SortOrder::Series, 2), "/a.epub");
+  EXPECT_EQ(index.ordinalForRow(SortOrder::Series, 3), 0xFFFF);
+
+  ClixRecord record{};
+  ASSERT_TRUE(index.readRecord(index.ordinalForRow(SortOrder::Series, 0), record));
+  std::string series;
+  float volume = 0;
+  ASSERT_TRUE(index.readSeries(record, series));
+  EXPECT_EQ(series, "Arrows");
+  ASSERT_TRUE(index.readSeriesIndex(record, volume));
+  EXPECT_FLOAT_EQ(volume, 1.5f);
+}
+
+TEST_F(LibraryBuilderTest, UnchangedRebuildKeepsSeries) {
+  bookMetadata["/a.epub"] = {"Moon Volume Two", "Writer", true, "Moon", 2.0f};
+  initial();
+  fake::parses = 0;
+
+  ASSERT_TRUE(buildLibraryIndex("/", stats, true));
+  EXPECT_EQ(fake::parses, 0u);
+
+  LibraryIndexFile index;
+  ASSERT_TRUE(index.open(INDEX));
+  ASSERT_EQ(index.seriesCount(), 1u);
+  EXPECT_EQ(pathAt(index, SortOrder::Series, 0), "/a.epub");
+}
+
+TEST_F(LibraryBuilderTest, LongSeriesNameKeepsVolumeOrderAcrossReuse) {
+  // Longer than the 128 bytes stored, so reused books carry the cut name.
+  const std::string longName(200, 's');
+  bookMetadata["/a.epub"] = {"Volume Three", "Writer", true, longName, 3.0f};
+  bookMetadata["/b.epub"] = {"Volume Two", "Writer", true, longName, 2.0f};
+  initial();
+
+  // A new first volume is parsed fresh while the other two are reused.
+  fake::add("/c.epub");
+  bookMetadata["/c.epub"] = {"Volume One", "Writer", true, longName, 1.0f};
+  ASSERT_TRUE(buildLibraryIndex("/", stats, true));
+
+  LibraryIndexFile index;
+  ASSERT_TRUE(index.open(INDEX));
+  ASSERT_EQ(index.seriesCount(), 3u);
+  EXPECT_EQ(pathAt(index, SortOrder::Series, 0), "/c.epub");
+  EXPECT_EQ(pathAt(index, SortOrder::Series, 1), "/b.epub");
+  EXPECT_EQ(pathAt(index, SortOrder::Series, 2), "/a.epub");
+}
+
+TEST_F(LibraryBuilderTest, LargeSeriesIndexesKeepVolumeOrder) {
+  fake::add("/c.epub");
+  // Title order (A, B, C) is the reverse of volume order.
+  bookMetadata["/a.epub"] = {"A", "Writer", true, "Long Run", 3000.0f};
+  bookMetadata["/b.epub"] = {"B", "Writer", true, "Long Run", 1000.0f};
+  bookMetadata["/c.epub"] = {"C", "Writer", true, "Long Run", 700.0f};
+  initial();
+
+  LibraryIndexFile index;
+  ASSERT_TRUE(index.open(INDEX));
+  ASSERT_EQ(index.seriesCount(), 3u);
+  EXPECT_EQ(pathAt(index, SortOrder::Series, 0), "/c.epub");
+  EXPECT_EQ(pathAt(index, SortOrder::Series, 1), "/b.epub");
+  EXPECT_EQ(pathAt(index, SortOrder::Series, 2), "/a.epub");
+}
+
+TEST_F(LibraryBuilderTest, SeriesAllocationFailureMarksIndexSeriesDegraded) {
+  // Fail each allocation in turn until one lands on the series sort.
+  bool sawSeriesFailure = false;
+  for (int attempt = 0; attempt < 32 && !sawSeriesFailure; attempt++) {
+    fake::reset();
+    bookMetadata.clear();
+    fake::add("/a.epub");
+    fake::add("/b.epub");
+    bookMetadata["/a.epub"] = {"Two", "Writer", true, "Moon", 2.0f};
+    bookMetadata["/b.epub"] = {"One", "Writer", true, "Moon", 1.0f};
+    fake::failAlloc = attempt;
+    if (!buildLibraryIndex("/", stats, true) || !stats.seriesDegraded || stats.ranksDegraded) continue;
+    sawSeriesFailure = true;
+
+    LibraryIndexFile index;
+    ASSERT_TRUE(index.open(INDEX));
+    EXPECT_EQ(index.bookCount(), 2u);
+    EXPECT_EQ(index.seriesCount(), 0u);
+    EXPECT_TRUE(index.seriesDegraded());
+  }
+  EXPECT_TRUE(sawSeriesFailure);
+}

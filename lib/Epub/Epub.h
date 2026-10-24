@@ -50,6 +50,8 @@ class Epub {
   bool parseContentOpf(BookMetadataCache::BookMetadata& bookMetadata, bool writeSpineEntries = true,
                        bool metadataOnly = false, ZipFile* sharedZip = nullptr);
   bool generateThumbBmpForCover(int height, const std::string& coverImageHref) const;
+  // Metadata-only content.opf parse; title and author are optional outputs.
+  bool readPackageMetadata(SyncMetadata& metadata, std::string* title, std::string* author);
   bool openProtection();
   bool parseTocNcxFile() const;
   bool parseTocNavFile() const;
@@ -61,7 +63,10 @@ class Epub {
   ~Epub() = default;
   std::string& getBasePath() { return contentBasePath; }
   bool load(bool buildIfMissing = true, bool skipLoadingCss = false);
-  bool loadMetadata(std::string& title, std::string& author);
+  // Title and author for the library, from book.bin when cached. Passing `package`
+  // (series, identifiers) skips book.bin, which does not keep them, and parses
+  // content.opf instead.
+  bool loadMetadata(std::string& title, std::string& author, SyncMetadata* package = nullptr);
   bool loadSyncMetadata(SyncMetadata& metadata);
   bool clearCache() const;
   void setupCacheDir() const;

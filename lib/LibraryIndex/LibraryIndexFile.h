@@ -25,6 +25,9 @@ enum class SortOrder : uint8_t {
   TitleDesc,
   AuthorAsc,
   AuthorDesc,
+  // Only the books that belong to a series: grouped by series name, each series
+  // in series-index order. One direction only, so volumes always run upward.
+  Series,
 };
 
 // One book to locate in the index: the complete-path hash (clixPathHash) is
@@ -57,8 +60,12 @@ class LibraryIndexFile {
   ClixValidity validity() const { return lastValidity; }
   const ClixHeader& header() const { return head; }
   uint16_t bookCount() const { return opened ? head.bookCount : 0; }
+  uint16_t seriesCount() const { return opened ? head.seriesCount : 0; }
+  // Rows `order` has: every book, or only the books in a series.
+  uint16_t rowCount(SortOrder order) const;
   bool ranksDegraded() const { return opened && (head.flags & CLIX_FLAG_RANKS_DEGRADED) != 0; }
   bool dedupDegraded() const { return opened && (head.flags & CLIX_FLAG_DEDUP_DEGRADED) != 0; }
+  bool seriesDegraded() const { return opened && (head.flags & CLIX_FLAG_SERIES_DEGRADED) != 0; }
 
   // Record ordinal of the row at display position `row` in `order`. Returns
   // 0xFFFF when out of range, which callers treat as "no such row" rather than
@@ -88,6 +95,11 @@ class LibraryIndexFile {
   // Cleaned author spelling before the library-wide spelling vote. Empty is a
   // valid value, so success is independent of `out.empty()`.
   bool readSourceAuthor(const ClixRecord& record, std::string& out);
+
+  // Series the book belongs to, from its metadata. False when it has none.
+  bool readSeries(const ClixRecord& record, std::string& out);
+  // Position in the series (1, 2, 2.5...). False when the book gives none.
+  bool readSeriesIndex(const ClixRecord& record, float& out);
 
   // Absolute path of the book, rebuilt from its folder record.
   bool readPath(const ClixRecord& record, std::string& out);

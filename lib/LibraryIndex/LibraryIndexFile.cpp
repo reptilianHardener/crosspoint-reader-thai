@@ -5,6 +5,7 @@
 #include <Memory.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 #include "LibraryText.h"
@@ -60,11 +61,21 @@ bool LibraryIndexFile::readAt(const uint32_t offset, void* dst, const size_t len
   return true;
 }
 
+uint16_t LibraryIndexFile::rowCount(const SortOrder order) const {
+  if (!opened) return 0;
+  return order == SortOrder::Series ? head.seriesCount : head.bookCount;
+}
+
 uint16_t LibraryIndexFile::ordinalForRow(const SortOrder order, const uint16_t row) {
   constexpr uint16_t NONE = 0xFFFF;
-  if (!opened || row >= head.bookCount) return NONE;
+  if (!opened || row >= rowCount(order)) return NONE;
 
   switch (order) {
+    case SortOrder::Series: {
+      uint16_t ordinal = NONE;
+      return readAt(seriesOrderOffset(head, row), &ordinal, sizeof(ordinal)) && ordinal < head.bookCount ? ordinal
+                                                                                                          : NONE;
+    }
     case SortOrder::TitleAsc:
       // The record section IS in title order, so this costs no storage and no
       // read at all.
@@ -229,6 +240,18 @@ bool LibraryIndexFile::readTitle(const ClixRecord& record, std::string& out) {
 
 bool LibraryIndexFile::readSourceAuthor(const ClixRecord& record, std::string& out) {
   return readBlobField(record, 2, out);
+}
+
+bool LibraryIndexFile::readSeries(const ClixRecord& record, std::string& out) {
+  return readBlobField(record, 3, out) && !out.empty();
+}
+
+bool LibraryIndexFile::readSeriesIndex(const ClixRecord& record, float& out) {
+  std::string bytes;
+  if (!readBlobField(record, 4, bytes) || bytes.size() != sizeof(out)) return false;
+  memcpy(&out, bytes.data(), sizeof(out));
+  // The card can rot: a NaN would break the builder's sort ordering on reuse.
+  return std::isfinite(out);
 }
 
 bool LibraryIndexFile::readPath(const ClixRecord& record, std::string& out) {
