@@ -110,12 +110,12 @@ void SdCardFontSystem::begin(GfxRenderer& renderer) {
         setupUiFallbacks(renderer);
         LOG_DBG("SDFS", "Loaded SD card font family: %s", SETTINGS.sdFontFamilyName);
       } else {
-        LOG_ERR("SDFS", "Failed to load SD font family: %s (clearing)", SETTINGS.sdFontFamilyName);
-        SETTINGS.clearSdFontFamily();
+        // The selection stays saved: the reader draws with the built-in family until the
+        // font loads (getReaderFontId falls through when the resolver finds nothing).
+        LOG_ERR("SDFS", "Failed to load SD font family: %s (using built-in for now)", SETTINGS.sdFontFamilyName);
       }
     } else {
-      LOG_DBG("SDFS", "SD font family not found on card: %s (clearing)", SETTINGS.sdFontFamilyName);
-      SETTINGS.clearSdFontFamily();
+      LOG_INF("SDFS", "SD font family not on card: %s (using built-in until it is)", SETTINGS.sdFontFamilyName);
     }
   }
 
@@ -171,9 +171,8 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
   if (familyMatches) {
     const auto* family = registry_.findFamily(wantedFamily);
     if (!family) {
-      LOG_DBG("SDFS", "SD font family disappeared: %s (clearing)", wantedFamily);
+      LOG_INF("SDFS", "SD font family disappeared: %s (using built-in until it returns)", wantedFamily);
       unloadCpfonts(renderer);
-      SETTINGS.clearSdFontFamily();
       return;
     }
     const auto* selected = family->findNearestSize(SETTINGS.fontPointSize);
@@ -197,12 +196,10 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
       setupUiFallbacks(renderer);
       LOG_DBG("SDFS", "Loaded SD font family: %s", wantedFamily);
     } else {
-      LOG_ERR("SDFS", "Failed to load SD font family: %s (clearing)", wantedFamily);
-      SETTINGS.clearSdFontFamily();
+      LOG_ERR("SDFS", "Failed to load SD font family: %s (using built-in for now)", wantedFamily);
     }
   } else {
-    LOG_DBG("SDFS", "SD font family not found: %s (clearing)", wantedFamily);
-    SETTINGS.clearSdFontFamily();
+    LOG_INF("SDFS", "SD font family not found: %s (using built-in until it is)", wantedFamily);
   }
 }
 

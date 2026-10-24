@@ -9,7 +9,9 @@
 #include <Logging.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
+#include <cstring>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -130,11 +132,6 @@ TileLayout computeLayout(const GfxRenderer& renderer, const Rect rect, const boo
   return l;
 }
 
-TileLayout layoutFor(const GfxRenderer& renderer, const Rect rect, const bool withCard) {
-  return computeLayout(renderer, rect, withCard, SETTINGS.homeTopImage[0] != '\0',
-                       SETTINGS.homeMiddleImage[0] != '\0');
-}
-
 Rect tileRect(const GfxRenderer& renderer) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   return Rect{0, metrics.homeTopPadding, renderer.getScreenWidth(), metrics.homeCoverTileHeight};
@@ -145,17 +142,60 @@ Rect slotRect(const TileLayout& l, const int i) {
               l.coverHeight};
 }
 
-// A JPG banner is decoded once into a BMP sized for its box under /.crosspoint. The
-// name keys on the source path and size, so replacing the image converts it again.
-bool jpgBannerBmpPath(const char* jpgPath, const Rect box, std::string& bmpPath) {
+constexpr char kCacheDir[] = "/.crosspoint";
+constexpr char kCachePrefix[] = "banner_";
+
+// Removes converted banners in kCacheDir that `stale` selects by file name.
+template <typename Stale>
+void removeConvertedBanners(Stale&& stale) {
+  std::vector<std::string> doomed;
+  {
+    HalFile dir = Storage.open(kCacheDir);
+    if (!dir || !dir.isDirectory()) return;
+    char name[64];
+    for (HalFile entry = dir.openNextFile(); entry; entry = dir.openNextFile()) {
+      if (entry.isDirectory()) continue;
+      entry.getName(name, sizeof(name));
+      if (strncmp(name, kCachePrefix, sizeof(kCachePrefix) - 1) == 0 && stale(name)) {
+        doomed.emplace_back(std::string(kCacheDir) + "/" + name);
+      }
+    }
+  }
+  for (const auto& path : doomed) {
+    if (!Storage.remove(path.c_str())) LOG_ERR("HOME", "Could not remove %s", path.c_str());
+  }
+}
+
+// banner_<8 hex>_... : the 2.0.0.1 naming, which recorded no slot.
+bool isUnslottedBanner(const char* name) {
+  const char* p = name + sizeof(kCachePrefix) - 1;
+  for (int i = 0; i < 8; i++) {
+    if (!isxdigit(static_cast<unsigned char>(p[i]))) return false;
+  }
+  return p[8] == '_';
+}
+
+// A JPG banner is decoded once into a BMP sized for its box under /.crosspoint, named
+// banner_<slot>_<hash>_<w>x<h>.bmp. The hash keys on the source path and size, so a
+// replaced image converts again; conversions of the slot's earlier images are deleted.
+bool jpgBannerBmpPath(const char* slot, const char* jpgPath, const Rect box, std::string& bmpPath) {
   HalFile jpg;
   if (!Storage.openFileForRead("HOME", jpgPath, jpg)) return false;
   const std::string key = std::string(jpgPath) + ":" + std::to_string(jpg.fileSize());
+  const unsigned hash = static_cast<unsigned>(std::hash<std::string>{}(key));
   char name[80];
-  snprintf(name, sizeof(name), "/.crosspoint/banner_%08x_%dx%d.bmp",
-           static_cast<unsigned>(std::hash<std::string>{}(key)), box.width, box.height);
+  snprintf(name, sizeof(name), "%s/%s%s_%08x_%dx%d.bmp", kCacheDir, kCachePrefix, slot, hash, box.width, box.height);
   bmpPath = name;
   if (Storage.exists(name)) return true;
+
+  char keep[32];  // this image's prefix: its other box sizes (orientations) stay
+  snprintf(keep, sizeof(keep), "%s%s_%08x_", kCachePrefix, slot, hash);
+  char slotPrefix[24];
+  snprintf(slotPrefix, sizeof(slotPrefix), "%s%s_", kCachePrefix, slot);
+  removeConvertedBanners([&](const char* file) {
+    if (isUnslottedBanner(file)) return true;
+    return strncmp(file, slotPrefix, strlen(slotPrefix)) == 0 && strncmp(file, keep, strlen(keep)) != 0;
+  });
 
   HalFile bmp;
   if (!Storage.openFileForWrite("HOME", bmpPath, bmp)) return false;
@@ -171,10 +211,12 @@ bool jpgBannerBmpPath(const char* jpgPath, const Rect box, std::string& bmpPath)
 
 // Draws a user BMP or JPG centred in `box`, scaled down to fit (never up). Returns the
 // drawn rect, or an empty one when the file is missing or unreadable.
-Rect drawImageFitted(const GfxRenderer& renderer, const char* path, const Rect box) {
+Rect drawImageFitted(const GfxRenderer& renderer, const char* slot, const char* path, const Rect box) {
   if (path[0] == '\0' || box.width <= 0 || box.height <= 0) return Rect{};
   std::string bmpPath = path;
-  if (FsHelpers::hasJpgExtension(std::string_view{path}) && !jpgBannerBmpPath(path, box, bmpPath)) return Rect{};
+  if (FsHelpers::hasJpgExtension(std::string_view{path}) && !jpgBannerBmpPath(slot, path, box, bmpPath)) {
+    return Rect{};
+  }
   HalFile file;
   if (!Storage.openFileForRead("HOME", bmpPath, file)) return Rect{};
   Bitmap bitmap(file, true);
@@ -276,16 +318,40 @@ const uint8_t* iconFor(const UIIcon icon) {
       return nullptr;
   }
 }
+// Worth laying out: the file is there and, for a BMP, its header reads. A JPG is only
+// decoded when drawn; drawRecentBookCover drops it then if that fails.
+bool imageUsable(const char* path) {
+  if (path[0] == '\0' || !Storage.exists(path)) return false;
+  if (FsHelpers::hasJpgExtension(std::string_view{path})) return true;
+  HalFile file;
+  if (!Storage.openFileForRead("HOME", path, file)) return false;
+  Bitmap bitmap(file);
+  return bitmap.parseHeaders() == BmpReaderError::Ok && bitmap.getWidth() > 0 && bitmap.getHeight() > 0;
+}
 }  // namespace
 
+void BannerTheme::onHomeEnter() const {
+  cardBookIndex = 0;
+  topUsable = imageUsable(SETTINGS.homeTopImage);
+  middleUsable = imageUsable(SETTINGS.homeMiddleImage);
+}
+
+void BannerTheme::forgetConvertedImages(const char* slot) {
+  char slotPrefix[24];
+  snprintf(slotPrefix, sizeof(slotPrefix), "%s%s_", kCachePrefix, slot);
+  removeConvertedBanners([&](const char* file) {
+    return isUnslottedBanner(file) || strncmp(file, slotPrefix, strlen(slotPrefix)) == 0;
+  });
+}
+
 int BannerTheme::homeCoverThumbHeight(const GfxRenderer& renderer) const {
-  const TileLayout l = layoutFor(renderer, tileRect(renderer), true);
+  const TileLayout l = computeLayout(renderer, tileRect(renderer), true, topUsable, middleUsable);
   // Thumbs fit a (0.6h, h) box; ask for one wide enough to fill the slot and crop the height.
   return std::max(l.coverHeight, l.slotWidth * 5 / 3 + 2);
 }
 
 bool BannerTheme::homeCoverBand(const GfxRenderer& renderer, const Rect rect, int& top, int& bottom) const {
-  const TileLayout l = layoutFor(renderer, rect, true);
+  const TileLayout l = computeLayout(renderer, rect, true, topUsable, middleUsable);
   top = l.covers.y;
   bottom = l.covers.y + l.covers.height;
   return true;
@@ -297,23 +363,40 @@ void BannerTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
                                       std::function<bool()> storeCoverBuffer) const {
   (void)bufferRestored;
   const bool hasBooks = !recentBooks.empty();
-  const TileLayout l = layoutFor(renderer, rect, hasBooks);
+  TileLayout l = computeLayout(renderer, rect, hasBooks, topUsable, middleUsable);
 
   // Images and covers are drawn once; later frames restore the snapshot.
   if (!coverRendered) {
-    if (l.top.height > 0) drawImageFitted(renderer, SETTINGS.homeTopImage, l.top);
-    drawCovers(renderer, l, recentBooks, homeCoverThumbHeight(renderer));
-    if (l.middle.height > 0) {
-      const Rect inner{l.middle.x + kImageInset, l.middle.y + kImageInset, l.middle.width - 2 * kImageInset,
-                       l.middle.height - 2 * kImageInset};
-      const Rect drawn = drawImageFitted(renderer, SETTINGS.homeMiddleImage, inner);
-      if (drawn.width > 0) {
-        renderer.maskRoundedRectOutsideCorners(drawn.x, drawn.y, drawn.width, drawn.height, kCardRadius - kImageInset,
-                                               Color::White);
+    // An image that fails to draw (say a JPG that will not decode) gives its space up: clear
+    // the tile and lay it out again without it. Each pass drops at least one image, so this
+    // runs at most three times.
+    bool imagesDrawn = false;
+    while (!imagesDrawn) {
+      imagesDrawn = true;
+      if (l.top.height > 0 && drawImageFitted(renderer, TOP_SLOT, SETTINGS.homeTopImage, l.top).width == 0) {
+        topUsable = false;
+        imagesDrawn = false;
       }
-      renderer.drawRoundedRect(l.middle.x, l.middle.y, l.middle.width, l.middle.height, kFrameWidth, kCardRadius,
-                               true);
+      if (l.middle.height > 0) {
+        const Rect inner{l.middle.x + kImageInset, l.middle.y + kImageInset, l.middle.width - 2 * kImageInset,
+                         l.middle.height - 2 * kImageInset};
+        const Rect drawn = drawImageFitted(renderer, MIDDLE_SLOT, SETTINGS.homeMiddleImage, inner);
+        if (drawn.width > 0) {
+          renderer.maskRoundedRectOutsideCorners(drawn.x, drawn.y, drawn.width, drawn.height,
+                                                 kCardRadius - kImageInset, Color::White);
+          renderer.drawRoundedRect(l.middle.x, l.middle.y, l.middle.width, l.middle.height, kFrameWidth,
+                                   kCardRadius, true);
+        } else {
+          middleUsable = false;
+          imagesDrawn = false;
+        }
+      }
+      if (!imagesDrawn) {
+        renderer.fillRect(rect.x, rect.y, rect.width, rect.height, false);
+        l = computeLayout(renderer, rect, hasBooks, topUsable, middleUsable);
+      }
     }
+    drawCovers(renderer, l, recentBooks, homeCoverThumbHeight(renderer));
     coverBufferStored = storeCoverBuffer();
     coverRendered = coverBufferStored;
   }

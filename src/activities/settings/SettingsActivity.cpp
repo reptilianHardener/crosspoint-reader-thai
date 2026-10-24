@@ -38,6 +38,7 @@
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/IntervalSelectionActivity.h"
 #include "components/UITheme.h"
+#include "components/themes/banner/BannerTheme.h"
 #include "components/UIThemeTokens.h"
 #include "components/UiAppHelpers.h"
 #include "fontIds.h"
@@ -496,6 +497,8 @@ void SettingsActivity::openHomeImageSetting(const SettingAction action, const St
     }
     field[0] = '\0';
     SETTINGS.saveToFile();
+    BannerTheme::forgetConvertedImages(field == SETTINGS.homeTopImage ? BannerTheme::TOP_SLOT
+                                                                      : BannerTheme::MIDDLE_SLOT);
     requestUpdate();
   });
   requestUpdate();
@@ -517,6 +520,8 @@ void SettingsActivity::pickHomeImage(char* field) {
         strncpy(field, path->path.c_str(), CrossPointSettings::HOME_IMAGE_PATH_LEN - 1);
         field[CrossPointSettings::HOME_IMAGE_PATH_LEN - 1] = '\0';
         SETTINGS.saveToFile();
+        BannerTheme::forgetConvertedImages(field == SETTINGS.homeTopImage ? BannerTheme::TOP_SLOT
+                                                                          : BannerTheme::MIDDLE_SLOT);
       }
     }
     requestUpdate();

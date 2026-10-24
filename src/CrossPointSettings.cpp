@@ -359,7 +359,9 @@ float CrossPointSettings::getReaderLineCompression() const {
   // One scale for all SD card fonts, whatever their format: .cpfont and vector
   // fonts both take their line height from FreeType's size metrics. Same values
   // as the former built-in Noto Serif; Normal keeps the font's own line height.
-  if (sdFontFamilyName[0] != '\0') {
+  // A saved SD family that is not loaded (not on the card) draws with the built-in font.
+  if (sdFontFamilyName[0] != '\0' && sdFontIdResolver &&
+      sdFontIdResolver(sdFontResolverCtx, sdFontFamilyName, fontPointSize) != 0) {
     switch (lineSpacing) {
       case TIGHT:
         return 0.95f;

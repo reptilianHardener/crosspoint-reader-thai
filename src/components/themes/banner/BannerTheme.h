@@ -35,8 +35,18 @@ class BannerTheme : public Lyra3CoversTheme {
   bool homeMenuGrid(const GfxRenderer& renderer, Rect rect, int buttonCount, HomeMenuGrid& grid) const override;
   bool homeCoverBand(const GfxRenderer& renderer, Rect rect, int& top, int& bottom) const override;
   bool homeRowNavigation() const override { return true; }
-  void onHomeEnter() const override { cardBookIndex = 0; }
+  void onHomeEnter() const override;
+
+  // Image slots, as named in converted-JPG cache files.
+  static constexpr const char* TOP_SLOT = "top";
+  static constexpr const char* MIDDLE_SLOT = "middle";
+  // Deletes the BMPs converted for a slot's JPG, e.g. when the slot's image changes.
+  static void forgetConvertedImages(const char* slot);
 
  private:
   mutable int cardBookIndex = 0;
+  // Images that can be shown, checked on each home visit; a missing or unreadable one
+  // gives its space to the covers instead of leaving an empty frame.
+  mutable bool topUsable = false;
+  mutable bool middleUsable = false;
 };
