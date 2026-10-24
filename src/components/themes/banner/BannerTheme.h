@@ -1,15 +1,15 @@
 #pragma once
 
-#include "components/themes/roundedraff/RoundedRaffTheme.h"
+#include "components/themes/lyra/Lyra3CoversTheme.h"
 
 class GfxRenderer;
 
-// RoundedRaff styling with a home screen of stacked rounded cards: an optional
+// Lyra Extended styling with a home screen of stacked rounded cards: an optional
 // user image, three recent covers, a second optional user image, a card for the
 // book in progress, and a single row of menu icons.
 namespace BannerMetrics {
 constexpr ThemeMetrics values = [] {
-  ThemeMetrics v = RoundedRaffMetrics::values;
+  ThemeMetrics v = Lyra3CoversMetrics::values;
   // Battery and clock share the top strip, clock in the left corner.
   v.headerClockCentered = false;
   v.homeTopPadding = 40;
@@ -23,10 +23,8 @@ constexpr ThemeMetrics values = [] {
 }();
 }  // namespace BannerMetrics
 
-class BannerTheme : public RoundedRaffTheme {
+class BannerTheme : public Lyra3CoversTheme {
  public:
-  void drawHeader(const GfxRenderer& renderer, Rect rect, const char* title, const char* subtitle = nullptr,
-                  bool backButton = true) const override;
   void drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
                            int selectorIndex, bool& coverRendered, bool& coverBufferStored, bool& bufferRestored,
                            std::function<bool()> storeCoverBuffer) const override;

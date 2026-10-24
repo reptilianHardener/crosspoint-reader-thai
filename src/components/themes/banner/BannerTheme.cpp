@@ -278,12 +278,6 @@ const uint8_t* iconFor(const UIIcon icon) {
 }
 }  // namespace
 
-void BannerTheme::drawHeader(const GfxRenderer& renderer, const Rect rect, const char* title, const char* subtitle,
-                             const bool backButton) const {
-  // The home band carries only the clock and battery.
-  BaseTheme::drawHeader(renderer, rect, title, subtitle, backButton);
-}
-
 int BannerTheme::homeCoverThumbHeight(const GfxRenderer& renderer) const {
   const TileLayout l = layoutFor(renderer, tileRect(renderer), true);
   // Thumbs fit a (0.6h, h) box; ask for one wide enough to fill the slot and crop the height.
