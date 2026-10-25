@@ -668,6 +668,15 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
     effectiveNoSpaceBefore = true;
     hasThaiWordBreaks = hasThaiWordBreaks || utf8IsThaiCodepoint(firstCodepoint(word));
   }
+  // Mai Yamok (ๆ) repeats the word before it, so a line never starts with it. A real
+  // space before it stays visible as a no-break space, the same tokens as U+00A0.
+  if (!words.empty() && firstCodepoint(word) == 0x0E46) {
+    if (!effectiveAttachToPrevious && !effectiveNoSpaceBefore) {
+      pushToken(" ", /*continues=*/true, /*noSpaceBefore=*/false, /*focusBoundary=*/0, visibleTextOffset);
+    }
+    effectiveAttachToPrevious = true;
+    effectiveNoSpaceBefore = false;
+  }
 
   // Bulk-reserve the per-token parallel arrays before a burst of pushes so they
   // don't repeatedly double. Only the std::vector arrays are reserved: words and
@@ -1194,6 +1203,7 @@ std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& rendere
       int rubyWidth;
       int leftOverlap;
       int rightOverlap;
+      int overhang;  // per side; negative when the ruby leaves room beside it
     };
 
     std::vector<RubyGroupInfo> groups;
@@ -1209,8 +1219,9 @@ std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& rendere
         }
         g.rubyWidth =
             renderer.getTextAdvanceX(fontId, rubyTexts[i].c_str(), EpdFontFamily::SUP, blockStyle.characterSpacing);
-        g.leftOverlap = std::max(0, (g.rubyWidth - g.baseWidth) / 2);
-        g.rightOverlap = std::max(0, (g.rubyWidth - g.baseWidth) / 2);
+        g.overhang = (g.rubyWidth - g.baseWidth) / 2;
+        g.leftOverlap = std::max(0, g.overhang);
+        g.rightOverlap = std::max(0, g.overhang);
         groups.push_back(g);
         i += g.count - 1;
       }
@@ -1220,8 +1231,10 @@ std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& rendere
     for (size_t gIdx = 0; gIdx < groups.size(); ++gIdx) {
       const auto& g = groups[gIdx];
 
-      // 1. Preceding character (left overhang)
-      if (g.start > 0) {
+      // 1. Preceding character (left overhang). A preceding ruby group is handled by
+      // its own step 2, which accounts for both groups' room.
+      const bool afterRubyGroup = gIdx > 0 && groups[gIdx - 1].start + groups[gIdx - 1].count == g.start;
+      if (g.start > 0 && !afterRubyGroup) {
         const uint32_t cpPrev = lastCodepoint(wordAt(g.start - 1));
         if (isCjkIdeograph(cpPrev)) {
           wordWidths[g.start - 1] += g.leftOverlap;
@@ -1235,9 +1248,9 @@ std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& rendere
       const size_t nextIdx = g.start + g.count;
       if (nextIdx < words.size()) {
         if (gIdx + 1 < groups.size() && groups[gIdx + 1].start == nextIdx) {
-          // Adjacent ruby groups: compute collision
+          // Adjacent ruby groups: one side's spare room absorbs the other's overhang.
           const auto& nextG = groups[gIdx + 1];
-          const int collision = g.rightOverlap + nextG.leftOverlap;
+          const int collision = g.overhang + nextG.overhang;
           if (collision > 0) {
             wordWidths[g.start + g.count - 1] += collision;
           }

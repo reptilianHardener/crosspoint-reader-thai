@@ -90,6 +90,14 @@ if (parsedSize != fileSize) {
 
 ## `section.bin`
 
+### Version 69
+
+Version 69 preserves the binary layout but rebuilds completed and partial
+sections for two line-breaking changes: a line no longer starts with the Thai
+repetition mark Mai Yamok (ๆ), and two adjacent ruby groups may use each other's
+spare room instead of always adding space between their base texts. Book
+metadata and saved progress are kept.
+
 ### Version 68
 
 Version 68 adds three fields to the header, after `wordSpacingPercent` and

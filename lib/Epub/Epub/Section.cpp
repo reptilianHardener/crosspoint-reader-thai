@@ -77,7 +77,8 @@ namespace {
 // v67: Count only stretchable literal spaces after visual text reordering.
 // v68: Bold-text, Thai-dictionary and vertical-text fields in the header (cache validation).
 //      This fork used v49/v50 for them with a different header; those caches rebuild.
-constexpr uint8_t SECTION_FILE_VERSION = 68;
+// v69: No line break before Thai Mai Yamok; adjacent ruby groups share spare room.
+constexpr uint8_t SECTION_FILE_VERSION = 69;
 // Written into the version field while a build is in progress; patched to
 // SECTION_FILE_VERSION only when the build is finalized. An abandoned /
 // crash-interrupted .bin therefore carries version 0, which loadSectionFile rejects

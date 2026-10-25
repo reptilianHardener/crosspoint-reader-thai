@@ -287,6 +287,8 @@ std::vector<size_t> ThaiWordBreaker::breakIndexes(const std::vector<CodepointInf
   breaks.reserve(cps.size());
 
   for (size_t idx = 0; idx + 1 < segments.size(); ++idx) {
+    // Mai Yamok (ๆ) repeats the word before it, so a line never starts with it.
+    if (cps[segments[idx].end].value == 0x0E46) continue;
     breaks.push_back(segments[idx].end);
   }
 

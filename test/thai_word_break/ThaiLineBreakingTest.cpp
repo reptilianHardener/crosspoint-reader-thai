@@ -110,3 +110,26 @@ TEST(ThaiLineBreaking, LatinTextIsUnaffected) {
   ASSERT_EQ(wordsOf(lines), expected);
   EXPECT_EQ(lines[0].xpos, (std::vector<int16_t>{0, 28}));
 }
+
+TEST(ThaiLineBreaking, MaiYamokStaysWithTheWordItRepeats) {
+  Hyphenator::setPreferredLanguage("th");
+  // ก + space + ข้าง is 36 px; ๆ would make 44. It moves down with ข้าง instead of starting a line.
+  const auto lines = layout({{"ก"}, {"ข้างๆ"}}, false, 40);
+  for (const auto& line : lines) {
+    ASSERT_FALSE(line.words.empty());
+    EXPECT_NE(line.words.front().rfind("ๆ", 0), 0u) << "line starts with Mai Yamok";
+  }
+  const std::vector<std::vector<std::string>> expected{{"ก"}, {"ข้างๆ"}};
+  EXPECT_EQ(wordsOf(lines), expected);
+}
+
+TEST(ThaiLineBreaking, MaiYamokAfterASpaceOrZeroWidthBreakStaysOnTheLine) {
+  Hyphenator::setPreferredLanguage("th");
+  // A real space stays visible (as an unbreakable space token); a ZWSP adds no gap.
+  const auto spaced = layout({{"ก"}, {"ข้าง"}, {"ๆ"}}, false, 40);
+  const std::vector<std::vector<std::string>> spacedExpected{{"ก"}, {"ข้าง", " ", "ๆ"}};
+  EXPECT_EQ(wordsOf(spaced), spacedExpected);
+  const auto zwsp = layout({{"ก"}, {"ข้าง"}, {"ๆ", false, true}}, false, 40);
+  const std::vector<std::vector<std::string>> zwspExpected{{"ก"}, {"ข้าง", "ๆ"}};
+  EXPECT_EQ(wordsOf(zwsp), zwspExpected);
+}
