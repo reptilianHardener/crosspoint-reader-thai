@@ -47,6 +47,22 @@ class HalGPIO {
   bool usbStateChanged = false;
   uint8_t previousCapacitivePageButtons = 0;
   bool capacitivePagePressed = false;
+#ifdef ENABLE_SERIAL_KEYS
+  // A serial-injected click (development builds): pressed for one update(),
+  // released on the next. -1 when idle.
+  int8_t injectedPending = -1;
+  int8_t injectedPressed = -1;
+  int8_t injectedReleased = -1;
+  static bool matches(int8_t injected, int buttonIndex) {
+    return injected >= 0 && (buttonIndex == ANY_BUTTON || injected == buttonIndex);
+  }
+  bool injectedPress(int buttonIndex) const { return matches(injectedPressed, buttonIndex); }
+  bool injectedRelease(int buttonIndex) const { return matches(injectedReleased, buttonIndex); }
+#else
+  bool injectedPress(int) const { return false; }
+  bool injectedRelease(int) const { return false; }
+#endif
+  static constexpr int ANY_BUTTON = -1;
 
  public:
   enum class DeviceType : uint8_t { X4, X3 };
@@ -74,6 +90,13 @@ class HalGPIO {
 
   // Button input methods
   void update();
+#ifdef ENABLE_SERIAL_KEYS
+  // Development builds: click a physical button as if pressed and released, for
+  // scripted device tests over serial (CMD:KEY:<name>). Unlike
+  // MappedInputManager::injectRemoteClick, it covers every button on every screen
+  // and goes through the button remapping. False while one is pending.
+  bool injectClick(uint8_t buttonIndex);
+#endif
   bool isPressed(uint8_t buttonIndex) const;
   bool wasPressed(uint8_t buttonIndex) const;
   bool wasAnyPressed() const;

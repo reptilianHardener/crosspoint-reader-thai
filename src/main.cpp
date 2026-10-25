@@ -915,6 +915,19 @@ void loop() {
         logSerial.write(buf, bufferSize);
         logSerial.printf("SCREENSHOT_END\n");
       }
+#ifdef ENABLE_SERIAL_KEYS
+      else if (cmd.startsWith("KEY:")) {
+        // Same order as the HalGPIO::BTN_* indexes.
+        static constexpr const char* KEY_NAMES[] = {"BACK", "CONFIRM", "LEFT", "RIGHT", "UP", "DOWN", "POWER"};
+        static_assert(sizeof(KEY_NAMES) / sizeof(KEY_NAMES[0]) == HalGPIO::BTN_POWER + 1, "one name per button");
+        const String name = cmd.substring(4);
+        const char* reply = "KEY_UNKNOWN";
+        for (uint8_t i = 0; i <= HalGPIO::BTN_POWER; i++) {
+          if (name == KEY_NAMES[i]) reply = gpio.injectClick(i) ? "KEY_OK" : "KEY_BUSY";
+        }
+        logSerial.printf("%s %s\n", reply, name.c_str());
+      }
+#endif
     }
   }
 
