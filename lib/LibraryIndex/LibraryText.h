@@ -50,6 +50,9 @@ std::string joinLibraryPath(std::string_view folder, std::string_view name);
 // shape.
 std::string fold(std::string_view text);
 
+// A series position as shown to the reader: "2" for a whole volume, "2.5" otherwise.
+std::string seriesPositionText(float position);
+
 // First letter of an already-folded sort key, or 0 when the key starts with a
 // number/non-letter. The Library renders 0 as its shared '#' group.
 uint32_t foldedGroupInitial(std::string_view folded);

@@ -101,6 +101,38 @@ uint16_t LibraryIndexFile::ordinalForRow(const SortOrder order, const uint16_t r
   return NONE;
 }
 
+uint16_t LibraryIndexFile::nextInSeries(const BookIdentity& book) {
+  constexpr uint16_t NONE = 0xFFFF;
+  if (!opened || seriesDegraded()) return NONE;
+  // Find the book with the chunked identity pass first, so a book outside any
+  // series costs no reads per series row.
+  uint16_t recentRow = NONE;
+  if (!recentRowsFor(&book, 1, &recentRow) || recentRow == NONE) return NONE;
+  const uint16_t current = ordinalForRow(SortOrder::RecentAsc, recentRow);
+  ClixRecord record{};
+  std::string series;
+  float currentPosition = 0;
+  if (current == NONE || !readRecord(current, record) || !readSeries(record, series) ||
+      !readSeriesIndex(record, currentPosition)) {
+    return NONE;
+  }
+  const std::string currentKey = fold(series);
+  // Series rows group like the Series tab (adjacent rows whose folded names are
+  // equal), each group in position order. Only the 2-byte order is read here.
+  const uint16_t rows = rowCount(SortOrder::Series);
+  uint16_t row = 0;
+  while (row < rows && ordinalForRow(SortOrder::Series, row) != current) row++;
+  float position = 0;
+  for (row++; row < rows; row++) {
+    const uint16_t ordinal = ordinalForRow(SortOrder::Series, row);
+    if (ordinal == NONE || !readRecord(ordinal, record) || !readSeries(record, series) || fold(series) != currentKey) {
+      return NONE;
+    }
+    if (readSeriesIndex(record, position) && position > currentPosition) return ordinal;
+  }
+  return NONE;
+}
+
 bool LibraryIndexFile::recentRowsFor(const BookIdentity* books, const size_t count, uint16_t* outRows) {
   constexpr uint16_t NONE = 0xFFFF;
   for (size_t i = 0; i < count; i++) outRows[i] = NONE;

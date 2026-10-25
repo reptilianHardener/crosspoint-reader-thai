@@ -3,7 +3,15 @@
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalGPIO.h>
+#include <HalStorage.h>
 #include <I18n.h>
+#include <LibraryBuilder.h>
+#include <LibraryIndexFile.h>
+#include <LibraryText.h>
+#include <Logging.h>
+#include <Memory.h>
+
+#include <cstdio>
 
 #include "CrossPointSettings.h"
 #include "ReaderUtils.h"
@@ -21,10 +29,51 @@ namespace fui = freeink::ui;
 namespace {
 constexpr fui::ActionId ACTION_ROW = 1;
 
-// Display name without the file extension, mirroring the file browser rows
-std::string displayName(const std::string& filename) {
-  const auto pos = filename.rfind('.');
-  return filename.substr(0, pos);
+// Display name without the folder or file extension, mirroring the file browser rows
+std::string displayName(const std::string& path) {
+  const auto slash = path.rfind('/');
+  const std::string filename = slash == std::string::npos ? path : path.substr(slash + 1);
+  return filename.substr(0, filename.rfind('.'));
+}
+
+// The next volume of the book's series, from the Library index: its path, its title
+// and a "Vol. N, Series" subtitle. A missing index, or metadata turned off (the index
+// then has no series), just means no series suggestion.
+bool findNextVolume(const std::string& bookPath, std::string& path, std::string& title, std::string& subtitle) {
+  if (SETTINGS.libraryUseMetadata == 0) return false;
+  // The index handle and a record live on the heap, like the Library's lookups.
+  struct Lookup {
+    library::LibraryIndexFile index;
+    library::ClixRecord record;
+  };
+  auto lookup = makeUniqueNoThrow<Lookup>();
+  if (!lookup) {
+    LOG_ERR("EOB", "OOM: library index lookup");
+    return false;
+  }
+  auto& index = lookup->index;
+  auto& record = lookup->record;
+  if (!index.open(library::libraryIndexPath())) return false;
+  // The size lets the lookup skip the stored path hash of most other books.
+  uint32_t fileSize = 0;
+  if (auto file = Storage.open(bookPath.c_str())) {
+    fileSize = static_cast<uint32_t>(file.fileSize());
+  }
+  const uint16_t ordinal = index.nextInSeries({library::clixPathHash(bookPath.data(), bookPath.size()), fileSize});
+  // The index can trail the card; never suggest a book that is gone.
+  if (ordinal == 0xFFFF || !index.readRecord(ordinal, record) || !index.readPath(record, path) ||
+      !Storage.exists(path.c_str())) {
+    return false;
+  }
+  if (!index.readTitle(record, title) || title.empty()) title = displayName(path);
+  std::string series;
+  float position = 0;
+  if (index.readSeries(record, series) && index.readSeriesIndex(record, position)) {
+    char volume[48];
+    snprintf(volume, sizeof(volume), tr(STR_LIBRARY_SERIES_VOLUME), library::seriesPositionText(position).c_str());
+    subtitle = std::string(volume) + ", " + series;
+  }
+  return true;
 }
 }  // namespace
 
@@ -34,28 +83,45 @@ void EndOfBookOptions::loadOnce(const std::string& currentBookPath) {
   if (isLoaded.load(std::memory_order_acquire)) {
     return;
   }
-  folder = FsHelpers::extractFolderPath(currentBookPath);
-  names = NextBookFinder::findNextBooks(currentBookPath, MAX_SUGGESTIONS);
+  paths.clear();
+  std::string seriesTitle;
+  std::string seriesSubtitle;
+  std::string seriesPath;
+  const bool hasNextVolume = findNextVolume(currentBookPath, seriesPath, seriesTitle, seriesSubtitle);
+  if (hasNextVolume) paths.push_back(seriesPath);
+  const std::string folder = FsHelpers::extractFolderPath(currentBookPath);
+  for (const auto& name : NextBookFinder::findNextBooks(currentBookPath, MAX_SUGGESTIONS)) {
+    if (paths.size() >= MAX_SUGGESTIONS) break;
+    std::string path = folder == "/" ? "/" + name : folder + "/" + name;
+    if (!hasNextVolume || path != seriesPath) paths.push_back(std::move(path));
+  }
   selector.store(0, std::memory_order_relaxed);
-  if (!names.empty()) {
+  if (!paths.empty()) {
     // One-time app setup on the render task, before the first render/route.
     resetUi();
     app.on(ACTION_ROW, &EndOfBookOptions::onRowEvent, this);
     app.setScreen(&EndOfBookOptions::listScreen, this);
     buildRowItems();
+    if (hasNextVolume) {
+      // The next series volume is row 0: its metadata title, with "Vol. N, Series".
+      rowLabels[0] = std::move(seriesTitle);
+      rowSubtitles[0] = std::move(seriesSubtitle);
+      rowItems[0].label = rowLabels[0].c_str();
+      if (!rowSubtitles[0].empty()) rowItems[0].subtitle = rowSubtitles[0].c_str();
+    }
   }
   // Release-publish so the main task, which gates all access on isLoaded, never
   // observes a partially built list (rowItems/rowLabels included)
   isLoaded.store(true, std::memory_order_release);
 }
 
-// Populates rowLabels/rowItems from names + the trailing "Home" row. Called
-// once here since names never changes after loadOnce() completes.
+// Populates rowLabels/rowItems from paths + the trailing "Home" row. Called
+// once here since paths never changes after loadOnce() completes.
 void EndOfBookOptions::buildRowItems() {
   rowCount = 0;
-  for (const auto& name : names) {
+  for (const auto& path : paths) {
     if (rowCount >= MAX_ROWS) break;
-    rowLabels[rowCount] = displayName(name);
+    rowLabels[rowCount] = displayName(path);
     fui::ListItem item;
     item.label = rowLabels[rowCount].c_str();
     item.actionValue = static_cast<int16_t>(rowCount);
@@ -72,18 +138,11 @@ void EndOfBookOptions::buildRowItems() {
   }
 }
 
-bool EndOfBookOptions::menuActive() const { return isLoaded.load(std::memory_order_acquire) && !names.empty(); }
-
-std::string EndOfBookOptions::fullPath(const size_t index) const {
-  if (index >= names.size()) {
-    return {};
-  }
-  return folder == "/" ? "/" + names[index] : folder + "/" + names[index];
-}
+bool EndOfBookOptions::menuActive() const { return isLoaded.load(std::memory_order_acquire) && !paths.empty(); }
 
 void EndOfBookOptions::onRowEvent(const fui::ActionEvent& event, void* user) {
   auto* self = static_cast<EndOfBookOptions*>(user);
-  if (event.value < 0 || event.value > static_cast<int16_t>(self->names.size())) return;
+  if (event.value < 0 || event.value > static_cast<int16_t>(self->paths.size())) return;
   self->selector.store(event.value, std::memory_order_relaxed);
   // The tapped row leaves this screen (open book or home); a lingering flash
   // would gray an unrelated element on the next render.
@@ -100,9 +159,9 @@ EndOfBookOptions::Action EndOfBookOptions::handleMenuInput(const MappedInputMana
   // app.on(ACTION_ROW, ...)), which sets tappedRow, so it flags this as always false.
   // cppcheck-suppress knownConditionTrueFalse
   if (route && tappedRow >= 0) {
-    if (tappedRow < static_cast<int>(names.size())) {
+    if (tappedRow < static_cast<int>(paths.size())) {
       if (openPath) {
-        *openPath = fullPath(tappedRow);
+        *openPath = paths[tappedRow];
       }
       return Action::OpenBook;
     }
@@ -114,9 +173,9 @@ EndOfBookOptions::Action EndOfBookOptions::handleMenuInput(const MappedInputMana
 
   const int selectedIndex = selector.load(std::memory_order_relaxed);
   if (input.wasReleased(MappedInputManager::Button::Confirm)) {
-    if (selectedIndex < static_cast<int>(names.size())) {
+    if (selectedIndex < static_cast<int>(paths.size())) {
       if (openPath) {
-        *openPath = fullPath(selectedIndex);
+        *openPath = paths[selectedIndex];
       }
       return Action::OpenBook;
     }
@@ -139,7 +198,7 @@ EndOfBookOptions::Action EndOfBookOptions::handleMenuInput(const MappedInputMana
   const auto triggered = [&](const MappedInputManager::Button button) {
     return usePress ? input.wasPressed(button) : input.wasReleased(button);
   };
-  const int itemCount = static_cast<int>(names.size()) + 1;  // + "Home" entry
+  const int itemCount = static_cast<int>(paths.size()) + 1;  // + "Home" entry
   if (triggered(MappedInputManager::Button::NavPrevious)) {
     selector.store(ButtonNavigator::previousIndex(selectedIndex, itemCount), std::memory_order_relaxed);
     return Action::Redraw;

@@ -718,14 +718,8 @@ void LibraryListActivity::formatSeriesSubtitle(const library::ClixRecord& record
   out.clear();
   float volume = 0;
   if (record.nameLen > 0 && index.readSeriesIndex(record, volume)) {
-    char number[16];
-    if (volume == static_cast<float>(static_cast<int>(volume))) {
-      snprintf(number, sizeof(number), "%d", static_cast<int>(volume));
-    } else {
-      snprintf(number, sizeof(number), "%.1f", static_cast<double>(volume));
-    }
     char text[48];
-    snprintf(text, sizeof(text), tr(STR_LIBRARY_SERIES_VOLUME), number);
+    snprintf(text, sizeof(text), tr(STR_LIBRARY_SERIES_VOLUME), library::seriesPositionText(volume).c_str());
     out = text;
   }
   if (!author.empty()) {

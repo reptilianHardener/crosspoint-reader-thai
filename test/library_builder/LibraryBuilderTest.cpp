@@ -483,6 +483,38 @@ TEST_F(LibraryBuilderTest, SeriesOrderGroupsBySeriesThenVolume) {
   EXPECT_FLOAT_EQ(volume, 1.5f);
 }
 
+TEST_F(LibraryBuilderTest, NextInSeriesSkipsOtherEditionsAndStopsAtTheSeriesEnd) {
+  fake::add("/Other/b2.epub");
+  fake::add("/c.epub");
+  fake::add("/d.epub");
+  fake::add("/e.epub");
+  bookMetadata["/a.epub"] = {"Moon Volume Two", "Writer", true, "Moon", 2.0f};
+  bookMetadata["/b.epub"] = {"Moon Volume One", "Writer", true, "Moon", 1.0f};
+  bookMetadata["/Other/b2.epub"] = {"Moon Volume One (Manga)", "Writer", true, "Moon", 1.0f};
+  bookMetadata["/c.epub"] = {"Moon Volume Three", "Writer", true, "MOON", 3.0f};
+  bookMetadata["/d.epub"] = {"Arrow", "Writer", true, "Arrows", 1.5f};
+  bookMetadata["/e.epub"] = {"Standalone", "Writer", true};
+  initial();
+
+  LibraryIndexFile index;
+  ASSERT_TRUE(index.open(INDEX));
+  const auto nextPath = [&](const std::string& path) {
+    const uint16_t ordinal = index.nextInSeries({clixPathHash(path.data(), path.size()), 0});
+    ClixRecord record{};
+    std::string next;
+    if (ordinal == 0xFFFF || !index.readRecord(ordinal, record) || !index.readPath(record, next)) return std::string();
+    return next;
+  };
+  // The other edition of volume 1 is skipped; case differences are one series.
+  EXPECT_EQ(nextPath("/b.epub"), "/a.epub");
+  EXPECT_EQ(nextPath("/Other/b2.epub"), "/a.epub");
+  EXPECT_EQ(nextPath("/a.epub"), "/c.epub");
+  EXPECT_EQ(nextPath("/c.epub"), "");  // last volume
+  EXPECT_EQ(nextPath("/d.epub"), "");  // only book of its series
+  EXPECT_EQ(nextPath("/e.epub"), "");  // no series
+  EXPECT_EQ(nextPath("/missing.epub"), "");
+}
+
 TEST_F(LibraryBuilderTest, UnchangedRebuildKeepsSeries) {
   bookMetadata["/a.epub"] = {"Moon Volume Two", "Writer", true, "Moon", 2.0f};
   initial();

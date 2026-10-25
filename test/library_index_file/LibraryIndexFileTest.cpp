@@ -6,14 +6,6 @@
 
 #include "LibraryIndexFile.h"
 
-namespace library {
-
-std::string joinLibraryPath(const std::string_view folder, const std::string_view name) {
-  return std::string(folder) + "/" + std::string(name);
-}
-
-}  // namespace library
-
 namespace {
 
 std::vector<uint8_t> makeBlob(const uint64_t pathHash, const std::initializer_list<uint8_t> fields) {

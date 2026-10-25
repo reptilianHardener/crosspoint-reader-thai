@@ -3,6 +3,7 @@
 #include <Utf8.h>
 
 #include <algorithm>
+#include <cstdio>
 
 namespace library {
 
@@ -220,6 +221,16 @@ std::string fold(const std::string_view text) {
   }
 
   return out;
+}
+
+std::string seriesPositionText(const float position) {
+  char text[16];
+  if (position == static_cast<float>(static_cast<int>(position))) {
+    snprintf(text, sizeof(text), "%d", static_cast<int>(position));
+  } else {
+    snprintf(text, sizeof(text), "%.1f", static_cast<double>(position));
+  }
+  return text;
 }
 
 uint32_t foldedGroupInitial(const std::string_view folded) {

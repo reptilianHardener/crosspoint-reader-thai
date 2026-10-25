@@ -10,9 +10,10 @@ class GfxRenderer;
 class MappedInputManager;
 
 // Shared End-of-Book next-book menu for the EPUB and XTC readers. Collects up to
-// MAX_SUGGESTIONS sibling books once per reader session, handles the menu input, and
-// draws the end screen. With no suggestions the end screen keeps its historical
-// plain-title look and behavior.
+// MAX_SUGGESTIONS books once per reader session (the next volume of the book's series
+// first, then the books after it in its folder), handles the menu input, and draws the
+// end screen. With no suggestions the end screen keeps its historical plain-title look
+// and behavior.
 class EndOfBookOptions : private UiAppHost {
  public:
   enum class Action { None, Redraw, OpenBook, GoHome, LastPage };
@@ -21,10 +22,10 @@ class EndOfBookOptions : private UiAppHost {
 
   explicit EndOfBookOptions(GfxRenderer& renderer);
 
-  // Scans the book's folder for suggestions; no-op when already loaded. Call ONLY from
-  // the reader's render() (the render task, serialized by RenderLock) — the loaded flag
-  // is the release/acquire publication point that lets the main task read the finished
-  // list safely.
+  // Looks up the next series volume and scans the book's folder for suggestions;
+  // no-op when already loaded. Call ONLY from the reader's render() (the render task,
+  // serialized by RenderLock) — the loaded flag is the release/acquire publication
+  // point that lets the main task read the finished list safely.
   void loadOnce(const std::string& currentBookPath);
 
   // True when the suggestion menu is showing and should own the reader's input.
@@ -49,21 +50,22 @@ class EndOfBookOptions : private UiAppHost {
   void buildListScreen(UiScreen& screen);
 
   GfxRenderer& renderer;
-  std::string folder;
-  // Written by the render task in loadOnce(), immutable afterwards; the main task only
-  // reads it after isLoaded is observed true (acquire), so no further locking is needed.
-  std::vector<std::string> names;
+  // Full paths of the suggested books. Written by the render task in loadOnce(),
+  // immutable afterwards; the main task only reads it after isLoaded is observed true
+  // (acquire), so no further locking is needed.
+  std::vector<std::string> paths;
   // Main-task selection updates may overlap a repaint on the render task.
   std::atomic<int> selector{0};
   std::atomic<bool> isLoaded{false};
 
   // Row storage, built once in loadOnce() (same acquire/release publication
-  // point as names — see isLoaded above) rather than per-render in
-  // buildListScreen(): names.size() is capped at MAX_SUGGESTIONS and never
+  // point as paths — see isLoaded above) rather than per-render in
+  // buildListScreen(): paths.size() is capped at MAX_SUGGESTIONS and never
   // changes afterward, so a fixed-capacity array avoids any heap allocation
   // for the row list, both at load time and every subsequent repaint.
   static constexpr size_t MAX_ROWS = MAX_SUGGESTIONS + 1;  // + the trailing "Home" row
   std::string rowLabels[MAX_ROWS];
+  std::string rowSubtitles[MAX_ROWS];
   freeink::ui::ListItem rowItems[MAX_ROWS]{};
   size_t rowCount = 0;
   void buildRowItems();
@@ -71,5 +73,4 @@ class EndOfBookOptions : private UiAppHost {
   // Row index dispatched by onRowEvent during the current route() call; -1 otherwise.
   int tappedRow = -1;
 
-  std::string fullPath(size_t index) const;
 };

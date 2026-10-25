@@ -645,6 +645,15 @@ If the **Short Power Button Click** setting is set to "Page Turn", you can also 
 
 This feature can be disabled in the **[Controls Settings](#363-controls)** to help avoid changing chapters by mistake.
 
+### End of Book
+
+When you turn past the last page, the reader suggests up to three books to read next, followed by **Home**:
+
+- If the book is part of a series and has a volume number, the next volume comes first, wherever it is on the card. It shows the book's title with its volume number and series name. Other editions of the volume you just finished are skipped. This needs **Use book metadata** turned on, and it uses the Library index: if you have just copied the next volume onto the card, use **Settings → System → Rebuild library index** first.
+- The other suggestions are the books that come after this one in its folder, in file name order.
+
+Press **Confirm** to open the selected book, or **Back** to return to the last page. On a touch device, tap a book or **Home**.
+
 ### Auto Page Turn
 
 Auto Page Turn automatically advances pages at a set interval, useful for hands-free reading. This feature can be enabled and configured from the **[Reader Menu](#5-reader-menu)** while reading an EPUB.

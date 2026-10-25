@@ -79,6 +79,12 @@ class LibraryIndexFile {
   static constexpr size_t MAX_IDENTITY_LOOKUPS = 16;
   bool recentRowsFor(const BookIdentity* books, size_t count, uint16_t* outRows);
 
+  // Record ordinal of the volume after `book` in its series: the first later
+  // book of the same series with a higher position, so a second edition of the
+  // same volume is skipped. 0xFFFF when the book is not indexed, has no series
+  // or position, or is the last volume.
+  uint16_t nextInSeries(const BookIdentity& book);
+
   bool readRecord(uint16_t ordinal, ClixRecord& out);
   // Persisted complete-path fingerprint used by rebuild reconciliation.
   bool readPathHash(const ClixRecord& record, uint64_t& out);
