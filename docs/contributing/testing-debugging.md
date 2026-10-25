@@ -34,6 +34,27 @@ python3 -m pip install pyserial colorama matplotlib
 python3 scripts/debugging_monitor.py
 ```
 
+## Serial commands
+
+The firmware reads lines that start with `CMD:` from the USB serial port. The
+monitor above adds the `CMD:` itself, so at its `Command:` prompt you type only
+the rest, for example `SCREENSHOT` or `KEY:BACK`.
+
+- `CMD:SCREENSHOT` sends the framebuffer between `SCREENSHOT_START:<bytes>` and
+  `SCREENSHOT_END` lines (1 bit per pixel, in the panel's native orientation).
+- `CMD:KEY:<name>` clicks a physical button: `BACK`, `CONFIRM`, `LEFT`, `RIGHT`,
+  `UP`, `DOWN` or `POWER`. With a remapped front-button layout, the name is the
+  button's position, not its remapped action. The device presses it on one
+  main-loop pass and releases it on the next, as a short press. It replies with
+  the name: `KEY_OK <name>`, `KEY_BUSY <name>` (the previous click is not
+  finished yet) or `KEY_UNKNOWN <name>`. A reply does not mean the screen has
+  redrawn: wait at least about one second between clicks, longer on slower
+  panels. Only the `default` environment (`pio run -e default`) sets
+  `-DENABLE_SERIAL_KEYS`; other builds, including releases, ignore the command.
+
+Together they let a script walk through screens and capture each one, which
+makes on-device test rounds repeatable.
+
 ## Useful bug report contents
 
 - Firmware version and build environment

@@ -109,6 +109,13 @@ void HalGPIO::begin() {
 
 void HalGPIO::update() {
   inputMgr.update();
+#ifdef ENABLE_SERIAL_KEYS
+  // Release last pass's injected press; press a pending click only when nothing was
+  // just released, so press and release always fall on separate passes.
+  injectedReleased = injectedPressed;
+  injectedPressed = injectedReleased < 0 ? injectedPending : -1;
+  if (injectedPressed >= 0) injectedPending = -1;
+#endif
   const uint8_t pageButtons = inputMgr.capacitivePageButtonMask();
   capacitivePagePressed = (pageButtons & ~previousCapacitivePageButtons) != 0;
   previousCapacitivePageButtons = pageButtons;
@@ -119,19 +126,33 @@ void HalGPIO::update() {
 
 bool HalGPIO::wasUsbStateChanged() const { return usbStateChanged; }
 
-bool HalGPIO::isPressed(uint8_t buttonIndex) const { return inputMgr.isPressed(buttonIndex); }
+#ifdef ENABLE_SERIAL_KEYS
+bool HalGPIO::injectClick(const uint8_t buttonIndex) {
+  if (injectedPending >= 0 || buttonIndex > BTN_POWER) return false;
+  injectedPending = static_cast<int8_t>(buttonIndex);
+  return true;
+}
+#endif
+
+bool HalGPIO::isPressed(uint8_t buttonIndex) const {
+  return injectedPress(buttonIndex) || inputMgr.isPressed(buttonIndex);
+}
 
 void HalGPIO::prepareForDeepSleep() {
   if (!inputMgr.prepareForDeepSleep()) LOG_ERR("GPIO", "Failed to put touch controller to sleep");
 }
 
-bool HalGPIO::wasPressed(uint8_t buttonIndex) const { return inputMgr.wasPressed(buttonIndex); }
+bool HalGPIO::wasPressed(uint8_t buttonIndex) const {
+  return injectedPress(buttonIndex) || inputMgr.wasPressed(buttonIndex);
+}
 
-bool HalGPIO::wasAnyPressed() const { return inputMgr.wasAnyPressed(); }
+bool HalGPIO::wasAnyPressed() const { return injectedPress(ANY_BUTTON) || inputMgr.wasAnyPressed(); }
 
-bool HalGPIO::wasReleased(uint8_t buttonIndex) const { return inputMgr.wasReleased(buttonIndex); }
+bool HalGPIO::wasReleased(uint8_t buttonIndex) const {
+  return injectedRelease(buttonIndex) || inputMgr.wasReleased(buttonIndex);
+}
 
-bool HalGPIO::wasAnyReleased() const { return inputMgr.wasAnyReleased(); }
+bool HalGPIO::wasAnyReleased() const { return injectedRelease(ANY_BUTTON) || inputMgr.wasAnyReleased(); }
 
 bool HalGPIO::rawInputActive() {
   if (inputMgr.isPowerButtonPhysicallyPressed()) return true;
@@ -142,9 +163,17 @@ bool HalGPIO::rawInputActive() {
   return (g1.raw >= 0 && g1.raw < kIdleRailMin) || (g2.raw >= 0 && g2.raw < kIdleRailMin);
 }
 
-unsigned long HalGPIO::getHeldTime() const { return inputMgr.getHeldTime(); }
+// An injected click is a short press, whatever the last physical press was: longer
+// than the 10 ms "Sleep" power click, shorter than every long-press threshold.
+constexpr unsigned long INJECTED_HOLD_MS = 50;
 
-unsigned long HalGPIO::getPowerButtonHeldTime() const { return inputMgr.getPowerButtonHeldTime(); }
+unsigned long HalGPIO::getHeldTime() const {
+  return injectedPress(ANY_BUTTON) || injectedRelease(ANY_BUTTON) ? INJECTED_HOLD_MS : inputMgr.getHeldTime();
+}
+
+unsigned long HalGPIO::getPowerButtonHeldTime() const {
+  return injectedPress(BTN_POWER) || injectedRelease(BTN_POWER) ? INJECTED_HOLD_MS : inputMgr.getPowerButtonHeldTime();
+}
 
 bool HalGPIO::hasTouch() const { return inputMgr.hasTouch(); }
 
