@@ -1,6 +1,7 @@
 #include "LibraryListActivity.h"
 
 #include <BoardConfig.h>
+#include <FontCacheManager.h>
 #include <FreeInkUIIcon.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
@@ -127,6 +128,8 @@ void LibraryListActivity::onEnter() {
 
 void LibraryListActivity::onExit() {
   index.close();
+  // Long title lists fill the UI glyph caches; don't pin them on the next screen.
+  if (auto* fontCache = renderer.getFontCacheManager()) fontCache->releaseSdFontCaches();
   Activity::onExit();
 }
 
