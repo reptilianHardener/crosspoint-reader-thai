@@ -94,7 +94,9 @@ other script the SD-font converter ships an interval for — even when book
 To avoid shipping every script's glyph set in flash, CrossPoint instead reuses
 the SD-card font you already selected: when a UI string contains a character
 the built-in font cannot draw, that whole string is rendered with your selected
-SD-card font instead.
+SD-card font instead. Scripts the selected family lacks are borrowed from up to
+two other installed `.cpfont` families that cover them, so a Thai reading font
+still shows Japanese titles when a Japanese family is on the card.
 
 The fallback is **size-matched**. The built-in UI fonts render at 8 pt
 (small/author lines), 10 pt (list rows) and 12 pt (book-cover titles, headers),
@@ -142,9 +144,13 @@ What this means in practice:
   `三体 Vol.1` renders entirely in the SD font (including the Latin part). If
   that SD font is a `Mono` family, the Latin portion will appear half/full
   width.
-- If no SD font is selected (a built-in reading font is active), there is no
-  fallback and the UI again shows boxes for non-Latin text — pick an SD font
-  covering that script to restore it.
+- If no SD font is selected (a built-in reading font is active), or the
+  selected one is missing or fails to load, the UI borrows non-Latin glyphs
+  from up to two installed `.cpfont` families instead, chosen by which scripts
+  they cover (probed on their 8 pt file). Direct TTF/OTF/TTC families are not
+  borrowed this way, and a borrowed family needs the 8, 10 and 12 pt files like
+  any other. Book content still renders in the built-in font, so a non-Latin
+  book needs an SD reading font that covers its script.
 
 ## Available Pre-Built Fonts
 

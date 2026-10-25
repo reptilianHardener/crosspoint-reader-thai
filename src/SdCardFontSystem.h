@@ -58,6 +58,9 @@ class SdCardFontSystem {
   void refreshIfDirty() {
     if (registryDirty_.exchange(false, std::memory_order_acquire)) {
       registry_.discover();
+      // Borrowed UI fallbacks may point at a family that was just replaced or
+      // removed; the next ensureLoaded() borrows again.
+      borrowedFallbacksStale_.store(true, std::memory_order_release);
     }
   }
 
@@ -69,6 +72,19 @@ class SdCardFontSystem {
   // family is loaded. Safe to call repeatedly (sizes already loaded are
   // reused).
   void setupUiFallbacks(GfxRenderer& renderer);
+  // UI fallbacks with no SD reader family loaded (a built-in reader font, or an SD
+  // family that is missing or failed to load): borrow every script from the
+  // installed families, so Thai or Japanese menus keep their glyphs.
+  void setupUiFallbacksWithoutReader(GfxRenderer& renderer);
+  // Borrow UI fallback sizes for the scripts in `missing` (a probe mask) from
+  // installed families other than `exclude`; at most two are taken.
+  void borrowUiFallbacks(GfxRenderer& renderer, uint16_t missing, const std::string& exclude);
+  // Set once borrowing has run with no SD reader family loaded, even when no
+  // family had glyphs to lend; cleared when the .cpfonts are unloaded. It is a
+  // "tried" marker, so it cannot be derived from what the manager holds.
+  bool uiFallbacksOnly_ = false;
+  // The registry was re-scanned outside ensureLoaded() (web upload or delete).
+  std::atomic<bool> borrowedFallbacksStale_{false};
 
 #if CROSSPOINT_VECTOR_FONTS
   // --- Vector (.ttf/.otf) font path (FreeInkFont via TtfEpdFont) -------------
@@ -135,6 +151,7 @@ class SdCardFontSystem {
   // Up to 4 style sources: 0=regular (required), 1=bold, 2=italic, 3=bold-italic.
   TtfSource ttfSources_[4];
   std::string ttfFamily_;     // loaded vector family name ("" = none)
+  std::string failedTtfFamily_;  // vector family whose last load failed ("" = none)
   int ttfFontId_ = 0;         // renderer font id for ttf_ (0 = none)
   uint8_t ttfPointSize_ = 0;  // size ttf_ was built at
   // UI-size TTF fallbacks (share ttfSources_); parallel to their renderer font ids.

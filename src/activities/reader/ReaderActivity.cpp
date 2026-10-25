@@ -73,7 +73,11 @@ void ReaderActivity::onEnter() {
     APP_STATE.saveToFile();
   }
 
-  sdFontSystem.ensureLoaded(renderer);
+  {
+    // ensureLoaded() can free and reload UI fallback fonts the render task draws with.
+    RenderLock lock(*this);
+    sdFontSystem.ensureLoaded(renderer);
+  }
   applyInitialOrientation();
 
   if (!loadBook()) {

@@ -68,6 +68,39 @@ constexpr UiFontSize kUiFontSizes[] = {
     {UI_12_FONT_ID, 12},
 };
 
+// One representative codepoint per script the built-in fonts may lack, in the
+// order other families are sought for them. At most 16: coverage is a uint16_t mask.
+constexpr uint32_t kFallbackProbes[] = {
+    0x0E01,  // Thai
+    0x4E00,  // CJK Unified Ideographs (Han)
+    0x3042,  // Hiragana
+    0x30A2,  // Katakana
+    0xAC00,  // Hangul Syllables
+    0x03B1,  // Greek
+    0x0430,  // Cyrillic
+    0x05D0,  // Hebrew
+    0x0627,  // Arabic
+    0x0905,  // Devanagari
+    0x0531,  // Armenian
+    0x10D0,  // Georgian
+    0x1200,  // Ethiopic
+    0x13A0,  // Cherokee
+    0x2D30,  // Tifinagh
+    0x0259,  // IPA Extensions (ə)
+};
+static_assert(std::size(kFallbackProbes) <= 16, "coverage masks are uint16_t");
+constexpr uint16_t kAllFallbackScripts = static_cast<uint16_t>((1u << std::size(kFallbackProbes)) - 1);
+
+uint16_t probeCoverage(const GfxRenderer& renderer, const int fontId) {
+  const auto it = renderer.getFontMap().find(fontId);
+  if (it == renderer.getFontMap().end()) return 0;
+  uint16_t mask = 0;
+  for (size_t i = 0; i < std::size(kFallbackProbes); i++) {
+    if (it->second.hasCodepoint(kFallbackProbes[i])) mask |= static_cast<uint16_t>(1u << i);
+  }
+  return mask;
+}
+
 }  // namespace
 
 void SdCardFontSystem::begin(GfxRenderer& renderer) {
@@ -103,6 +136,7 @@ void SdCardFontSystem::begin(GfxRenderer& renderer) {
         // wipe the user's selection on every boot. loadTtfFamily keeps the
         // selection on transient failures and registers UI fallbacks itself.
         loadTtfFamily(*family, renderer, /*registryWasDirty=*/false);
+        if (ttfFamily_.empty()) setupUiFallbacksWithoutReader(renderer);  // the TTF did not load
       } else
 #endif
           if (manager_.loadFamily(*family, renderer, SETTINGS.fontPointSize)) {
@@ -113,10 +147,14 @@ void SdCardFontSystem::begin(GfxRenderer& renderer) {
         // The selection stays saved: the reader draws with the built-in family until the
         // font loads (getReaderFontId falls through when the resolver finds nothing).
         LOG_ERR("SDFS", "Failed to load SD font family: %s (using built-in for now)", SETTINGS.sdFontFamilyName);
+        setupUiFallbacksWithoutReader(renderer);
       }
     } else {
       LOG_INF("SDFS", "SD font family not on card: %s (using built-in until it is)", SETTINGS.sdFontFamilyName);
+      setupUiFallbacksWithoutReader(renderer);
     }
+  } else {
+    setupUiFallbacksWithoutReader(renderer);
   }
 
   LOG_DBG("SDFS", "SD font system ready (%d families discovered)", registry_.getFamilyCount());
@@ -132,6 +170,8 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
     LOG_DBG("SDFS", "Registry dirty — re-discovering fonts");
     registry_.discover();
   }
+  const bool fallbacksStale =
+      borrowedFallbacksStale_.exchange(false, std::memory_order_acquire) || registryWasDirty;
 
   const char* wantedFamily = SETTINGS.sdFontFamilyName;
 
@@ -141,8 +181,20 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
   if (wantedFamily[0] != '\0') {
     const auto* wantedFam = registry_.findFamily(wantedFamily);
     if (wantedFam && wantedFam->vector) {
-      if (!manager_.currentFamilyName().empty()) unloadCpfonts(renderer);
+      // This family failed to load last time and nothing on the card changed: keep
+      // the borrowed UI fallbacks rather than re-probing every family on each call.
+      // Picking another font, a font change on the card, or a reboot retries it.
+      if (ttfFamily_.empty() && uiFallbacksOnly_ && !fallbacksStale && failedTtfFamily_ == wantedFam->name) {
+        return;
+      }
+      if (!manager_.currentFamilyName().empty() || uiFallbacksOnly_) unloadCpfonts(renderer);
       loadTtfFamily(*wantedFam, renderer, registryWasDirty);
+      if (ttfFamily_.empty()) {
+        failedTtfFamily_ = wantedFam->name;
+        setupUiFallbacksWithoutReader(renderer);  // the TTF did not load
+      } else {
+        failedTtfFamily_.clear();
+      }
       return;
     }
   }
@@ -154,9 +206,11 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
   const std::string& currentFamily = manager_.currentFamilyName();
 
   if (wantedFamily[0] == '\0') {
-    if (!currentFamily.empty()) {
+    // Fonts installed or removed since the fallbacks were borrowed: borrow again.
+    if (!currentFamily.empty() || (uiFallbacksOnly_ && fallbacksStale)) {
       unloadCpfonts(renderer);
     }
+    setupUiFallbacksWithoutReader(renderer);
     // Back on a built-in family, which exists only at BUILTIN_READER_POINT_SIZES:
     // a size inherited from an SD family has to come back into that set.
     snapFontPointSizeTo(snapToNearestPointSize(BUILTIN_READER_POINT_SIZES, std::size(BUILTIN_READER_POINT_SIZES),
@@ -173,6 +227,7 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
     if (!family) {
       LOG_INF("SDFS", "SD font family disappeared: %s (using built-in until it returns)", wantedFamily);
       unloadCpfonts(renderer);
+      setupUiFallbacksWithoutReader(renderer);
       return;
     }
     const auto* selected = family->findNearestSize(SETTINGS.fontPointSize);
@@ -180,16 +235,22 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
     // Snap before the early return: the wanted size can already be loaded while
     // the setting still names a size this family does not ship.
     snapFontPointSizeTo(wantedPt);
-    if (!registryWasDirty && wantedPt == manager_.currentPointSize()) return;
+    // Fonts changed on the card (here or via refreshIfDirty): reload, which also
+    // borrows the UI fallbacks again.
+    if (!fallbacksStale && wantedPt == manager_.currentPointSize()) return;
     LOG_DBG("SDFS", "Reloading %s: size %u -> %u%s", wantedFamily, manager_.currentPointSize(), wantedPt,
-            registryWasDirty ? " [registry dirty]" : "");
-  }
-
-  if (!currentFamily.empty()) {
-    unloadCpfonts(renderer);
+            fallbacksStale ? " [fonts changed]" : "");
   }
 
   const auto* family = registry_.findFamily(wantedFamily);
+  // Still not on the card and the borrowed fallbacks are current: nothing to redo,
+  // so a missing saved family does not re-probe every installed one on each book open.
+  if (!family && uiFallbacksOnly_ && !fallbacksStale) return;
+
+  if (!currentFamily.empty() || uiFallbacksOnly_) {
+    unloadCpfonts(renderer);
+  }
+
   if (family) {
     if (manager_.loadFamily(*family, renderer, SETTINGS.fontPointSize)) {
       snapFontPointSizeTo(manager_.currentPointSize());
@@ -197,9 +258,11 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
       LOG_DBG("SDFS", "Loaded SD font family: %s", wantedFamily);
     } else {
       LOG_ERR("SDFS", "Failed to load SD font family: %s (using built-in for now)", wantedFamily);
+      setupUiFallbacksWithoutReader(renderer);
     }
   } else {
     LOG_INF("SDFS", "SD font family not found: %s (using built-in until it is)", wantedFamily);
+    setupUiFallbacksWithoutReader(renderer);
   }
 }
 
@@ -216,38 +279,7 @@ void SdCardFontSystem::setupUiFallbacks(GfxRenderer& renderer) {
   // its UI sizes would be dead weight in RAM.
   const auto readerIt = renderer.getFontMap().find(manager_.getFontId(familyName));
   if (readerIt == renderer.getFontMap().end()) return;
-  // One representative codepoint per script the built-in fonts may lack, in the
-  // order other families are sought for them. At most 16: coverage is a uint16_t mask.
-  static constexpr uint32_t kFallbackProbes[] = {
-      0x0E01,  // Thai
-      0x4E00,  // CJK Unified Ideographs (Han)
-      0x3042,  // Hiragana
-      0x30A2,  // Katakana
-      0xAC00,  // Hangul Syllables
-      0x03B1,  // Greek
-      0x0430,  // Cyrillic
-      0x05D0,  // Hebrew
-      0x0627,  // Arabic
-      0x0905,  // Devanagari
-      0x0531,  // Armenian
-      0x10D0,  // Georgian
-      0x1200,  // Ethiopic
-      0x13A0,  // Cherokee
-      0x2D30,  // Tifinagh
-      0x0259,  // IPA Extensions (ə)
-  };
-  static_assert(std::size(kFallbackProbes) <= 16, "coverage masks are uint16_t");
-  const auto probeCoverage = [&renderer](const int fontId) -> uint16_t {
-    const auto it = renderer.getFontMap().find(fontId);
-    if (it == renderer.getFontMap().end()) return 0;
-    uint16_t mask = 0;
-    for (size_t i = 0; i < std::size(kFallbackProbes); i++) {
-      if (it->second.hasCodepoint(kFallbackProbes[i])) mask |= static_cast<uint16_t>(1u << i);
-    }
-    return mask;
-  };
-
-  const uint16_t readerCoverage = probeCoverage(readerIt->first);
+  const uint16_t readerCoverage = probeCoverage(renderer, readerIt->first);
   if (readerCoverage == 0) {
     LOG_DBG("SDFS", "%s has no fallback-script coverage - skipping its UI sizes", familyName.c_str());
   } else {
@@ -265,24 +297,36 @@ void SdCardFontSystem::setupUiFallbacks(GfxRenderer& renderer) {
 
   // The reader family rarely covers every script on the card: a Thai face draws
   // no kana, a Japanese one no Thai. Borrow the scripts it lacks from other
-  // installed families so titles in those scripts still appear. Each borrowed
-  // family keeps its interval tables resident at three sizes, so at most two
-  // are taken.
+  // installed families so titles in those scripts still appear.
+  borrowUiFallbacks(renderer, static_cast<uint16_t>(kAllFallbackScripts & ~readerCoverage), familyName);
+}
+
+void SdCardFontSystem::setupUiFallbacksWithoutReader(GfxRenderer& renderer) {
+  if (uiFallbacksOnly_ || !manager_.currentFamilyName().empty()) return;
+#if CROSSPOINT_VECTOR_FONTS
+  if (!ttfFamily_.empty()) return;  // the TTF reader face installs its own UI fallbacks
+#endif
+  uiFallbacksOnly_ = true;
+  borrowUiFallbacks(renderer, kAllFallbackScripts, std::string());
+}
+
+void SdCardFontSystem::borrowUiFallbacks(GfxRenderer& renderer, uint16_t missing, const std::string& exclude) {
+  // Each borrowed family keeps its interval tables resident at three sizes, so at
+  // most two are taken.
   static constexpr size_t kMaxBorrowedFamilies = 2;
   static constexpr size_t kMaxProbedFamilies = 24;
   struct Candidate {
     const SdCardFontFamilyInfo* family;
     uint16_t coverage;
   };
-  uint16_t missing = static_cast<uint16_t>(((1u << std::size(kFallbackProbes)) - 1) & ~readerCoverage);
   std::vector<Candidate> candidates;
   candidates.reserve(kMaxProbedFamilies);
   for (const auto& other : registry_.getFamilies()) {
     if (missing == 0 || candidates.size() >= kMaxProbedFamilies) break;
-    if (other.vector || other.name == familyName) continue;
+    if (other.vector || other.name == exclude) continue;
     const int probeId = manager_.loadFallbackFile(other, renderer, kUiFontSizes[0].pointSize);
     if (probeId == 0) continue;
-    const uint16_t coverage = probeCoverage(probeId) & missing;
+    const uint16_t coverage = probeCoverage(renderer, probeId) & missing;
     manager_.unloadFont(probeId, renderer);
     if (coverage != 0) candidates.push_back({&other, coverage});
   }
@@ -291,18 +335,31 @@ void SdCardFontSystem::setupUiFallbacks(GfxRenderer& renderer) {
   for (size_t probe = 0; probe < std::size(kFallbackProbes) && borrowed < kMaxBorrowedFamilies; probe++) {
     const auto bit = static_cast<uint16_t>(1u << probe);
     if ((missing & bit) == 0) continue;
+    // Of the families with this script, take the one covering the most scripts still
+    // missing (a Thai+Japanese face over a Thai-only one): fewer families to hold,
+    // and one face for mixed titles.
+    const Candidate* best = nullptr;
+    int bestScripts = 0;
     for (const auto& candidate : candidates) {
       if ((candidate.coverage & bit) == 0) continue;
+      const int scripts = __builtin_popcount(candidate.coverage & missing);
+      if (scripts > bestScripts) {
+        best = &candidate;
+        bestScripts = scripts;
+      }
+    }
+    if (best != nullptr) {
+      const auto& candidate = *best;
       for (const auto& ui : kUiFontSizes) {
         const int sdFontId = manager_.loadFallbackFile(*candidate.family, renderer, ui.pointSize);
         if (sdFontId != 0 && !renderer.addFallbackFont(ui.fontId, sdFontId)) {
           manager_.unloadFont(sdFontId, renderer);
         }
       }
-      LOG_DBG("SDFS", "UI borrows %s for scripts %s lacks", candidate.family->name.c_str(), familyName.c_str());
+      LOG_DBG("SDFS", "UI borrows %s for scripts %s lacks", candidate.family->name.c_str(),
+              exclude.empty() ? "the built-in fonts" : exclude.c_str());
       missing = static_cast<uint16_t>(missing & ~candidate.coverage);
       borrowed++;
-      break;
     }
   }
 }
@@ -323,6 +380,7 @@ int SdCardFontSystem::variantFontId(const int readerFontId, const uint8_t pointS
 void SdCardFontSystem::unloadCpfonts(GfxRenderer& renderer) {
   cpfontVariants_.clear();  // the manager owns and frees the fonts themselves
   manager_.unloadAll(renderer);
+  uiFallbacksOnly_ = false;
 }
 
 int SdCardFontSystem::resolveVariant(const int fontId, const float scale) {
