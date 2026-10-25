@@ -337,6 +337,24 @@ void EpubReaderMenuActivity::renderSheet() {
   }
 
   const Rect& s = l.sheet;
+  const int screenW = renderer.getScreenWidth();
+  if (pageBehind) {
+    // Clear the page line the sheet's top edge cuts through. A gap between lines is
+    // several blank rows; one blank row can sit inside a line (e.g. under Thai marks).
+    constexpr int kMaxScan = 120;
+    constexpr int kMinGapRows = 4;
+    int blankRows = 0;
+    for (int y = s.y - 1; y >= std::max(0, s.y - kMaxScan); y--) {
+      bool blank = true;
+      for (int x = 0; x < screenW && blank; x++) blank = !renderer.readPixel(x, y);
+      blankRows = blank ? blankRows + 1 : 0;
+      if (blankRows == kMinGapRows) {
+        const int clearTop = y + kMinGapRows;
+        if (clearTop < s.y) renderer.fillRect(0, clearTop, screenW, s.y - clearTop, false);
+        break;
+      }
+    }
+  }
   renderer.fillRoundedRect(s.x, s.y, s.width, s.height + radius, radius, true, true, false, false, Color::White);
   renderer.drawRoundedRect(s.x, s.y, s.width, s.height + radius, 3, radius, true, true, false, false, true);
 
@@ -401,6 +419,9 @@ void EpubReaderMenuActivity::renderSheet() {
                       top + icon.h + 4, label.c_str(), !selected);
   }
 
+  // The page's status bar sits under the hints; clear it so they read cleanly.
+  const int hintsTop = s.y + s.height;
+  renderer.fillRect(0, hintsTop, screenW, renderer.getScreenHeight() - hintsTop, false);
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   renderer.displayBuffer();
