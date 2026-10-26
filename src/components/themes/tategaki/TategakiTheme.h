@@ -19,7 +19,12 @@ constexpr ThemeMetrics values = [] {
   v.controlRadius = 0;
   v.sheetRadius = 0;
   v.capsuleRadius = 0;
+  // A square popup is white with a black frame (BaseTheme::drawPopup), so its text
+  // and progress bar are black, unlike Shelf's rounded black popup.
   v.popupCornerRadius = 0;
+  v.popupTextInverted = true;
+  v.popupProgressFillInverted = true;
+  v.popupProgressOutlineInverted = true;
   v.tabPillFullSlot = true;
   return v;
 }();
