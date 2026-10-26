@@ -256,6 +256,7 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
   - "Banner" - Lyra Extended styling with your own images above and between the covers
   - "Shelf" - A card for the highlighted book above a shelf of four covers; the EPUB reader menu opens as a sheet of tiles
   - "Vertical" - The highlighted book's cover and vertical title beside a row of spines, read right to left, with vertical tabs and a right-to-left EPUB reader menu sheet
+  - "Tanzaku" - Like "Vertical", without the cover: a narrower card with the highlighted book's title in one column (shortened with "…" when long) and the author, and no cover images are made for the home screen
   - "Cover Grid" - A grid of covers (boards with PSRAM only)
 
 - **Sunlight Fading Fix**: Configure whether to enable a software-fix for the issue where white X4 models may fade when used in direct sunlight:

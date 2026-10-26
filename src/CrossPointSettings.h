@@ -201,7 +201,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // UI Theme
   // COVER_GRID stays last: the settings list hides it on boards without PSRAM by dropping
   // the final entry. fromJson() migrates older numberings by the "uiThemeOrder" marker.
-  enum UI_THEME { LYRA_3_COVERS = 0, BANNER = 1, SHELF = 2, TATEGAKI = 3, COVER_GRID = 4 };
+  enum UI_THEME { LYRA_3_COVERS = 0, BANNER = 1, SHELF = 2, TATEGAKI = 3, TATEGAKI_NO_COVER = 4, COVER_GRID = 5 };
   // Banner theme images: BMP paths on the SD card (empty = section hidden).
   static constexpr size_t HOME_IMAGE_PATH_LEN = 128;
   // Which way the home carousel advances

@@ -32,10 +32,13 @@ constexpr ThemeMetrics values = [] {
 
 class TategakiTheme : public ShelfTheme {
  public:
+  // Without a cover (the "Tanzaku" theme) the card is compact: a one-column
+  // title and the author start at the top, and no cover thumbnails are made.
+  explicit TategakiTheme(bool showCover = true) : showCover(showCover) {}
   void drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
                            int selectorIndex, bool& coverRendered, bool& coverBufferStored, bool& bufferRestored,
                            std::function<bool()> storeCoverBuffer) const override;
-  // Only the highlighted book's cover is shown; -1 when there is no room for it.
+  // Only the highlighted book's cover is shown; -1 when there is none or no room for it.
   int homeCoverThumbHeight(const GfxRenderer& renderer) const override;
   int homeExtraCoverThumbHeights(const GfxRenderer&, int*, int) const override { return 0; }
   bool homeBookColumns(const GfxRenderer& renderer, Rect tile, int count, HomeBookColumns& columns) const override;
@@ -44,4 +47,7 @@ class TategakiTheme : public ShelfTheme {
 
  protected:
   int cornerRadius() const override { return 0; }
+
+ private:
+  bool showCover;
 };

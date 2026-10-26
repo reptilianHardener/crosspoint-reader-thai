@@ -108,7 +108,7 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
   if (homeTopImage[0] != '\0') doc["homeTopImage"] = homeTopImage;
   if (homeMiddleImage[0] != '\0') doc["homeMiddleImage"] = homeMiddleImage;
   // Marks uiTheme as using the current UI_THEME numbering.
-  doc["uiThemeOrder"] = 3;
+  doc["uiThemeOrder"] = 4;
   // The displayed option list varies by board, so this setting uses a dynamic
   // display-index mapping and is skipped by the generic persistence loop.
   doc["longPressMenuFunction"] = longPressMenuFunction;
@@ -291,9 +291,13 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   // Older numberings, read from the stored value (the loop above clamped it to the new list):
   // no marker had COVER_GRID at 5, marker 1 added BANNER (COVER_GRID 6), marker 2 added SHELF
   // and TATEGAKI (COVER_GRID 8). Classic, Lyra, Halo 2 and RoundedRaff (0, 1, 3, 4 in all of
-  // them) were dropped after that and become Lyra Extended.
+  // them) were dropped after that and become Lyra Extended. Marker 3 had COVER_GRID at 4,
+  // where marker 4 put TATEGAKI_NO_COVER.
   const int themeOrder = doc["uiThemeOrder"] | 0;
-  if (themeOrder < 3) {
+  if (themeOrder == 3) {
+    if ((doc["uiTheme"] | 0) == 4) uiTheme = UITheme::supportsCoverGrid() ? COVER_GRID : LYRA_3_COVERS;
+    needsResave = true;
+  } else if (themeOrder < 3) {
     int stored = doc["uiTheme"] | 2;
     if ((themeOrder == 0 && stored == 5) || (themeOrder == 1 && stored == 6)) stored = 8;
     static constexpr uint8_t ORDER2_TO_CURRENT[] = {LYRA_3_COVERS, LYRA_3_COVERS, LYRA_3_COVERS,

@@ -87,6 +87,17 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       LOG_DBG("UI", "Using Tategaki theme");
       break;
     }
+    case CrossPointSettings::UI_THEME::TATEGAKI_NO_COVER: {
+      auto theme = makeUniqueNoThrow<TategakiTheme>(false);
+      if (!theme) {
+        LOG_ERR("UI", "OOM: Tanzaku theme");
+        return;
+      }
+      currentTheme = std::move(theme);
+      currentMetrics = &TategakiMetrics::values;
+      LOG_DBG("UI", "Using Tanzaku theme");
+      break;
+    }
     case CrossPointSettings::UI_THEME::LYRA_3_COVERS:
       LOG_DBG("UI", "Using Lyra 3 Covers theme");
       currentTheme = std::make_unique<Lyra3CoversTheme>();

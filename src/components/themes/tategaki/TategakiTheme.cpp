@@ -20,7 +20,7 @@ namespace {
 constexpr int kTitleFont = UI_12_FONT_ID;
 constexpr int kSidePadding = 16;
 constexpr int kSectionGap = 10;
-constexpr int kTitleColumns = 2;
+constexpr int kTitleColumns = 2;  // one without a cover, where the card is compact
 constexpr int kColumnGap = 6;
 constexpr int kBarWidth = 10;
 constexpr int kRuleGap = 12;
@@ -39,6 +39,7 @@ struct TategakiLayout {
   int bottom = 0;
   int titleRight = 0;  // right edge of the first (rightmost) title column
   int titleColumnWidth = 0;
+  int titleColumns = 0;
   int authorX = 0;  // left edge of the author column
   int authorWidth = 0;
   int progressX = 0;  // left edge of the progress column
@@ -50,13 +51,15 @@ struct TategakiLayout {
   int textTop = 0;  // where the vertical title and the author / progress column start
 };
 
-TategakiLayout computeLayout(const GfxRenderer& renderer, const Rect rect, const int bottomLimit) {
+TategakiLayout computeLayout(const GfxRenderer& renderer, const Rect rect, const int bottomLimit,
+                             const bool showCover) {
   TategakiLayout l;
   l.top = rect.y + 8;
   l.bottom = std::min(rect.y + rect.height, bottomLimit) - 4;
   l.titleColumnWidth = renderer.getLineHeight(kTitleFont);
   l.titleRight = rect.x + rect.width - kSidePadding;
-  const int titleLeft = l.titleRight - kTitleColumns * l.titleColumnWidth - (kTitleColumns - 1) * kColumnGap;
+  l.titleColumns = showCover ? kTitleColumns : 1;
+  const int titleLeft = l.titleRight - l.titleColumns * l.titleColumnWidth - (l.titleColumns - 1) * kColumnGap;
   l.authorWidth = renderer.getLineHeight(SMALL_FONT_ID);
   l.authorX = titleLeft - kRuleGap - l.authorWidth;
   l.progressWidth = std::max(kBarWidth, renderer.getTextWidth(SMALL_FONT_ID, "100%", EpdFontFamily::BOLD));
@@ -68,7 +71,7 @@ TategakiLayout computeLayout(const GfxRenderer& renderer, const Rect rect, const
   const int coverW = l.titleRight - l.progressX;
   const int coverH = std::min(coverW * 3 / 2, (l.bottom - l.top) * 2 / 5);
   l.textTop = l.top;
-  if (coverH >= kMinCoverHeight) {
+  if (showCover && coverH >= kMinCoverHeight) {
     const int width = std::min(coverW, coverH * 2 / 3 + 1);
     l.cover = Rect{l.titleRight - width, l.top, width, coverH};
     l.textTop = l.top + coverH + kCoverGap;
@@ -181,7 +184,7 @@ void drawCurrentBook(const GfxRenderer& renderer, const TategakiLayout& l, const
   if (l.cover.height > 0) ShelfTheme::drawCover(renderer, book, l.cover);
   const int height = l.bottom - l.textTop;
   const auto columns =
-      splitColumns(renderer, kTitleFont, book.title.c_str(), height, kTitleColumns, EpdFontFamily::BOLD);
+      splitColumns(renderer, kTitleFont, book.title.c_str(), height, l.titleColumns, EpdFontFamily::BOLD);
   int columnRight = l.titleRight;
   for (const auto& column : columns) {
     renderer.drawTextVertical(kTitleFont, columnRight, l.textTop, column.c_str(), true, EpdFontFamily::BOLD);
@@ -301,13 +304,14 @@ void drawSpine(const GfxRenderer& renderer, const Rect s, const RecentBook& book
 }  // namespace
 
 int TategakiTheme::homeCoverThumbHeight(const GfxRenderer& renderer) const {
-  const TategakiLayout l = computeLayout(renderer, tileRect(renderer), menuTop(renderer, MENU_HEIGHT) - kSectionGap);
+  const TategakiLayout l =
+      computeLayout(renderer, tileRect(renderer), menuTop(renderer, MENU_HEIGHT) - kSectionGap, showCover);
   return l.cover.height > 0 ? coverThumbHeight(l.cover) : -1;
 }
 
 bool TategakiTheme::homeBookColumns(const GfxRenderer& renderer, const Rect tile, const int count,
                                     HomeBookColumns& columns) const {
-  const TategakiLayout l = computeLayout(renderer, tile, menuTop(renderer, MENU_HEIGHT) - kSectionGap);
+  const TategakiLayout l = computeLayout(renderer, tile, menuTop(renderer, MENU_HEIGHT) - kSectionGap, showCover);
   columns.count = spineCount(l, tile, count);
   const Rect leftmost = spineRect(l, std::max(1, columns.count) - 1);
   columns.left = leftmost.x;
@@ -329,7 +333,7 @@ void TategakiTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
   (void)coverBufferStored;
   (void)bufferRestored;
   (void)storeCoverBuffer;
-  const TategakiLayout l = computeLayout(renderer, rect, menuTop(renderer, MENU_HEIGHT) - kSectionGap);
+  const TategakiLayout l = computeLayout(renderer, rect, menuTop(renderer, MENU_HEIGHT) - kSectionGap, showCover);
   const int count = spineCount(l, rect, static_cast<int>(recentBooks.size()));
 
   renderer.fillRect(l.ruleX, l.top, 2, l.bottom - l.top, true);
