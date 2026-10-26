@@ -33,3 +33,6 @@ lib/EpdFont/scripts/output/
 sdkconfig.sticky
 sdkconfig.x4pro
 flake.*
+
+# scripts/device_steps.py output
+device-steps/

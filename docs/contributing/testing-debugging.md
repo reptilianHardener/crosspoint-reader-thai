@@ -53,7 +53,19 @@ the rest, for example `SCREENSHOT` or `KEY:BACK`.
   `-DENABLE_SERIAL_KEYS`; other builds, including releases, ignore the command.
 
 Together they let a script walk through screens and capture each one, which
-makes on-device test rounds repeatable.
+makes on-device test rounds repeatable. `scripts/device_steps.py` does this
+(it needs pyserial and Pillow: `python3 -m pip install -r scripts/requirements.txt`):
+
+```sh
+python3 scripts/device_steps.py SHOT:home KEY:DOWN KEY:RIGHT KEY:CONFIRM \
+    WAIT:3 SHOT:library KEY:BACK WAIT:12 MEM
+```
+
+It waits for each `KEY_OK` reply, saves screenshots as upright PNG files in
+`device-steps/`, and prints the heap lines (`[MEM] Free`, `MaxAlloc`) as a
+table at the end. Heap lines appear every 10 seconds, so the example waits
+before `MEM`. Use `--file` to read the steps from a file, one per line; see
+`--help` for other panel sizes and for landscape screenshots.
 
 ## Useful bug report contents
 
