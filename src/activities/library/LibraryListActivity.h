@@ -100,6 +100,10 @@ class LibraryListActivity final : public UiTabListActivity {
   // Series name for a row of the series order, and the subtitle for a book in it.
   bool seriesNameForRow(int row, std::string& out);
   void formatSeriesSubtitle(const library::ClixRecord& record, const std::string& author, std::string& out);
+  // Reading percent of a book in the open series (-1 when unread or unknown).
+  int seriesPercentFor(int entry, const library::ClixRecord& record);
+  // Entry of the open series' book read most recently, or 0 when none was.
+  int mostRecentSeriesEntry(int firstRow, int count);
   void expandGroup(int groupEntry);
   void restoreExpandedList();
   void selectTab(int index, bool toggleIfActive);
@@ -191,6 +195,11 @@ class LibraryListActivity final : public UiTabListActivity {
   uint16_t seriesRowTotal = 0;
   // Header title while a series is open; stable for the render task.
   std::string seriesTitle;
+  // Reading percent per book of the open series, read from each book's cache the
+  // first time its row is drawn: one byte per book, freed when the series closes.
+  static constexpr int8_t PERCENT_NOT_READ = -2;
+  std::unique_ptr<int8_t[]> seriesPercents;
+  uint16_t seriesPercentCount = 0;
   freeink::ui::ListNav seriesListNav;
 
   // Visible-window row storage, reused across renders (buildRows). Bounded by

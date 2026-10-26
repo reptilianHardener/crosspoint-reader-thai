@@ -27,6 +27,7 @@
 #include "components/icons/search32.h"
 #include "fontIds.h"
 #include "util/BookCacheUtils.h"
+#include "util/BookProgress.h"
 
 namespace fui = freeink::ui;
 
@@ -696,17 +697,59 @@ void LibraryListActivity::showSeriesList() {
 
 void LibraryListActivity::openSeries(const int group) {
   if (group < 0 || group >= groupCount) return;
+  // Reads the index and replaces seriesPercents, both of which the render task uses.
+  RenderLock lock(*this);
   seriesListNav = activeNav();
   seriesGroup = group;
   groupsCollapsed = false;
   seriesNameForRow(groupStarts[group], seriesTitle);
+  const int count = seriesGroupEnd(group) - groupStarts[group];
+  seriesPercents = makeUniqueNoThrow<int8_t[]>(static_cast<size_t>(count));
+  seriesPercentCount = seriesPercents ? static_cast<uint16_t>(count) : 0;
+  for (int i = 0; i < seriesPercentCount; i++) seriesPercents[i] = PERCENT_NOT_READ;
   auto& nav = activeNav();
-  nav.reset(1);
+  nav.reset(1 + mostRecentSeriesEntry(groupStarts[group], count));
   nav.followOnBuild = true;
   requestUpdate();
 }
 
+int LibraryListActivity::mostRecentSeriesEntry(const int firstRow, const int count) {
+  // resolvePinned() matched the recent books (newest first) to index rows, so
+  // only 2-byte orders are read here: a lower rank is a more recent book.
+  uint16_t ordinals[RecentBooksStore::MAX_RECENT_BOOKS];
+  for (int r = 0; r < pinnedTotal; r++) {
+    ordinals[r] =
+        pinnedAscRows[r] == 0xFFFF ? 0xFFFF : index.ordinalForRow(library::SortOrder::RecentAsc, pinnedAscRows[r]);
+  }
+  int best = 0;
+  int bestRank = pinnedTotal;
+  for (int entry = 0; entry < count && bestRank > 0; entry++) {
+    const uint16_t ordinal = index.ordinalForRow(library::SortOrder::Series, static_cast<uint16_t>(firstRow + entry));
+    if (ordinal == 0xFFFF) continue;
+    for (int r = 0; r < bestRank; r++) {
+      if (ordinals[r] == ordinal) {
+        best = entry;
+        bestRank = r;
+        break;
+      }
+    }
+  }
+  return best;
+}
+
+int LibraryListActivity::seriesPercentFor(const int entry, const library::ClixRecord& record) {
+  if (seriesGroup < 0 || !query.empty() || !seriesPercents || entry < 0 || entry >= seriesPercentCount) return -1;
+  if (seriesPercents[entry] == PERCENT_NOT_READ) {
+    std::string path;
+    seriesPercents[entry] = static_cast<int8_t>(index.readPath(record, path) ? loadBookProgress(path) : -1);
+  }
+  return seriesPercents[entry];
+}
+
 void LibraryListActivity::closeSeries() {
+  RenderLock lock(*this);
+  seriesPercents.reset();
+  seriesPercentCount = 0;
   seriesGroup = -1;
   groupsCollapsed = true;
   activeNav() = seriesListNav;
@@ -1021,6 +1064,13 @@ void LibraryListActivity::buildRows(UiScreen& screen) {
       if (seriesRows) {
         std::string& subtitle = winHeaders[static_cast<size_t>(headers++)];
         formatSeriesSubtitle(record, author, subtitle);
+        const int percent = seriesPercentFor(entry, record);
+        if (percent > 0) {
+          char text[8];
+          snprintf(text, sizeof(text), "%d%%", percent);
+          if (!subtitle.empty()) subtitle += ", ";
+          subtitle += text;
+        }
         if (!subtitle.empty()) item.subtitle = subtitle.c_str();
       } else if (!authorGrouped && !author.empty()) {
         item.subtitle = author.c_str();

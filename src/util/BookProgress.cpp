@@ -18,15 +18,17 @@ uint32_t readLe32(const uint8_t* p) {
 int loadBookProgress(const std::string& path) {
   uint8_t data[10]{};
   if (FsHelpers::hasReflowableBookExtension(path)) {
-    // Metadata objects exceed the stack budget; only the featured book is loaded, once per entry.
+    // Metadata objects exceed the stack budget. The constructor only derives the cache
+    // path, so a book never opened is answered without loading it.
     auto epub = makeUniqueNoThrow<Epub>(path, "/.crosspoint");
     if (!epub) {
-      LOG_ERR("HOME", "OOM: progress metadata");
+      LOG_ERR("PROG", "OOM: progress metadata");
       return -1;
     }
-    if (!epub->load(false, true)) return -1;
+    const std::string progressPath = epub->getCachePath() + "/progress.bin";
+    if (!Storage.exists(progressPath.c_str()) || !epub->load(false, true)) return -1;
     HalFile file;
-    if (!Storage.openFileForRead("HOME", epub->getCachePath() + "/progress.bin", file)) return -1;
+    if (!Storage.openFileForRead("PROG", progressPath, file)) return -1;
     const int size = file.read(data, sizeof(data));
     if (size != 4 && size != 6 && size != 10) return -1;
     const int spine = data[0] | (data[1] << 8);
@@ -41,13 +43,13 @@ int loadBookProgress(const std::string& path) {
   if (FsHelpers::hasXtcExtension(path)) {
     auto xtc = makeUniqueNoThrow<Xtc>(path, "/.crosspoint");
     if (!xtc) {
-      LOG_ERR("HOME", "OOM: XTC progress metadata");
+      LOG_ERR("PROG", "OOM: XTC progress metadata");
       return -1;
     }
-    if (!xtc->load()) return -1;
+    const std::string progressPath = xtc->getCachePath() + "/progress.bin";
+    if (!Storage.exists(progressPath.c_str()) || !xtc->load()) return -1;
     HalFile file;
-    if (!Storage.openFileForRead("HOME", xtc->getCachePath() + "/progress.bin", file) || file.read(data, 4) != 4)
-      return -1;
+    if (!Storage.openFileForRead("PROG", progressPath, file) || file.read(data, 4) != 4) return -1;
     const uint32_t page = readLe32(data);
     if (xtc->getPageCount() == 0) return -1;
     if (page >= xtc->getPageCount()) return 100;
