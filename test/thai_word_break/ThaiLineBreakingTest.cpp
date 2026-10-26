@@ -133,3 +133,16 @@ TEST(ThaiLineBreaking, MaiYamokAfterASpaceOrZeroWidthBreakStaysOnTheLine) {
   const std::vector<std::vector<std::string>> zwspExpected{{"ก"}, {"ข้าง", "ๆ"}};
   EXPECT_EQ(wordsOf(zwsp), zwspExpected);
 }
+
+TEST(ThaiLineBreaking, PaiyannoiStaysWithTheWordItAbbreviates) {
+  Hyphenator::setPreferredLanguage("th");
+  // ก + space + กรุง + เทพ is 60 px and ฯ makes 68, so in 64 px ฯ alone would start
+  // line 2. It moves down with เทพ instead (กรุง|เทพ is a real word boundary).
+  const auto lines = layout({{"ก"}, {"กรุงเทพฯ"}}, false, 64);
+  for (const auto& line : lines) {
+    ASSERT_FALSE(line.words.empty());
+    EXPECT_NE(line.words.front().rfind("ฯ", 0), 0u) << "line starts with Paiyannoi";
+  }
+  const std::vector<std::vector<std::string>> expected{{"ก", "กรุง"}, {"เทพฯ"}};
+  EXPECT_EQ(wordsOf(lines), expected);
+}

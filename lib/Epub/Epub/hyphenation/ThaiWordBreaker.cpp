@@ -287,8 +287,10 @@ std::vector<size_t> ThaiWordBreaker::breakIndexes(const std::vector<CodepointInf
   breaks.reserve(cps.size());
 
   for (size_t idx = 0; idx + 1 < segments.size(); ++idx) {
-    // Mai Yamok (ๆ) repeats the word before it, so a line never starts with it.
-    if (cps[segments[idx].end].value == 0x0E46) continue;
+    // Mai Yamok (ๆ) repeats the word before it and Paiyannoi (ฯ) abbreviates it
+    // (กรุงเทพฯ), so neither is split from that word.
+    const uint32_t next = cps[segments[idx].end].value;
+    if (next == 0x0E46 || next == 0x0E2F) continue;
     breaks.push_back(segments[idx].end);
   }
 

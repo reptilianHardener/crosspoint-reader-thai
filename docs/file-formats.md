@@ -90,6 +90,13 @@ if (parsedSize != fileSize) {
 
 ## `section.bin`
 
+### Version 70
+
+Version 70 preserves the binary layout but rebuilds completed and partial
+sections because Thai text no longer breaks a line before Paiyannoi (ฯ) when it
+is written straight after its word, as in กรุงเทพฯ. Book metadata and saved
+progress are kept.
+
 ### Version 69
 
 Version 69 preserves the binary layout but rebuilds completed and partial
