@@ -25,6 +25,7 @@ namespace {
 
 // Soft hyphen byte pattern used throughout EPUBs (UTF-8 for U+00AD).
 constexpr char SOFT_HYPHEN_UTF8[] = "\xC2\xAD";
+constexpr char ZERO_WIDTH_SPACE_UTF8[] = "\xE2\x80\x8B";
 constexpr size_t SOFT_HYPHEN_BYTES = 2;
 // Paragraph-level direction: scan the first N words to find base direction.
 constexpr size_t RTL_PARAGRAPH_PROBE_WORDS = 3;
@@ -91,6 +92,105 @@ bool containsThaiRun(const std::string& text) {
   }
   return false;
 }
+
+// A zero-width space or soft hyphen between two Thai characters is a publisher's segmentation
+// hint, not part of the word. Removes them; each one adds its byte offset in the result to hints
+// and its codepoint index in the input to stripped. Words without one come back unchanged and
+// allocate nothing (a soft hyphen in a Latin word is left to the hyphenator).
+std::string stripThaiInternalSeparators(std::string word, std::vector<uint16_t>& hints,
+                                        std::vector<uint32_t>& stripped) {
+  if (word.find(ZERO_WIDTH_SPACE_UTF8) == std::string::npos && word.find(SOFT_HYPHEN_UTF8) == std::string::npos) {
+    return word;
+  }
+  // Pass 1 counts: a Latin word with a soft hyphen must not pay for a copy.
+  const auto isSeparator = [](const uint32_t cp) { return cp == 0x200B || cp == 0x00AD; };
+  size_t count = 0;
+  {
+    const auto* ptr = reinterpret_cast<const unsigned char*>(word.c_str());
+    uint32_t prev = 0;
+    while (*ptr) {
+      const uint32_t cp = utf8NextCodepoint(&ptr);
+      if (cp == 0) break;
+      if (isSeparator(cp) && utf8IsThaiCodepoint(prev)) {
+        const auto* peek = ptr;
+        if (utf8IsThaiCodepoint(utf8NextCodepoint(&peek))) {
+          ++count;
+          continue;
+        }
+      }
+      prev = cp;
+    }
+  }
+  if (count == 0) return word;
+
+  hints.reserve(count);
+  stripped.reserve(count);
+  std::string out;
+  out.reserve(word.size());
+  const auto* ptr = reinterpret_cast<const unsigned char*>(word.c_str());
+  uint32_t prev = 0;
+  uint32_t index = 0;
+  while (*ptr) {
+    const auto* const start = ptr;
+    const uint32_t cp = utf8NextCodepoint(&ptr);
+    if (cp == 0) break;
+    if (isSeparator(cp) && utf8IsThaiCodepoint(prev)) {
+      const auto* peek = ptr;
+      if (utf8IsThaiCodepoint(utf8NextCodepoint(&peek))) {
+        hints.push_back(static_cast<uint16_t>(out.size()));
+        stripped.push_back(index++);
+        continue;
+      }
+    }
+    out.append(reinterpret_cast<const char*>(start), static_cast<size_t>(ptr - start));
+    prev = cp;
+    ++index;
+  }
+  return out;
+}
+
+// Codepoint index in the source word for an index in the word with its separators stripped.
+uint32_t sourceIndexFor(const std::vector<uint32_t>& stripped, const uint32_t index) {
+  uint32_t source = index;
+  for (const uint32_t removed : stripped) {
+    if (removed > source) break;
+    ++source;
+  }
+  return source;
+}
+
+}  // namespace
+
+// Absorbed source codepoints must be recorded in ascending order. Stripped separators and NFC
+// absorptions are interleaved through this context: before recording an NFC absorption, every
+// stripped index that precedes it is recorded first.
+struct ParsedText::AbsorbedSourceContext {
+  ParsedText* text;
+  uint32_t start;
+  const std::vector<uint32_t>* stripped;
+  size_t nextStripped = 0;
+  bool composed = false;
+};
+
+bool ParsedText::recordStrippedBefore(AbsorbedSourceContext& context, const uint32_t sourceIndex) {
+  while (context.nextStripped < context.stripped->size() && (*context.stripped)[context.nextStripped] < sourceIndex) {
+    if (!context.text->recordAbsorbedSourceOffset(context.start + (*context.stripped)[context.nextStripped])) {
+      return false;
+    }
+    ++context.nextStripped;
+  }
+  return true;
+}
+
+bool ParsedText::absorbComposedSource(const uint32_t offset, void* context) {
+  auto& source = *static_cast<AbsorbedSourceContext*>(context);
+  const uint32_t sourceIndex = sourceIndexFor(*source.stripped, offset);
+  source.composed = true;
+  return recordStrippedBefore(source, sourceIndex) &&
+         source.text->recordAbsorbedSourceOffset(source.start + sourceIndex);
+}
+
+namespace {
 
 // Line cost for the optimal-fit breaker. Ordinary paragraphs use squared slack with a free
 // last line. Thai paragraphs have no visible word gaps to absorb slack, so a ragged or
@@ -484,18 +584,16 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
   // misplaced. Compose to NFC here, the single funnel every word passes through, so a
   // precomposed glyph is used instead. This runs once per word at layout time (the
   // result is cached in the section file) and is a cheap no-op for mark-free text.
-  struct SourceContext {
-    ParsedText* text;
-    uint32_t start;
-  } sourceContext{this, visibleTextOffset};
-  word = utf8ComposeNfc(
-      word,
-      [](const uint32_t offset, void* context) {
-        const auto& source = *static_cast<SourceContext*>(context);
-        return source.text->recordAbsorbedSourceOffset(source.start + offset);
-      },
-      &sourceContext);
+  std::vector<uint16_t> separatorHints;
+  std::vector<uint32_t> strippedIndexes;
+  word = stripThaiInternalSeparators(std::move(word), separatorHints, strippedIndexes);
+  AbsorbedSourceContext sourceContext{this, visibleTextOffset, &strippedIndexes};
+  word = utf8ComposeNfc(word, absorbComposedSource, &sourceContext);
   if (word.empty()) return;
+  if (!recordStrippedBefore(sourceContext, std::numeric_limits<uint32_t>::max())) return;
+  // Hints are byte offsets taken before composition; composing moves them. They only help
+  // unknown text, so a composed word simply goes without.
+  if (sourceContext.composed) separatorHints.clear();
 
   EpdFontFamily::Style baseStyle = fontStyle;
   if (underline) {
@@ -633,7 +731,8 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
   // to real dictionary boundaries; cluster-level fallback splits are left to the overflow
   // path in hyphenateWordAtIndex().
   if (containsThaiRun(word)) {
-    const auto thaiBreaks = Hyphenator::breakOffsets(word, /*includeFallback=*/false);
+    const auto thaiBreaks =
+        Hyphenator::breakOffsets(word, /*includeFallback=*/false, separatorHints.empty() ? nullptr : &separatorHints);
     if (!thaiBreaks.empty()) {
       ensureTokenCapacity(thaiBreaks.size() + 1);
       bool firstToken = true;
@@ -647,7 +746,7 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
         const std::string_view token(word.data() + tokenStart, info.byteOffset - tokenStart);
         pushToken(token, firstToken ? effectiveAttachToPrevious : false, firstToken ? effectiveNoSpaceBefore : true,
                   /*focusBoundary=*/0, tokenVisibleOffset);
-        tokenVisibleOffset += countCodepoints(token);
+        tokenVisibleOffset = sourceOffsetAfter(tokenVisibleOffset, countCodepoints(token));
         firstToken = false;
         tokenStart = info.byteOffset;
       }

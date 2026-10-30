@@ -88,7 +88,9 @@ namespace {
 // v173: Upstream v73 (ruby layout, .notdef glyphs) plus the fork's changes; the fork's ruby
 //       spare-room rule is dropped in favor of upstream's ruby layout. The partial sentinel
 //       below falls as this rises: it meets an upstream full version when the two sum to 282.
-constexpr uint8_t SECTION_FILE_VERSION = 173;
+// v174: Hidden breaks (U+200B, U+00AD) inside a Thai word defer to the dictionary; single
+//       letters are not dictionary words; an overlong Thai run is cut between words.
+constexpr uint8_t SECTION_FILE_VERSION = 174;
 // Written into the version field while a build is in progress; patched to
 // SECTION_FILE_VERSION only when the build is finalized. An abandoned /
 // crash-interrupted .bin therefore carries version 0, which loadSectionFile rejects

@@ -127,6 +127,33 @@ TEST_F(ThaiWordBreak, SegmentsRunsAtDictionaryWordBoundaries) {
   }
 }
 
+TEST_F(ThaiWordBreak, SingleLettersAreNotWords) {
+  // The word list holds letter names such as ห. An unknown run must not be cut at them.
+  EXPECT_EQ(segment("หญิ"), "หญิ");
+  EXPECT_EQ(segment("เด็กหญิ"), "เด็ก=หญิ");
+  // The fallback used only for a word wider than the line still cuts unknown text at clusters.
+  EXPECT_EQ(segment("เด็กหญิ", true), "เด็ก=ห=ญิ");
+}
+
+TEST_F(ThaiWordBreak, HintsBreakOnlyUnknownText) {
+  // A hint is where the source had a zero-width space or soft hyphen. Byte offsets: Thai is
+  // three bytes per codepoint.
+  const auto breaksWithHint = [](const std::string& word, const uint16_t hint) {
+    const std::vector<uint16_t> hints{hint};
+    return breakOffsetsToPositions(word, Hyphenator::breakOffsets(word, false, &hints));
+  };
+  // Inside a dictionary word (เด็กหญิง, and ต่าง before its ๆ): dropped.
+  EXPECT_TRUE(breaksWithHint("เด็กหญิง", 21).empty());
+  EXPECT_TRUE(breaksWithHint("ต่างๆ", 9).empty());
+  // Unknown text (ฃ and ฅ are obsolete letters): kept at a cluster boundary ...
+  EXPECT_EQ(breaksWithHint("ฃฅฃฅ", 6), (std::vector<size_t>{2}));
+  // ... but not before a vowel mark, nor before a consonant that carries การันต์ (์).
+  EXPECT_TRUE(breaksWithHint("ฃฅิฅ", 6).empty());
+  EXPECT_TRUE(breaksWithHint("ฃฅซ์", 6).empty());
+  // A hint at an existing boundary adds nothing.
+  EXPECT_EQ(breaksWithHint("ในการ", 6), (std::vector<size_t>{2}));
+}
+
 TEST_F(ThaiWordBreak, BreaksNeverRequestAnInsertedHyphen) {
   for (const auto& info : Hyphenator::breakOffsets("ในการขับเคลื่อนแทน", false)) {
     EXPECT_FALSE(info.requiresInsertedHyphen);

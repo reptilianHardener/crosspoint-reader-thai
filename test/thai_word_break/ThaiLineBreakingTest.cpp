@@ -103,6 +103,62 @@ TEST(ThaiLineBreaking, ZeroWidthSpaceIsABreakOpportunityWithoutAGap) {
   EXPECT_EQ(wordsOf(narrow), expected);
 }
 
+TEST(ThaiLineBreaking, HiddenBreakInsideADictionaryWordIsIgnored) {
+  Hyphenator::setPreferredLanguage("th");
+  // A publisher's ZWSP or soft hyphen inside เด็กหญิง: the word stays whole and the run still
+  // splits at the dictionary boundaries. Bases: เด็กหญิง 48 px, ทั้ง 16 px.
+  for (const char* separator : {"​", "­"}) {
+    const std::string run = std::string("เด็กหญิ") + separator + "งทั้งสี่";
+    const auto lines = layout({{run.c_str()}}, false, 400);
+    const std::vector<std::vector<std::string>> expected{{"เด็กหญิง", "ทั้ง", "สี่"}};
+    EXPECT_EQ(wordsOf(lines), expected) << (separator[0] == '\xE2' ? "zero-width space" : "soft hyphen");
+    ASSERT_EQ(lines.size(), 1u);
+    EXPECT_EQ(lines[0].xpos, (std::vector<int16_t>{0, 48, 64}));
+  }
+}
+
+TEST(ThaiLineBreaking, HiddenBreakInsideUnknownTextIsKept) {
+  Hyphenator::setPreferredLanguage("th");
+  // ฃ and ฅ are obsolete letters, so ฃฅฃฅ is in no dictionary: the dictionary cannot split it,
+  // and a publisher's ZWSP is the only boundary there.
+  const auto whole = layout({{"ฃฅฃฅ"}}, false, 400);
+  const std::vector<std::vector<std::string>> wholeExpected{{"ฃฅฃฅ"}};
+  EXPECT_EQ(wordsOf(whole), wholeExpected);
+  const auto hinted = layout({{"ฃฅ​ฃฅ"}}, false, 400);
+  const std::vector<std::vector<std::string>> hintedExpected{{"ฃฅ", "ฃฅ"}};
+  EXPECT_EQ(wordsOf(hinted), hintedExpected);
+  ASSERT_EQ(hinted.size(), 1u);
+  EXPECT_EQ(hinted[0].xpos, (std::vector<int16_t>{0, 16}));  // no gap at the hint
+  const auto narrow = layout({{"ฃฅ​ฃฅ"}}, false, 20);
+  const std::vector<std::vector<std::string>> narrowExpected{{"ฃฅ"}, {"ฃฅ"}};
+  EXPECT_EQ(wordsOf(narrow), narrowExpected);
+}
+
+TEST(ThaiLineBreaking, HiddenBreakInsideAWordBeforeMaiYamokIsIgnored) {
+  Hyphenator::setPreferredLanguage("th");
+  // ต่าง is a word; the ๆ after it never starts a line, and a hint inside ต่าง is still wrong.
+  const auto lines = layout({{"ต่า\u200Bงๆ"}}, false, 400);
+  const std::vector<std::vector<std::string>> expected{{"ต่างๆ"}};
+  EXPECT_EQ(wordsOf(lines), expected);
+}
+
+TEST(ThaiLineBreaking, HintInAWordThatNfcComposesIsDropped) {
+  Hyphenator::setPreferredLanguage("th");
+  // e + combining acute composes to é and shifts every byte after it, so the hint is not used;
+  // the word stays one valid UTF-8 token.
+  const auto lines = layout({{"e\u0301ก\u200Bขค"}}, false, 400);
+  const std::vector<std::vector<std::string>> expected{{"\u00E9กขค"}};
+  EXPECT_EQ(wordsOf(lines), expected);
+}
+
+TEST(ThaiLineBreaking, HiddenBreakBeforeAMarkIsDropped) {
+  Hyphenator::setPreferredLanguage("th");
+  // A ZWSP in front of a vowel mark can never be a boundary, even in unknown text.
+  const auto lines = layout({{"ฃฅ​ิฅ"}}, false, 400);
+  const std::vector<std::vector<std::string>> expected{{"ฃฅิฅ"}};
+  EXPECT_EQ(wordsOf(lines), expected);
+}
+
 TEST(ThaiLineBreaking, LatinTextIsUnaffected) {
   Hyphenator::setPreferredLanguage("en");
   const auto lines = layout({{"abc"}, {"def"}}, false, 400);

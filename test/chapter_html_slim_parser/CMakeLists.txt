@@ -15,6 +15,11 @@ add_executable(ChapterHtmlSlimParserTest
   ${REPO_ROOT}/lib/Epub/Epub/converters/ImageDimsProbe.cpp
   ${REPO_ROOT}/lib/Epub/Epub/converters/ImageToFramebufferDecoder.cpp
   ${REPO_ROOT}/lib/Utf8/Utf8.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/hyphenation/Hyphenator.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/hyphenation/ThaiWordBreaker.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/hyphenation/LanguageRegistry.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/hyphenation/LiangHyphenation.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/hyphenation/HyphenationCommon.cpp
 )
 
 target_include_directories(ChapterHtmlSlimParserTest PRIVATE

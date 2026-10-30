@@ -170,7 +170,9 @@ void collectDictionaryMatchEnds(const std::vector<CodepointInfo>& cps, const siz
       pos = scan;
       advanced = true;
 
-      if (isTerminalNode(nodeIndex) && boundaries[pos]) {
+      // The word list also holds letter names; a single letter is not a word here, or an
+      // unknown run such as หญิ would be cut into ห and ญิ.
+      if (isTerminalNode(nodeIndex) && boundaries[pos] && pos - start >= 2) {
         outMatches.push_back({pos});
       }
       break;
@@ -209,7 +211,8 @@ std::vector<Segment> buildSegments(const std::vector<Decision>& decisions, const
 
 }  // namespace
 
-std::vector<size_t> ThaiWordBreaker::breakIndexes(const std::vector<CodepointInfo>& cps, const bool includeFallback) {
+std::vector<size_t> ThaiWordBreaker::breakIndexes(const std::vector<CodepointInfo>& cps, const bool includeFallback,
+                                                  const std::vector<size_t>* hintIndexes) {
   if (cps.size() < 2) {
     return {};
   }
@@ -287,12 +290,28 @@ std::vector<size_t> ThaiWordBreaker::breakIndexes(const std::vector<CodepointInf
   breaks.reserve(cps.size());
 
   for (size_t idx = 0; idx + 1 < segments.size(); ++idx) {
-    // Mai Yamok (ๆ) repeats the word before it and Paiyannoi (ฯ) abbreviates it
-    // (กรุงเทพฯ), so neither is split from that word.
-    const uint32_t next = cps[segments[idx].end].value;
-    if (next == 0x0E46 || next == 0x0E2F) continue;
     breaks.push_back(segments[idx].end);
   }
+
+  // A publisher's hint inside a known word is wrong; inside unknown text it is the only
+  // boundary there, if the cluster allows one.
+  if (hintIndexes) {
+    for (const size_t hint : *hintIndexes) {
+      if (hint == 0 || hint >= cps.size() || !boundaries[hint]) continue;
+      for (const auto& segment : segments) {
+        if (hint > segment.start && hint < segment.end) {
+          if (!segment.isKnownWord) breaks.push_back(hint);
+          break;
+        }
+      }
+    }
+  }
+
+  // Mai Yamok (ๆ) repeats the word before it and Paiyannoi (ฯ) abbreviates it
+  // (กรุงเทพฯ), so neither is split from that word.
+  breaks.erase(std::remove_if(breaks.begin(), breaks.end(),
+                              [&](const size_t idx) { return cps[idx].value == 0x0E46 || cps[idx].value == 0x0E2F; }),
+               breaks.end());
 
   if (includeFallback) {
     for (const auto& segment : segments) {

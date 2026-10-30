@@ -90,6 +90,18 @@ if (parsedSize != fileSize) {
 
 ## `section.bin`
 
+### Version 174
+
+Version 174 keeps the binary layout and rebuilds completed and partial sections.
+Line breaks in Thai text change: a zero-width space or soft hyphen between two
+Thai characters no longer splits the run before the dictionary sees it. The
+dictionary segments the whole run, and the hidden character only breaks text
+the dictionary does not know. Single letters are no longer dictionary words, so
+unknown text is not cut at them. A Thai run longer than the 200-byte word
+buffer is cut at a dictionary word boundary when one lies within its last 60
+bytes; otherwise the cut before the last letter cluster remains. Book metadata
+and saved progress are kept.
+
 ### Version 173
 
 Version 173 is upstream version 73 with this fork's changes added. Version 172
