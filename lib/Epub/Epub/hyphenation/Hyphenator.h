@@ -35,7 +35,11 @@ class Hyphenator {
   //   5. Fallback every-N-chars splitting (only when includeFallback is true AND no
   //      pattern breaks were found). Used as a last resort to prevent a single oversized
   //      word from overflowing the page width.
-  static std::vector<BreakInfo> breakOffsets(const std::string& word, bool includeFallback);
+  // hintByteOffsets: positions in word where the source had a zero-width space or soft hyphen
+  //   between two Thai characters; see ThaiWordBreaker::breakIndexes. Used on the plain Thai
+  //   path only; a word that also holds a visible hyphen or apostrophe ignores them.
+  static std::vector<BreakInfo> breakOffsets(const std::string& word, bool includeFallback,
+                                             const std::vector<uint16_t>* hintByteOffsets = nullptr);
 
   // Provide a publication-level language hint (e.g. "en", "en-US", "ru") used to select hyphenation rules.
   static void setPreferredLanguage(const std::string& lang);

@@ -23,6 +23,7 @@
 #include "Epub/converters/ImageDimsProbe.h"
 #include "Epub/converters/ImageToFramebufferDecoder.h"
 #include "Epub/htmlEntities.h"
+#include "Epub/hyphenation/Hyphenator.h"
 
 // Minimum file size (in bytes) to show indexing popup - smaller chapters don't benefit from it
 constexpr size_t MIN_SIZE_FOR_POPUP = 10 * 1024;  // 10KB
@@ -98,6 +99,56 @@ int thaiClusterSafeLen(const char* buf, const int len) {
 
   if (pos <= 0 || len - pos > THAI_CLUSTER_CARRY_MAX_BYTES) return len;
   return pos;
+}
+
+constexpr char ZERO_WIDTH_SPACE_UTF8[] = "\xE2\x80\x8B";
+
+// Longest tail carried to the next word when a Thai run is cut between dictionary words.
+constexpr int THAI_WORD_CARRY_MAX_BYTES = 60;
+
+// Byte offset of the last Thai word boundary in buf[0, len) at or after minKeep, or 0 when there
+// is none. Hyphenation breaks would draw a hyphen and do not count. A boundary right before a
+// zero-width space kept in the word (see characterData) moves past it, so the space ends the
+// first half and flushPartWordBuffer turns it into the break.
+int lastThaiWordBoundary(const char* buf, const int len, const int minKeep) {
+  const auto breaks = Hyphenator::breakOffsets(std::string(buf, static_cast<size_t>(len)), /*includeFallback=*/false);
+  for (auto it = breaks.rbegin(); it != breaks.rend(); ++it) {
+    if (it->requiresInsertedHyphen) continue;
+    int boundary = static_cast<int>(it->byteOffset);
+    if (boundary < minKeep) break;
+    if (boundary + 3 <= len && memcmp(buf + boundary, ZERO_WIDTH_SPACE_UTF8, 3) == 0) boundary += 3;
+    if (boundary < len) return boundary;
+  }
+  return 0;
+}
+
+// Like thaiClusterSafeLen, but prefers the last dictionary word boundary within the carried tail,
+// so both halves of a cut run segment into whole words; atWordBoundary says which rule applied.
+// Falls back to the cluster rule.
+int thaiWordSafeLen(const char* buf, const int len, bool& atWordBoundary) {
+  atWordBoundary = false;
+  const int clusterLen = thaiClusterSafeLen(buf, len);
+  if (clusterLen == len) return len;  // the tail is not Thai, or the cluster is too long to carry
+  const int boundary = lastThaiWordBoundary(buf, len, std::max(0, len - THAI_WORD_CARRY_MAX_BYTES));
+  if (boundary == 0) return clusterLen;
+  atWordBoundary = true;
+  return boundary;
+}
+
+bool endsWithZeroWidthSpace(const char* buf, const int len) {
+  return len >= 3 && memcmp(buf + len - 3, ZERO_WIDTH_SPACE_UTF8, 3) == 0;
+}
+
+// True when the last complete UTF-8 sequence in buf is a Thai codepoint (0xE0 0xB8/0xB9 xx).
+bool endsWithThaiCodepoint(const char* buf, const int len) {
+  return len >= 3 && static_cast<uint8_t>(buf[len - 3]) == 0xE0 &&
+         (static_cast<uint8_t>(buf[len - 2]) == 0xB8 || static_cast<uint8_t>(buf[len - 2]) == 0xB9);
+}
+
+// True when the sequence starting at s[i] is Thai (expat hands over whole characters).
+bool startsThaiCodepoint(const XML_Char* s, const int i, const int len) {
+  return i + 2 < len && static_cast<uint8_t>(s[i]) == 0xE0 &&
+         (static_cast<uint8_t>(s[i + 1]) == 0xB8 || static_cast<uint8_t>(s[i + 1]) == 0xB9);
 }
 
 std::string trimAndNormalize(const std::string& str) {
@@ -738,6 +789,16 @@ void ChapterHtmlSlimParser::flushPartWordBuffer() {
     return;
   }
 
+  // A ZWSP kept at the end of a Thai word (see characterData) was not followed by a Thai
+  // letter: the word ends here and the next one gets the zero-width break.
+  const bool zeroWidthBreakAfter = endsWithZeroWidthSpace(partWordBuffer, partWordBufferIndex);
+  if (zeroWidthBreakAfter) partWordBufferIndex -= 3;
+  if (partWordBufferIndex == 0) {
+    nextWordContinues = false;
+    nextWordZeroWidthBreak = zeroWidthBreakAfter;
+    return;
+  }
+
   if (effectivePreserveWhitespace) {
     currentTextBlock->suppressFirstLineIndent();
     auto& style = currentTextBlock->getBlockStyle();
@@ -804,6 +865,7 @@ void ChapterHtmlSlimParser::flushPartWordBuffer() {
   }
   partWordBufferIndex = 0;
   nextWordContinues = false;
+  nextWordZeroWidthBreak = zeroWidthBreakAfter;
   listItemBulletOnly = false;
 }
 
@@ -2561,11 +2623,22 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
       continue;
     }
 
-    // Zero Width Space (U+200B) = 0xE2 0x80 0x8B: "break allowed, no visible gap". It ends
-    // the current word and marks the next one as a zero-width break opportunity. Thai books
-    // are often pre-segmented this way.
+    // Zero Width Space (U+200B) = 0xE2 0x80 0x8B: "break allowed, no visible gap". Outside a
+    // Thai word it ends the current word and marks the next one as a zero-width break
+    // opportunity. Thai books are often pre-segmented this way.
     if (static_cast<uint8_t>(s[i]) == 0xE2 && i + 2 < len && static_cast<uint8_t>(s[i + 1]) == 0x80 &&
         static_cast<uint8_t>(s[i + 2]) == 0x8B) {
+      // After a Thai letter the ZWSP may sit inside a word (publishers' segmentation tools put
+      // it there). Keep it in the word for now: a Thai letter next lets ParsedText weigh it
+      // against the dictionary; anything else turns it back into a plain zero-width break.
+      if (self->partWordBufferIndex > 0 && self->partWordBufferIndex + 3 <= MAX_WORD_SIZE &&
+          endsWithThaiCodepoint(self->partWordBuffer, self->partWordBufferIndex) &&
+          !endsWithZeroWidthSpace(self->partWordBuffer, self->partWordBufferIndex)) {
+        memcpy(self->partWordBuffer + self->partWordBufferIndex, ZERO_WIDTH_SPACE_UTF8, 3);
+        self->partWordBufferIndex += 3;
+        i += 2;
+        continue;
+      }
       if (self->partWordBufferIndex > 0) {
         self->flushPartWordBuffer();
       }
@@ -2607,13 +2680,15 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
     // decoder can't interpret.
     if (self->partWordBufferIndex >= MAX_WORD_SIZE) {
       int safeLen = utf8SafeTruncateBuffer(self->partWordBuffer, self->partWordBufferIndex);
-      // Thai has no spaces, so a paragraph routinely fills the buffer. Cutting between a
-      // consonant and its vowel or tone mark would draw the mark without its base, so
-      // carry the trailing Thai cluster over to the next word instead.
-      safeLen = thaiClusterSafeLen(self->partWordBuffer, safeLen);
+      // Thai has no spaces, so a paragraph routinely fills the buffer. Cut it between
+      // dictionary words when one ends in the last 60 bytes, so both halves segment into
+      // whole words; otherwise cut before the trailing cluster, so a vowel or tone mark is
+      // never drawn without its base. The tail is carried over to the next word.
+      bool cutAtWordBoundary = false;
+      safeLen = thaiWordSafeLen(self->partWordBuffer, safeLen, cutAtWordBoundary);
 
       if (safeLen < self->partWordBufferIndex && safeLen > 0) {
-        // Incomplete UTF-8 sequence or Thai cluster at the end — save it before flushing
+        // Incomplete UTF-8 sequence, Thai cluster or partial word at the end: save it before flushing
         int overflow = self->partWordBufferIndex - safeLen;
         uint32_t overflowVisibleOffset = self->partWordVisibleOffset;
         const unsigned char* offsetPtr = reinterpret_cast<const unsigned char*>(self->partWordBuffer);
@@ -2622,13 +2697,16 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
           utf8NextCodepoint(&offsetPtr);
           overflowVisibleOffset++;
         }
-        char saved[THAI_CLUSTER_CARRY_MAX_BYTES + 4];
+        char saved[THAI_WORD_CARRY_MAX_BYTES + 4];
         for (int j = 0; j < overflow; j++) {
           saved[j] = self->partWordBuffer[safeLen + j];
         }
         self->partWordBufferIndex = safeLen;
         self->flushPartWordBuffer();
-        self->nextWordContinues = true;
+        // A cut between dictionary words is a real boundary, the same gapless break a ZWSP gives;
+        // a cut inside a word stays glued.
+        self->nextWordContinues = !cutAtWordBoundary;
+        self->nextWordZeroWidthBreak = cutAtWordBoundary || self->nextWordZeroWidthBreak;
         for (int j = 0; j < overflow; j++) {
           self->partWordBuffer[j] = saved[j];
         }
@@ -2638,6 +2716,11 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
         self->flushPartWordBuffer();
         self->nextWordContinues = true;
       }
+    }
+
+    // A kept ZWSP (above) followed by anything but a Thai letter is a plain zero-width break.
+    if (endsWithZeroWidthSpace(self->partWordBuffer, self->partWordBufferIndex) && !startsThaiCodepoint(s, i, len)) {
+      self->flushPartWordBuffer();
     }
 
     if (self->partWordBufferIndex == 0) {

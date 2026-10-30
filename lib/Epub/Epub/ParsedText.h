@@ -116,6 +116,10 @@ class ParsedText {
   uint32_t visibleOffsetAt(size_t wordIndex) const;
   uint32_t sourceOffsetAfter(uint32_t start, uint32_t renderedLength) const;
   bool recordAbsorbedSourceOffset(uint32_t offset);
+  // addWord records stripped Thai separators and NFC absorptions in source order through these.
+  struct AbsorbedSourceContext;
+  static bool recordStrippedBefore(AbsorbedSourceContext& context, uint32_t sourceIndex);
+  static bool absorbComposedSource(uint32_t offset, void* context);
   void retireAbsorbedSourceOffsets(uint32_t remainingStart);
   void pushVisibleOffset(uint32_t offset);
   void insertVisibleOffset(size_t wordIndex, uint32_t offset);

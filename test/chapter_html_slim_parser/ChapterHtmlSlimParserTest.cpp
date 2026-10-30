@@ -285,6 +285,80 @@ TEST_F(ChapterHtmlSlimParserTest, RubySurvivesPartialParagraphExtraction) {
   EXPECT_EQ(lines, 2u);
 }
 
+TEST_F(ChapterHtmlSlimParserTest, ZeroWidthSpaceBetweenThaiLettersStaysInTheWord) {
+  // Between two Thai letters the ZWSP reaches the block inside one word, where the dictionary
+  // drops it (เด็กหญิง is a word). Before a Latin letter, or at the end of the text, it is still
+  // a zero-width break and never a visible space.
+  struct Case {
+    const char* paragraph;
+    std::vector<std::vector<std::string>> expected;
+  };
+  const std::vector<Case> cases{
+      {"เด็ก​หญิง", {{"เด็กหญิง"}}},
+      {"เด็ก​ABC", {{"เด็ก"}, {"ABC"}}},
+      {"เด็ก​", {{"เด็ก"}}},
+  };
+  for (const auto& testCase : cases) {
+    const std::string html = std::string("<html><body><p>") + testCase.paragraph + "</p></body></html>";
+    const auto tempDir = std::filesystem::temp_directory_path();
+    filepath = (tempDir / "crosspoint-thai-zwsp.xhtml").string();
+    {
+      HalFile file;
+      ASSERT_TRUE(file.open(filepath.c_str(), "wb"));
+      ASSERT_EQ(file.write(html.data(), html.size()), html.size());
+    }
+    // 40 px holds the three base glyphs of เด็ก (24 px) but not ABC (24 px) as well.
+    parser.currentTextBlock = std::make_unique<ParsedText>();
+    parser.viewportWidth = 40;
+    parser.paragraphIndentSpaces = 0;
+    std::vector<std::vector<std::string>> lines;
+    parser.completePageFn = [&](std::unique_ptr<Page> page, auto, auto, auto) {
+      for (const auto& element : page->elements) {
+        if (element->getTag() != TAG_PageLine) continue;
+        const auto& block = *static_cast<const PageLine&>(*element).getBlock();
+        auto& line = lines.emplace_back();
+        for (uint16_t i = 0; i < block.wordCount(); ++i) line.emplace_back(block.wordText(i));
+      }
+    };
+    EXPECT_TRUE(parser.parseAndBuildPages());
+    std::filesystem::remove(filepath);
+    EXPECT_EQ(lines, testCase.expected) << testCase.paragraph;
+  }
+}
+
+TEST_F(ChapterHtmlSlimParserTest, OverlongThaiRunIsCutAtAWordBoundary) {
+  // Eight เด็กหญิง and สมมติ (207 bytes) with no space overflow the 200-byte word buffer, which
+  // fills two letters into สมมติ. The cut goes back to the word boundary after เด็กหญิง (the
+  // cluster rule alone would keep ส in the first half), and it is a break: eight words (384 px)
+  // fill a 400 px line and สมมติ moves down whole.
+  std::string run;
+  for (int i = 0; i < 8; ++i) run += "เด็กหญิง";
+  run += "สมมติ";
+  const std::string html = "<html><body><p>" + run + "</p></body></html>";
+  const auto tempDir = std::filesystem::temp_directory_path();
+  filepath = (tempDir / "crosspoint-thai-overlong.xhtml").string();
+  {
+    HalFile file;
+    ASSERT_TRUE(file.open(filepath.c_str(), "wb"));
+    ASSERT_EQ(file.write(html.data(), html.size()), html.size());
+  }
+  parser.viewportWidth = 400;
+  parser.paragraphIndentSpaces = 0;
+  std::vector<std::vector<std::string>> lines;
+  parser.completePageFn = [&](std::unique_ptr<Page> page, auto, auto, auto) {
+    for (const auto& element : page->elements) {
+      if (element->getTag() != TAG_PageLine) continue;
+      const auto& block = *static_cast<const PageLine&>(*element).getBlock();
+      auto& line = lines.emplace_back();
+      for (uint16_t i = 0; i < block.wordCount(); ++i) line.emplace_back(block.wordText(i));
+    }
+  };
+  EXPECT_TRUE(parser.parseAndBuildPages());
+  std::filesystem::remove(filepath);
+  const std::vector<std::vector<std::string>> expected{std::vector<std::string>(8, "เด็กหญิง"), {"สมมติ"}};
+  EXPECT_EQ(lines, expected);
+}
+
 TEST_F(ChapterHtmlSlimParserTest, SpaceBeforeThaiMaiYamokDoesNotBreak) {
   // A space, a source line break, or an element boundary before ๆ.
   for (const char* paragraph : {"ก ข้าง ๆ", "ก ข้าง\nๆ", "ก ข้าง <span>ๆ</span>"}) {

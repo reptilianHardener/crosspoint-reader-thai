@@ -12,8 +12,11 @@ class ThaiWordBreaker {
   // Returns legal Thai line-break positions as codepoint indexes inside cps.
   // Breaks are emitted only at dictionary-derived word boundaries unless
   // includeFallback is enabled, in which case unknown runs additionally expose
-  // safe Thai cluster boundaries as a last resort.
-  static std::vector<size_t> breakIndexes(const std::vector<CodepointInfo>& cps, bool includeFallback);
+  // safe Thai cluster boundaries as a last resort. hintIndexes are positions where
+  // the source had a zero-width space or soft hyphen; one counts as a break only
+  // inside text the dictionary does not know, and only at a cluster boundary.
+  static std::vector<size_t> breakIndexes(const std::vector<CodepointInfo>& cps, bool includeFallback,
+                                          const std::vector<size_t>* hintIndexes = nullptr);
 
   // Load a user dictionary from a list of UTF-8 Thai words.
   // Words are stored as codepoint sequences for O(1) per-character matching.

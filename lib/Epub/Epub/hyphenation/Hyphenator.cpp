@@ -194,7 +194,8 @@ void sortAndDedupeBreakInfos(std::vector<Hyphenator::BreakInfo>& infos) {
 
 }  // namespace
 
-std::vector<Hyphenator::BreakInfo> Hyphenator::breakOffsets(const std::string& word, const bool includeFallback) {
+std::vector<Hyphenator::BreakInfo> Hyphenator::breakOffsets(const std::string& word, const bool includeFallback,
+                                                            const std::vector<uint16_t>* hintByteOffsets) {
   if (word.empty()) {
     return {};
   }
@@ -260,7 +261,18 @@ std::vector<Hyphenator::BreakInfo> Hyphenator::breakOffsets(const std::string& w
     }
     if (hasThai) {
       std::vector<Hyphenator::BreakInfo> thaiBreaks;
-      const auto thaiBreakIndexes = ThaiWordBreaker::breakIndexes(cps, includeFallback);
+      // Hints arrive as byte offsets; the breaker works in codepoint indexes. Both are ascending.
+      std::vector<size_t> hintIndexes;
+      if (hintByteOffsets) {
+        hintIndexes.reserve(hintByteOffsets->size());
+        size_t i = 0;
+        for (const uint16_t offset : *hintByteOffsets) {
+          while (i < cps.size() && cps[i].byteOffset < offset) ++i;
+          if (i < cps.size() && cps[i].byteOffset == offset) hintIndexes.push_back(i);
+        }
+      }
+      const auto thaiBreakIndexes =
+          ThaiWordBreaker::breakIndexes(cps, includeFallback, hintIndexes.empty() ? nullptr : &hintIndexes);
       thaiBreaks.reserve(thaiBreakIndexes.size());
       for (const size_t idx : thaiBreakIndexes) {
         if (idx > 0 && idx < cps.size()) {
