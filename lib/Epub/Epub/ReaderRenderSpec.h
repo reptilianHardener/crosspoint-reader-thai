@@ -12,6 +12,8 @@
 // backstop (a 0x0 viewport lays out nothing), not an invitation to omit it.
 struct ReaderRenderSpec {
   int fontId = 0;
+  // Multiplier of font size in pixels. Thai and Japanese books also apply their script pitch
+  // (see applyScriptLineSpacing).
   float lineCompression = 1.0f;
   bool extraParagraphSpacing = false;
   uint8_t paragraphIndentSpaces = 2;
@@ -32,6 +34,9 @@ struct ReaderRenderSpec {
   // Tategaki: the page is laid out as vertical lines stacked right to left. viewportWidth is
   // then the line length (down the screen) and viewportHeight the room for lines (across it).
   bool verticalText = false;
+  // Share of the font's line height (advanceY) its glyphs can reach: usually below 1 in Japanese
+  // books, whose lines are set tighter than a font with Thai marks (see applyScriptLineSpacing).
+  float glyphExtentScale = 1.0f;
 };
 
 // Stable signature for clipping anchors. Page-local word ordinals are valid
@@ -42,6 +47,9 @@ inline uint32_t readerRenderSpecSignature(const ReaderRenderSpec& spec) {
     signature ^= value;
     signature *= 16777619U;
   };
+  // Bump when the same spec values lay out differently, so old clipping word ranges stop matching.
+  constexpr uint32_t LAYOUT_SIGNATURE_VERSION = 1;
+  mix(LAYOUT_SIGNATURE_VERSION);
   mix(static_cast<uint32_t>(spec.fontId));
   mix(static_cast<uint32_t>(spec.lineCompression * 1000.0f));
   mix(spec.extraParagraphSpacing);

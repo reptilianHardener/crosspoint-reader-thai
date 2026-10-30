@@ -16,6 +16,7 @@ class SleepActivity final : public Activity {
  private:
   void renderDefaultSleepScreen() const;
   void renderCustomSleepScreen() const;
+  bool renderCustomSleepBmp(const std::string& path) const;
   void renderCoverSleepScreen() const;
   // infoPanelBook: when set, the "Halo 2 Cover" layout: the image always fills the screen
   // and a panel with this book's title and reading progress is drawn over its bottom edge.

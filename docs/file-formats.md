@@ -90,25 +90,14 @@ if (parsedSize != fileSize) {
 
 ## `section.bin`
 
-### Version 70
+### Version 172
 
-Version 70 preserves the binary layout but rebuilds completed and partial
-sections because Thai text no longer breaks a line before Paiyannoi (ฯ) when it
-is written straight after its word, as in กรุงเทพฯ. Book metadata and saved
-progress are kept.
+Version 172 is upstream version 71 with this fork's changes added. The fork had
+used versions 68, 69 and 70 for these changes, so those caches are rebuilt.
+Fork versions start at 172 so they never match an upstream version.
 
-### Version 69
-
-Version 69 preserves the binary layout but rebuilds completed and partial
-sections for two line-breaking changes: a line no longer starts with the Thai
-repetition mark Mai Yamok (ๆ), and two adjacent ruby groups may use each other's
-spare room instead of always adding space between their base texts. Book
-metadata and saved progress are kept.
-
-### Version 68
-
-Version 68 adds three fields to the header, after `wordSpacingPercent` and
-before the page count:
+It adds four fields to the header, after `wordSpacingPercent` and before the
+page count:
 
 - `forceBold` (`bool`): the reader's "Bold text" setting. When set, every run is
   laid out in the bold face.
@@ -118,16 +107,53 @@ before the page count:
 - `verticalText` (`bool`): the section was laid out for vertical (tategaki)
   text. `viewportWidth` is then the line length, which runs down the screen, and
   `viewportHeight` the room for lines across it.
+- `glyphExtentScale` (`float`): the share of the font's line height (`advanceY`)
+  that glyphs can reach, used where a line's glyphs must fit on the page or
+  clear the content after them. It is at most 1 (usually below 1) in Japanese books and 1 otherwise.
 
-All three are part of the cache key. Element positions on a vertical page are
+All four are part of the cache key. In Thai and Japanese books `lineCompression`
+is the Line Spacing multiplier times a script factor, so the default spacing
+keeps the script's own line pitch: the font's line height for Thai, 1.45 times a
+kanji's width for Japanese. Element positions on a vertical page are
 stored along and across the lines rather than as screen x and y: `xPos` runs
 down the screen from the top of the page area and `yPos` leftward from its right
 edge. An image stays upright, so it advances the flow by its width and is
 centred by its height. Link rectangles follow the same convention. Drop caps and
 border boxes are not drawn on vertical pages.
 
-The Thai fork used versions 49 and 50 for these fields with a different header
-layout; those caches are rebuilt.
+Line breaks also differ from upstream: a line never starts with the Thai
+repetition mark Mai Yamok (ๆ), nor with Paiyannoi (ฯ) written straight after its
+word (กรุงเทพฯ), and two adjacent ruby groups may use each other's spare room
+instead of always adding space between their base texts. Book metadata and
+saved progress are kept.
+
+### Version 71
+
+Version 71 keeps the binary layout and rebuilds completed and partial sections.
+Focus split offsets now locate the bold prefix in RTL words and the regular
+suffix in LTR words. Book metadata and saved progress are kept.
+
+### Version 70
+
+Version 70 preserves the binary layout but rebuilds completed and partial
+sections because SD-font layout now rounds each scaled glyph advance to pixels,
+matching unkerned drawing. Cached line breaks and word positions change.
+Book metadata and saved progress are kept.
+
+### Version 69
+
+Version 69 preserves the binary layout but rebuilds completed and partial
+sections because line spacing now multiplies font size instead of the font's
+newline distance (`advanceY`). Clipping layout signatures also distinguish the
+new calculation so old page-local word ranges are not reused for a new layout.
+Book metadata and saved progress are kept.
+
+### Version 68
+
+Version 68 preserves the binary layout but rebuilds completed and partial
+sections to remove mid-line hyphens left by drop-cap layout. The lines beside
+the drop cap use bounded greedy wrapping; the rest keep their usual wrapping.
+Book metadata and saved progress are kept.
 
 ### Version 67
 
@@ -595,6 +621,10 @@ struct SectionBin {
     bool focusReadingEnabled;
     s8 characterSpacing;
     u8 wordSpacingPercent;
+    bool forceBold;
+    u16 thaiDictionaryRevision;
+    bool verticalText;
+    float glyphExtentScale;
 
     u16 pageCount;
     u32 pageLutOffset;

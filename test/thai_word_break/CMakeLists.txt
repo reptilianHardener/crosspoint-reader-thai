@@ -25,6 +25,7 @@ gtest_discover_tests(ThaiWordBreakTest)
 # Line layout of Thai text through ParsedText.
 add_executable(ThaiLineBreakingTest
   ThaiLineBreakingTest.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/CjkBreaks.cpp
   ${REPO_ROOT}/lib/Epub/Epub/ParsedText.cpp
   ${REPO_ROOT}/lib/Epub/Epub/WordStore.cpp
   ${REPO_ROOT}/lib/Epub/Epub/blocks/TextBlock.cpp

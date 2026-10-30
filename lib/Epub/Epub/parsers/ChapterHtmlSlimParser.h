@@ -42,6 +42,7 @@ class ChapterHtmlSlimParser {
   bool nextWordContinues = false;  // true when next flushed word attaches to previous (inline element boundary)
   bool forceBold = false;          // reader "bold text" setting (see setForceBold)
   bool verticalText = false;       // tategaki page (see setVerticalText)
+  float glyphExtentScale = 1.0f;   // see setGlyphExtentScale
   // A ZERO WIDTH SPACE (U+200B) was seen since the last flushed word: the next word may wrap
   // onto a new line but renders with no gap. Cleared by real whitespace, which wins.
   bool nextWordZeroWidthBreak = false;
@@ -255,6 +256,9 @@ class ChapterHtmlSlimParser {
   void completeCurrentPage();
   void emitCurrentPage();
   void noteContent(int top, int bottom);
+  int lastLineGlyphBottom() const;
+  // Height the glyphs of a line in fontId can reach: the font's line height times glyphExtentScale.
+  int glyphLineHeight(int fontId) const;
   void openBoxScope(BlockStyle& ownStyle, const CssStyle& cssStyle);
   void closeBoxScope();
   void emitBoxSegment(const BoxScope& box, bool closing);
@@ -336,6 +340,8 @@ class ChapterHtmlSlimParser {
   // The page is drawn as vertical lines: viewportWidth runs down the screen and viewportHeight
   // across it. Text flows unchanged; images stay upright, so their extents swap.
   void setVerticalText(const bool enabled) { verticalText = enabled; }
+  // Share of a font's line height its glyphs can reach (ReaderRenderSpec::glyphExtentScale).
+  void setGlyphExtentScale(const float scale) { glyphExtentScale = scale; }
   void setParagraphIndentSpaces(const uint8_t spaces) { paragraphIndentSpaces = spaces; }
 
   // One-shot parse: builds every page before returning (begin + step* + finish).

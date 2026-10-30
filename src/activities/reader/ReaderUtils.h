@@ -45,6 +45,13 @@ inline bool isJapaneseBookLanguage(std::string_view tag) {
   return lower(0) == 'j' && lower(1) == 'a';
 }
 
+inline bool isThaiBookLanguage(std::string_view tag) {
+  const auto lower = [&tag](const size_t i) { return std::tolower(static_cast<unsigned char>(tag[i])); };
+  if (tag.size() == 3) return lower(0) == 't' && lower(1) == 'h' && lower(2) == 'a';
+  if (tag.size() < 2 || (tag.size() > 2 && tag[2] != '-' && tag[2] != '_')) return false;
+  return lower(0) == 't' && lower(1) == 'h';
+}
+
 inline void applyOrientation(GfxRenderer& renderer, const uint8_t orientation) {
   switch (orientation) {
     case CrossPointSettings::ORIENTATION::PORTRAIT:

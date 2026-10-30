@@ -73,6 +73,8 @@ class ClipSelectionActivity final : public Activity {
   size_t pageCount() const { return borrowedPages.empty() ? pages.size() : borrowedPages.size(); }
   const Page& pageAt(size_t index) const { return *(borrowedPages.empty() ? pages[index] : borrowedPages[index]); }
   bool isLookup() const { return mode != Mode::Clip; }
+  int firstAction() const { return lookupAvailable ? 0 : 1; }
+  int actionCount() const { return mode == Mode::DefinitionLookup ? 1 : 3 - firstAction(); }
   int actionAt(int x, int y) const;
   // Position along a word's line: screen x, or screen y on a vertical page.
   int alongStart(const WordBox& word) const { return vertical ? word.y : word.x; }
@@ -115,6 +117,7 @@ class ClipSelectionActivity final : public Activity {
   const int initialY;
   const Mode mode;
   const bool vertical = false;
+  bool lookupAvailable = false;
   OptionPopup actionPopup;
   // ponytail: retain 16 button frames during refresh; increase only if overflow is observed.
   std::array<uint8_t, 16> pendingButtons{};

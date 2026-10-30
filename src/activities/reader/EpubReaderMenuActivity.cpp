@@ -9,11 +9,13 @@
 #include <cstdio>
 
 #include "CrossPointSettings.h"
+#include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
 #include "ReaderUtils.h"
 #include "components/UITheme.h"
 #include "components/icons/readerSheetIcons.h"
 #include "fontIds.h"
+#include "util/PluginEvents.h"
 #include "util/SlideSwitch.h"
 
 namespace fui = freeink::ui;
@@ -22,11 +24,12 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInpu
                                                const std::string& title, const int currentPage, const int totalPages,
                                                const int bookProgressPercent, const uint8_t currentOrientation,
                                                const bool hasFootnotes, const bool hasBookmarks,
-                                               const bool hasClippings, std::string chapterTitle,
-                                               const bool pageOnScreen)
+                                               const bool hasClippings, MenuAction& selectedAction,
+                                               std::string chapterTitle, const bool pageOnScreen)
     : UiListActivity("EpubReaderMenu", renderer, mappedInput),
       pageBehind(pageOnScreen),
       chapterTitle(std::move(chapterTitle)),
+      selectedAction(selectedAction),
       title(title),
       pendingOrientation(currentOrientation),
       currentPage(currentPage),
@@ -58,6 +61,37 @@ const freeink::Icon& EpubReaderMenuActivity::sheetIcon(const int index) const {
   return index == SHEET_MORE_TILE ? icon_sheet_more_24 : *sheetTiles[index].icon;
 }
 
+void EpubReaderMenuActivity::onEnter() {
+  RenderLock lock;
+  UiListActivity::onEnter();
+  bool inList = false;
+  for (size_t i = 0; i < menuItems.size(); ++i) {
+    if (menuItems[i].action == selectedAction) {
+      nav.reset(static_cast<int>(i));
+      inList = true;
+      break;
+    }
+  }
+  // The sheet reopens on the tile of the last action, or on More when only the list has it.
+  if (!hasSheet) return;
+  for (int i = 0; i < SHEET_MORE_TILE; ++i) {
+    if (sheetTiles[i].action == selectedAction) {
+      sheetSelected = i;
+      return;
+    }
+  }
+  if (inList) sheetSelected = SHEET_MORE_TILE;
+}
+
+void EpubReaderMenuActivity::onExit() {
+  if (sheetMode && sheetSelected < SHEET_MORE_TILE) {
+    selectedAction = sheetTiles[sheetSelected].action;
+  } else if (nav.selected >= 0 && nav.selected < static_cast<int>(menuItems.size())) {
+    selectedAction = menuItems[nav.selected].action;
+  }
+  UiListActivity::onExit();
+}
+
 // Populates menuRowItems's labels/actionValue from menuItems. Called once
 // here since menuItems (and thus which rows exist) never changes after
 // construction; buildScreen() only touches the two rows with a live value.
@@ -86,11 +120,13 @@ void EpubReaderMenuActivity::buildMenuItems(std::vector<MenuItem>& items, const 
   if (hasClippings) {
     items.push_back({MenuAction::VIEW_CLIPPINGS, StrId::STR_VIEW_CLIPPINGS});
   }
-  items.push_back({MenuAction::NIGHT_MODE, StrId::STR_NIGHT_MODE});
+  if (!slideSwitchOwns(CrossPointSettings::SLIDE_SWITCH_NIGHT_MODE)) {
+    items.push_back({MenuAction::NIGHT_MODE, StrId::STR_NIGHT_MODE});
+  }
   if (Frontlight.present() && !slideSwitchOwnsLight()) {
     items.push_back({MenuAction::FRONTLIGHT, StrId::STR_FRONTLIGHT});
   }
-  if (bleturner::status().compiledIn) {
+  if (bleturner::status().compiledIn && SETTINGS.ble.peerAddr[0] != '\0') {
     items.push_back({MenuAction::BLUETOOTH, StrId::STR_BT_PAGE_TURNER});
   }
   if (SETTINGS.dictionaryName[0] != '\0') {
@@ -102,7 +138,13 @@ void EpubReaderMenuActivity::buildMenuItems(std::vector<MenuItem>& items, const 
   items.push_back({MenuAction::SCREENSHOT, StrId::STR_SCREENSHOT_BUTTON});
   items.push_back({MenuAction::DISPLAY_QR, StrId::STR_DISPLAY_QR});
   items.push_back({MenuAction::GO_HOME, StrId::STR_GO_HOME_BUTTON});
-  items.push_back({MenuAction::SYNC, StrId::STR_SYNC_PROGRESS});
+  bool canSync = KOREADER_STORE.hasCredentials();
+  for (size_t event = 0; !canSync && event < static_cast<size_t>(pluginevents::Event::COUNT); ++event) {
+    canSync = pluginevents::anySubscriber(static_cast<pluginevents::Event>(event));
+  }
+  if (canSync) {
+    items.push_back({MenuAction::SYNC, StrId::STR_SYNC_PROGRESS});
+  }
   items.push_back({MenuAction::DELETE_CACHE, StrId::STR_DELETE_CACHE});
   items.push_back({MenuAction::TEXT_SETTINGS, StrId::STR_TEXT_SETTINGS});
 }
@@ -138,12 +180,12 @@ void EpubReaderMenuActivity::activateIndex(const int index) {
   activateAction(menuItems[index].action);
 }
 
-void EpubReaderMenuActivity::activateAction(const MenuAction selectedAction) {
-  if (selectedAction == MenuAction::ROTATE_SCREEN || selectedAction == MenuAction::AUTO_PAGE_TURN) {
+void EpubReaderMenuActivity::activateAction(const MenuAction action) {
+  if (action == MenuAction::ROTATE_SCREEN || action == MenuAction::AUTO_PAGE_TURN) {
     // The popup and a turned screen both cover the page the sheet was drawn over.
     pageBehind = false;
   }
-  if (selectedAction == MenuAction::ROTATE_SCREEN) {
+  if (action == MenuAction::ROTATE_SCREEN) {
     optionPopup.show(StrId::STR_ORIENTATION, orientationLabels.data(), static_cast<int>(orientationLabels.size()),
                      pendingOrientation, [this](int idx) {
                        pendingOrientation = idx;
@@ -158,7 +200,7 @@ void EpubReaderMenuActivity::activateAction(const MenuAction selectedAction) {
     return;
   }
 
-  if (selectedAction == MenuAction::AUTO_PAGE_TURN) {
+  if (action == MenuAction::AUTO_PAGE_TURN) {
     optionPopup.show(I18N.get(StrId::STR_AUTO_TURN_PAGES_PER_MIN), pageTurnLabels.data(),
                      static_cast<int>(pageTurnLabels.size()), selectedPageTurnOption, [this](int idx) {
                        selectedPageTurnOption = idx;
@@ -168,20 +210,20 @@ void EpubReaderMenuActivity::activateAction(const MenuAction selectedAction) {
     return;
   }
 
-  if (selectedAction == MenuAction::NIGHT_MODE) {
+  if (action == MenuAction::NIGHT_MODE) {
     SETTINGS.screenInverted = SETTINGS.screenInverted == 0 ? 1 : 0;
     SETTINGS.saveToFile();
     requestUpdate();
     return;
   }
 
-  if (selectedAction == MenuAction::BLUETOOTH) {
+  if (action == MenuAction::BLUETOOTH) {
     toggleBluetooth();
     requestUpdate();
     return;
   }
 
-  if (selectedAction == MenuAction::FRONTLIGHT) {
+  if (action == MenuAction::FRONTLIGHT) {
     const bool lightOn = !Frontlight.isOn();
     Frontlight.setOn(lightOn);
     SETTINGS.frontlightOn = lightOn ? 1 : 0;
@@ -190,7 +232,7 @@ void EpubReaderMenuActivity::activateAction(const MenuAction selectedAction) {
     return;
   }
 
-  setResult(MenuResult{static_cast<int>(selectedAction), pendingOrientation, selectedPageTurnOption});
+  setResult(MenuResult{static_cast<int>(action), pendingOrientation, selectedPageTurnOption});
   finish();
 }
 
@@ -434,7 +476,6 @@ void EpubReaderMenuActivity::activateSheetTile(const int index) {
   if (index == SHEET_MORE_TILE) {
     sheetMode = false;
     pageBehind = false;
-    nav.reset();
     requestUpdate();
     return;
   }
@@ -487,18 +528,12 @@ bool EpubReaderMenuActivity::handleSheetInput() {
   return true;
 }
 
-void EpubReaderMenuActivity::render(RenderLock&&) {
+void EpubReaderMenuActivity::render(RenderLock&& lock) {
   if (optionPopup.processRender(renderer, mappedInput)) return;
   if (sheetMode) {
     renderSheet();
     return;
   }
 
-  renderer.clearScreen();
-  drawChrome();
-
-  renderUi();
-
-  drawFooter();
-  renderer.displayBuffer();
+  UiListActivity::render(std::move(lock));
 }

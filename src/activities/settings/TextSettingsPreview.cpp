@@ -2,6 +2,7 @@
 
 #include <EpdFontFamily.h>
 #include <Epub/ParsedText.h>
+#include <Epub/ReaderRenderSpec.h>
 #include <Epub/blocks/BlockStyle.h>
 #include <Epub/blocks/TextBlock.h>
 #include <FontCacheManager.h>
@@ -9,11 +10,11 @@
 #include <I18n.h>
 
 #include <algorithm>
-#include <cstdio>
 #include <string>
 #include <utility>
 
 #include "CrossPointSettings.h"
+#include "ScriptLineSpacing.h"
 #include "fontIds.h"
 
 namespace textsettings {
@@ -63,19 +64,19 @@ void relayout(PreviewLayout& layout, const GfxRenderer& renderer, int fontId, in
 
 }  // namespace
 
-void renderPreview(const GfxRenderer& renderer, PreviewLayout& layout, int previewPadding, int labelGap, int top,
-                   int height, const char* familyName, const char* sizeName) {
-  const int left = previewPadding;
-  const int width = renderer.getScreenWidth() - (previewPadding * 2);
+void renderPreview(const GfxRenderer& renderer, PreviewLayout& layout, int previewPadding, int labelGap, Rect bounds,
+                   const char* caption) {
+  const int top = bounds.y;
+  const int height = bounds.height;
+  const int left = bounds.x + previewPadding;
+  const int width = bounds.width - (previewPadding * 2);
   if (width <= 0 || height <= 0) return;
 
   const int labelH = renderer.getTextHeight(UI_10_FONT_ID);
   const int labelReserved = labelH + labelGap + previewPadding;
 
-  char labelBuf[128];
-  snprintf(labelBuf, sizeof(labelBuf), "%s \"%s, %s\"", tr(STR_PREVIEW), familyName, sizeName);
   const int labelY = top + height - previewPadding - labelH;
-  renderer.drawText(UI_10_FONT_ID, left, labelY, labelBuf);
+  renderer.drawText(UI_10_FONT_ID, left, labelY, caption);
 
   const int fontId = SETTINGS.getReaderFontId();
   if (fontId == 0) return;
@@ -87,7 +88,13 @@ void renderPreview(const GfxRenderer& renderer, PreviewLayout& layout, int previ
   const int textWidth = width - 2 * SETTINGS.screenMargin;
   if (textWidth <= 0) return;
 
-  const float compression = SETTINGS.getReaderLineCompression();
+  // The sample text is in the UI language, so it takes that script's line pitch.
+  ReaderRenderSpec spacing{.fontId = fontId, .lineCompression = SETTINGS.getReaderLineCompression()};
+  applyScriptLineSpacing(spacing, renderer,
+                         I18N.getLanguage() == Language::TH   ? LineScript::Thai
+                         : I18N.getLanguage() == Language::JA ? LineScript::Japanese
+                                                              : LineScript::Other);
+  const float compression = spacing.lineCompression;
   const int lineAdvance = std::max(1, renderer.getLineHeight(fontId, compression));
   const int paragraphGap = SETTINGS.extraParagraphSpacing ? lineAdvance / 2 : 0;
 
