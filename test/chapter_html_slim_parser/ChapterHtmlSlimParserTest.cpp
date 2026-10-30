@@ -285,39 +285,6 @@ TEST_F(ChapterHtmlSlimParserTest, RubySurvivesPartialParagraphExtraction) {
   EXPECT_EQ(lines, 2u);
 }
 
-TEST_F(ChapterHtmlSlimParserTest, AdjacentRubyGroupsShareSpareRoom) {
-  // "x" (8 px) carries 24 px of ruby: 8 px overhang per side. "yz" (16 px) carries 8 px,
-  // leaving 4 px free per side, so only 4 px of the overhang needs extra room.
-  ParsedText text;
-  text.addWord("x", EpdFontFamily::REGULAR);
-  text.addWord("yz", EpdFontFamily::REGULAR, false, /*attachToPrevious=*/true);
-  text.setRubyForWordAt(0, "abc");
-  text.setRubyForWordAt(1, "r");
-  std::vector<int16_t> xpos;
-  text.layoutAndExtractLines(renderer, 0, 200, [&](std::unique_ptr<TextBlock> line, auto) {
-    for (uint16_t i = 0; i < line->wordCount(); ++i) xpos.push_back(line->wordXpos(i));
-  });
-  ASSERT_EQ(xpos.size(), 2u);
-  EXPECT_EQ(xpos[1] - xpos[0], 12);
-}
-
-TEST_F(ChapterHtmlSlimParserTest, AdjacentRubyGroupsShareSpareRoomInEitherOrder) {
-  // Mirror of the test above with kanji bases: 山川 (spare 4 px per side) before 木
-  // (8 px overhang). The overhang onto a preceding kanji must not be counted twice.
-  ParsedText text;
-  text.addWord("山川", EpdFontFamily::REGULAR);
-  text.addWord("木", EpdFontFamily::REGULAR, false, /*attachToPrevious=*/true);
-  // 山川 splits into one token per kanji; the group ruby spans both.
-  text.setRubyGroupAt(0, 2, "r");
-  text.setRubyForWordAt(2, "abc");
-  std::vector<int16_t> xpos;
-  text.layoutAndExtractLines(renderer, 0, 200, [&](std::unique_ptr<TextBlock> line, auto) {
-    for (uint16_t i = 0; i < line->wordCount(); ++i) xpos.push_back(line->wordXpos(i));
-  });
-  ASSERT_EQ(xpos.size(), 3u);
-  EXPECT_EQ(xpos[2] - xpos[0], 20);
-}
-
 TEST_F(ChapterHtmlSlimParserTest, SpaceBeforeThaiMaiYamokDoesNotBreak) {
   // A space, a source line break, or an element boundary before ๆ.
   for (const char* paragraph : {"ก ข้าง ๆ", "ก ข้าง\nๆ", "ก ข้าง <span>ๆ</span>"}) {

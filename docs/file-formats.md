@@ -90,11 +90,16 @@ if (parsedSize != fileSize) {
 
 ## `section.bin`
 
-### Version 172
+### Version 173
 
-Version 172 is upstream version 71 with this fork's changes added. The fork had
-used versions 68, 69 and 70 for these changes, so those caches are rebuilt.
-Fork versions start at 172 so they never match an upstream version.
+Version 173 is upstream version 73 with this fork's changes added. Version 172
+was upstream version 71 plus the same changes and a fork ruby rule that version
+173 drops in favor of upstream's ruby layout (version 72). The fork had used
+versions 68, 69 and 70 for these changes, so those caches are rebuilt. Fork
+versions start at 172 so they never match an upstream version. The partial-build
+sentinel is derived from the version (`0xFE - (version - 28)`), so a fork
+partial file would only match an upstream full version once the two versions
+add up to 282; check this when either side nears that.
 
 It adds four fields to the header, after `wordSpacingPercent` and before the
 page count:
@@ -123,9 +128,25 @@ border boxes are not drawn on vertical pages.
 
 Line breaks also differ from upstream: a line never starts with the Thai
 repetition mark Mai Yamok (ๆ), nor with Paiyannoi (ฯ) written straight after its
-word (กรุงเทพฯ), and two adjacent ruby groups may use each other's spare room
-instead of always adding space between their base texts. Book metadata and
+word (กรุงเทพฯ). Ruby layout follows upstream version 72. Book metadata and
 saved progress are kept.
+
+### Version 73
+
+Version 73 keeps the binary layout and rebuilds completed and partial sections.
+TrueType vector fonts now render and advance the .notdef glyph for missing
+characters instead of omitting them. Cached line breaks and word positions change
+for text containing glyph fallbacks. Book metadata and saved progress are kept.
+
+### Version 72
+
+Version 72 makes ruby layout closer to how Chromium browser render text with
+ruby characters by default (`ruby-align: space-around; ruby-overhang: auto;`)
+Ruby annotation can overhang neighboring base text by at most the smaller of
+half the ruby edge-character width and 1/4 of the neighboring word width. When
+the ruby annotation is wider than its base text, spacing is inserted between
+every character in the base text as well as at the start and the end of the
+base text so that it becomes the same length as the ruby annotation.
 
 ### Version 71
 

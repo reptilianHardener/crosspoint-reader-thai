@@ -79,11 +79,16 @@ namespace {
 // v69: Line spacing multiplies font size instead of advanceY.
 // v70: SD-font layout rounds each scaled glyph advance to match drawing.
 // v71: Focus split offsets follow the visual run order for RTL words.
+// v72: Make ruby rendering closer to how Chromium renders ruby by default.
+// v73: TrueType vector fonts load and advance .notdef for missing glyphs.
 // v172: Upstream v71 plus this fork's changes, which used v68-v70 with other meanings: bold-text,
-//      Thai-dictionary, vertical-text and glyph-extent header fields; no line break before Thai
-//      Mai Yamok or Paiyannoi; adjacent ruby groups share spare room. Those fork caches rebuild.
-//      Fork versions start at 172 so they never reuse an upstream number; bump by one from here.
-constexpr uint8_t SECTION_FILE_VERSION = 172;
+//       Thai-dictionary, vertical-text and glyph-extent header fields; no line break before Thai
+//       Mai Yamok or Paiyannoi; adjacent ruby groups share spare room. Those fork caches rebuild.
+//       Fork versions start at 172 so they never reuse an upstream number; bump by one from here.
+// v173: Upstream v73 (ruby layout, .notdef glyphs) plus the fork's changes; the fork's ruby
+//       spare-room rule is dropped in favor of upstream's ruby layout. The partial sentinel
+//       below falls as this rises: it meets an upstream full version when the two sum to 282.
+constexpr uint8_t SECTION_FILE_VERSION = 173;
 // Written into the version field while a build is in progress; patched to
 // SECTION_FILE_VERSION only when the build is finalized. An abandoned /
 // crash-interrupted .bin therefore carries version 0, which loadSectionFile rejects
