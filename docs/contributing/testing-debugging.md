@@ -67,6 +67,33 @@ table at the end. Heap lines appear every 10 seconds, so the example waits
 before `MEM`. Use `--file` to read the steps from a file, one per line; see
 `--help` for other panel sizes and for landscape screenshots.
 
+### Golden pages
+
+The same script catches rendering regressions. Write a steps file that opens
+the pages you care about (a Thai chapter, a Japanese vertical page, the Text
+Settings preview) and takes a `SHOT` of each. Run it once on a firmware you
+trust with `--golden <dir> --record` to save those screenshots as goldens.
+After a change, run the same steps with `--golden <dir>`: every `SHOT` is
+compared pixel for pixel with its golden, each difference is printed with its
+pixel count and saved as `<out>/<name>.diff.png` (changed pixels in black),
+and the script exits with status 1 when anything differs.
+
+```sh
+python3 scripts/device_steps.py --file pages.steps --golden device-steps/golden --record
+python3 scripts/device_steps.py --file pages.steps --golden device-steps/golden
+```
+
+A `SHOT` without a golden counts as a difference, and `--record` overwrites
+every page it shoots, so to add or refresh one page run `--record` with a
+steps file that holds only that page.
+
+The pages depend on the books on the card, the saved reading positions and
+the text settings, so keep the steps file and the goldens together with a note
+of that setup, and start each run from the same screen (usually Home). A step
+that lands on a different page, or a status bar with a changed clock or
+battery level, shows up as a difference too: compare the diff image before
+treating one as a regression, or hide the clock in Status Bar settings.
+
 ## Useful bug report contents
 
 - Firmware version and build environment
