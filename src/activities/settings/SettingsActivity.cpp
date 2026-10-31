@@ -371,6 +371,7 @@ void SettingsActivity::toggleSelectedSetting() {
         break;
       case SettingAction::TextSettings:
         startActivityForResult(std::make_unique<TextSettingsActivity>(renderer, mappedInput, &sdFontSystem.registry(),
+                                                                      textsettings::scriptForUiLanguage(),
                                                                       TextSettingsActivity::Tab::Family),
                                [this](const ActivityResult&) {
                                  // TextSettingsActivity saves on each change; no save needed here.

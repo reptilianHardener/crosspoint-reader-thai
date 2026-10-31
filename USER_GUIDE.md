@@ -274,7 +274,7 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
 
 - **Reader Font Size**: Choose a point size. Built-in and direct TTF/OTF/TTC fonts offer 12, 14, 16, and 18 pt. A `.cpfont` family offers the sizes installed for that family.
 
-- **Reader Line Spacing**: Space added between lines, as a percentage of font size: 0%, +10%, +20% (default), +30%, +45%, +60%, or +75%. In books whose language is Thai or Japanese, the default keeps the script's usual line pitch (room for Thai tone marks; 1.45 times a kanji's width in Japanese), and the other values scale from there. The preview in Text Settings follows the interface language.
+- **Reader Line Spacing**: Space added between lines, as a percentage of font size: 0%, +10%, +20% (default), +30%, +45%, +60%, or +75%. In books whose language is Thai or Japanese, the default keeps the script's usual line pitch (room for Thai tone marks; 1.45 times a kanji's width in Japanese), and the other values scale from there. The preview in Text Settings shows a Thai or Japanese sample when it is opened from a book in that language; other books, and Text Settings opened from the Settings menu, use the interface language's sample (English if the interface is Thai or Japanese).
 
 - **Reader Screen Margin**: Controls the screen margins in Reading Mode between 5 and 40 pixels in 5-pixel increments.
 

@@ -20,8 +20,9 @@ class TextSettingsActivity final : public UiTabListActivity {
  public:
   enum class Tab : uint8_t { Family, Size, Layout, Style, Count };
 
+  // previewScript: the open book's script, or textsettings::scriptForUiLanguage() with no book.
   TextSettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const SdCardFontRegistry* registry,
-                       Tab initialTab = Tab::Family);
+                       LineScript previewScript, Tab initialTab = Tab::Family);
 
   void onEnter() override;
   void render(RenderLock&&) override;
@@ -97,6 +98,7 @@ class TextSettingsActivity final : public UiTabListActivity {
   std::vector<FontEntry> fonts_;
   std::vector<SizeEntry> sizes_;
   textsettings::PreviewLayout previewLayout_;  // cached preview line layout; relaid only on setting/geometry change
+  const LineScript previewScript_;
 
   Tab tab_;
   int currentFamilyIndex_ = 0;

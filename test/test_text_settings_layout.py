@@ -59,6 +59,7 @@ harness = r"""
 #include <builtinFonts/ubuntu_12_regular.h>
 #include <components/themes/lyra/LyraTheme.h>
 #include <components/themes/roundedraff/RoundedRaffTheme.h>
+#include <ScriptLineSpacing.h>
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -132,6 +133,7 @@ struct TextSettingsActivity : UiTabListActivity {
   std::vector<Entry> fonts_{{"Bitter"}}, sizes_{{"12 pt"}};
   int currentFamilyIndex_ = 0, currentSizeIndex_ = 0;
   textsettings::PreviewLayout previewLayout_;
+  LineScript previewScript_ = LineScript::Other;
   std::vector<fui::ListItem> rowItems_;
   fui::ListNav nav;
   fui::ListNav& activeNav() { return nav; }

@@ -30,8 +30,23 @@ CssTextAlign toCssAlign(uint8_t align) {
   return static_cast<CssTextAlign>(align);
 }
 
+// The sample for a Thai or Japanese book is that language's own; any other book shows the
+// interface language's sample, unless that is Thai or Japanese, which would misrepresent it.
+const char* sampleText(const LineScript script) {
+  switch (script) {
+    case LineScript::Thai:
+      return I18N.get(StrId::STR_FONT_PREVIEW_TEXT, Language::TH);
+    case LineScript::Japanese:
+      return I18N.get(StrId::STR_FONT_PREVIEW_TEXT, Language::JA);
+    case LineScript::Other:
+      break;
+  }
+  if (scriptForUiLanguage() != LineScript::Other) return I18N.get(StrId::STR_FONT_PREVIEW_TEXT, Language::EN);
+  return I18N.get(StrId::STR_FONT_PREVIEW_TEXT);
+}
+
 // Lay the sample text out through the reader engine into layout.lines
-void relayout(PreviewLayout& layout, const GfxRenderer& renderer, int fontId, int textWidth) {
+void relayout(PreviewLayout& layout, const GfxRenderer& renderer, int fontId, int textWidth, const char* text) {
   layout.lines.clear();
 
   BlockStyle style;
@@ -42,7 +57,6 @@ void relayout(PreviewLayout& layout, const GfxRenderer& renderer, int fontId, in
                     SETTINGS.paragraphIndentSpaces);
 
   // Feed one space-separated word at a time; addWord handles NFC/CJK/RTL/focus splitting
-  const char* text = I18N.get(StrId::STR_FONT_PREVIEW_TEXT);
   std::string word;
   for (const char* p = text;; p++) {
     if (*p == ' ' || *p == '\0') {
@@ -64,8 +78,19 @@ void relayout(PreviewLayout& layout, const GfxRenderer& renderer, int fontId, in
 
 }  // namespace
 
-void renderPreview(const GfxRenderer& renderer, PreviewLayout& layout, int previewPadding, int labelGap, Rect bounds,
-                   const char* caption) {
+LineScript scriptForUiLanguage() {
+  switch (I18N.getLanguage()) {
+    case Language::TH:
+      return LineScript::Thai;
+    case Language::JA:
+      return LineScript::Japanese;
+    default:
+      return LineScript::Other;
+  }
+}
+
+void renderPreview(const GfxRenderer& renderer, PreviewLayout& layout, const LineScript script,
+                   const int previewPadding, const int labelGap, const Rect bounds, const char* caption) {
   const int top = bounds.y;
   const int height = bounds.height;
   const int left = bounds.x + previewPadding;
@@ -88,22 +113,18 @@ void renderPreview(const GfxRenderer& renderer, PreviewLayout& layout, int previ
   const int textWidth = width - 2 * SETTINGS.screenMargin;
   if (textWidth <= 0) return;
 
-  // The sample text is in the UI language, so it takes that script's line pitch.
+  // The sample takes the line pitch the reader would give a book in this script.
   ReaderRenderSpec spacing{.fontId = fontId, .lineCompression = SETTINGS.getReaderLineCompression()};
-  applyScriptLineSpacing(spacing, renderer,
-                         I18N.getLanguage() == Language::TH   ? LineScript::Thai
-                         : I18N.getLanguage() == Language::JA ? LineScript::Japanese
-                                                              : LineScript::Other);
+  applyScriptLineSpacing(spacing, renderer, script);
   const float compression = spacing.lineCompression;
   const int lineAdvance = std::max(1, renderer.getLineHeight(fontId, compression));
   const int paragraphGap = SETTINGS.extraParagraphSpacing ? lineAdvance / 2 : 0;
 
   // Re-lay-out (and re-prewarm glyphs) only when a layout-affecting setting or the
-  // geometry changed; else reuse the cache. The prewarm inputs are (fontId, constant
-  // sample text, styleMask<-focusReading), all of which are key fields, so a matching
-  // key means an identical prewarm call. This relies on nothing else evicting the SD
-  // glyph cache while this activity is up — true today: the only evictor is
-  // FontCacheManager::PrewarmScope, used solely by the reader/dictionary activities.
+  // geometry changed; else reuse the cache. The prewarm inputs are (fontId, the sample
+  // text, styleMask<-focusReading); the sample is fixed for the activity's lifetime and
+  // the rest are key fields, so a matching key means an identical prewarm call. Nothing evicts the SD glyph cache
+  // while this activity is up except an out-of-memory retry, after which glyphs re-fault from SD on the next draw.
   const PreviewKey key{.fontId = fontId,
                        .fontPointSize = SETTINGS.fontPointSize,
                        .screenMargin = SETTINGS.screenMargin,
@@ -117,10 +138,11 @@ void renderPreview(const GfxRenderer& renderer, PreviewLayout& layout, int previ
                        .focusReading = SETTINGS.focusReadingEnabled != 0,
                        .hyphenation = SETTINGS.hyphenationEnabled != 0};
   if (key != layout.key) {
+    const char* text = sampleText(script);
     if (auto* fcm = renderer.getFontCacheManager()) {
-      fcm->prewarmCache(fontId, I18N.get(StrId::STR_FONT_PREVIEW_TEXT), SETTINGS.focusReadingEnabled ? 0x03 : 0x01);
+      fcm->prewarmCache(fontId, text, SETTINGS.focusReadingEnabled ? 0x03 : 0x01);
     }
-    relayout(layout, renderer, fontId, textWidth);
+    relayout(layout, renderer, fontId, textWidth, text);
     layout.key = key;
   }
 

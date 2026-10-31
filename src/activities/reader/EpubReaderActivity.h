@@ -18,6 +18,7 @@
 #include "ProgressMapper.h"
 #include "ReaderActivity.h"
 #include "ReaderToolbarUi.h"
+#include "ScriptLineSpacing.h"
 #include "components/OptionPopup.h"
 
 class EpubReaderActivity final : public ReaderActivity {
@@ -114,6 +115,8 @@ class EpubReaderActivity final : public ReaderActivity {
   // advancing leftward. Refreshed by renderBook() from the book language and the setting.
   bool verticalLayout = false;
   bool wantsVerticalLayout() const;
+  // The script the book's language tag puts it in; decides line pitch and the Text Settings sample.
+  LineScript bookLineScript() const;
   ReaderRenderSpec makeRenderSpec(uint16_t viewportWidth, uint16_t viewportHeight) const;
   // Screen position the page's elements are drawn from: its top-left corner, or on a
   // vertical page its top-right one (see PageElement::render).
