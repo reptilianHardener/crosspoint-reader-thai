@@ -296,6 +296,7 @@ cache. This cache directory exists at `.crosspoint` on the SD card. The structur
 │   ├── progress.bin     # reading position (chapter, page, etc.)
 │   ├── cover.bmp        # generated cover image
 │   ├── book.bin         # metadata: title, author, spine, TOC
+│   ├── source.bin       # size and date of the book file the cache was built from
 │   ├── css_rules.cache  # parsed CSS rule cache
 │   ├── img_*            # rendered image cache files
 │   └── sections/        # per-chapter layout cache
@@ -307,7 +308,7 @@ cache. This cache directory exists at `.crosspoint` on the SD card. The structur
 └── recent.json          # recent books list
 ```
 
-Removing `/.crosspoint` clears all cached metadata and forces a full regeneration on next open. Book deletes, overwrites, and moves done through the firmware or web UI clear or re-key matching caches; manual SD-card edits may leave stale cache directories behind.
+Removing `/.crosspoint` clears all cached metadata and forces a full regeneration on next open. Book deletes, overwrites, and moves done through the firmware or web UI clear or re-key matching caches. A book replaced on the SD card at the same path is re-indexed when it is next opened; renamed or deleted books may leave stale cache directories behind.
 
 For more details on the internal file structures, see the [file formats document](./docs/file-formats.md).
 

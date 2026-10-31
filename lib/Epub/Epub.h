@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "Epub/BookMetadataCache.h"
+#include "Epub/SourceStamp.h"
 #include "Epub/css/CssParser.h"
 
 class ZipFile;
@@ -70,6 +71,12 @@ class Epub {
   bool loadSyncMetadata(SyncMetadata& metadata);
   bool clearCache() const;
   void setupCacheDir() const;
+  // Whether the book file still matches the one its cache was built from (see SourceStamp):
+  // Changed means the cache must be rebuilt; Unknown means the cache has no stamp yet.
+  // Always Same for TXT/MD, which Txt::validateCache covers.
+  SourceStamp::State sourceState() const;
+  // Records the current book file as the one the cache describes.
+  void stampSource() const;
   const std::string& getCachePath() const;
   const std::string& getPath() const;
   // Empty unless the encrypted-entry accessor failed to open.

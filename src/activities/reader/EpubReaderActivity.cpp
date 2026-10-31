@@ -250,10 +250,34 @@ bool EpubReaderActivity::loadBook() {
     return false;
   }
 
-  const bool uncached = !Storage.exists((loadedEpub->getCachePath() + "/book.bin").c_str());
-  if (uncached) {
+  bool uncached = !Storage.exists((loadedEpub->getCachePath() + "/book.bin").c_str());
+  const SourceStamp::State source = uncached ? SourceStamp::State::Same : loadedEpub->sourceState();
+  // A cache from before stamps existed: take the file on the card as its source from now on.
+  if (source == SourceStamp::State::Unknown) loadedEpub->stampSource();
+  const bool replaced = source == SourceStamp::State::Changed;
+  if (uncached || replaced) {
     disableFastInitialRefresh();
     GUI.drawPopup(renderer, tr(STR_INDEXING));
+  }
+  if (replaced) {
+    // The book file was replaced on the card: index it again. Like Delete Book Cache, keep
+    // the saved position; the rest of the directory describes the old file.
+    LOG_DBG("ERS", "Book file changed since it was indexed, rebuilding cache");
+    uint8_t progress[10];
+    int progressSize = 0;
+    {
+      HalFile f;
+      if (Storage.openFileForRead("ERS", loadedEpub->getCachePath() + "/progress.bin", f)) {
+        progressSize = f.read(progress, sizeof(progress));
+      }
+    }
+    if (!loadedEpub->clearCache()) LOG_ERR("ERS", "Could not remove the old cache; rebuilding over it");
+    loadedEpub->setupCacheDir();
+    if (progressSize > 0 &&
+        !ProgressFile::writeAtomic(loadedEpub->getCachePath(), progress, static_cast<size_t>(progressSize))) {
+      LOG_ERR("ERS", "Failed to keep progress across the cache rebuild");
+    }
+    uncached = true;
   }
 
   bool loaded;
