@@ -88,6 +88,18 @@ if (parsedSize != fileSize) {
 }
 ```
 
+## `source.bin`
+
+An 8-byte file in a book's cache directory, written when the book is indexed:
+the book file's size (`u32`) and FAT modification time (`u32`, date in the
+high 16 bits, time in the low 16; 0 when the card has none). When the reader
+opens a book it compares them with the file on the card. A file that no longer
+matches was replaced (a corrected language tag, a new edition): the cache
+directory is rebuilt, keeping only the saved reading position. A side without
+a timestamp compares size only. A cache directory without this file (indexed
+before it existed) adopts the current file as its source on the next open.
+TXT and MD books keep their own check in `Txt::validateCache`.
+
 ## `section.bin`
 
 ### Version 174

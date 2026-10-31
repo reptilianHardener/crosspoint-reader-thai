@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "Epub/BookMetadataCache.h"
+#include "Epub/SourceStamp.h"
 #include "ZipFile.h"
 
 // Counting allocator: heap bytes allocated while `counting` is set and not yet freed.
@@ -103,6 +104,31 @@ TEST(BookMetadataCacheHeap, ResidentHeapDoesNotGrowWithSpineCount) {
     resident[spineCount == 5000] = loaded;
   }
   EXPECT_LE(resident[1], resident[0] + 1024) << "30 chapters: " << resident[0] << " B";
+}
+
+// source.bin remembers the book file's size and timestamp; a replaced file no longer matches.
+TEST(SourceStampTest, ReplacedFileIsDetected) {
+  const std::string dir = cacheDir();
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir);
+  const std::string epub = dir + "/book.epub";
+  const auto writeEpub = [&](const size_t bytes) { std::ofstream(epub, std::ios::trunc) << std::string(bytes, 'x'); };
+
+  EXPECT_EQ(SourceStamp::check(dir, epub), SourceStamp::State::Unknown);  // no stamp yet
+  EXPECT_FALSE(SourceStamp::write(dir, epub));                            // no file to stamp
+
+  writeEpub(1000);
+  HalFile::stubModificationTime = 0x5A3C8000;
+  ASSERT_TRUE(SourceStamp::write(dir, epub));
+  EXPECT_EQ(SourceStamp::check(dir, epub), SourceStamp::State::Same);
+  writeEpub(1001);  // re-saved with another size
+  EXPECT_EQ(SourceStamp::check(dir, epub), SourceStamp::State::Changed);
+  writeEpub(1000);  // same size, newer timestamp (an edited language tag can keep the size)
+  HalFile::stubModificationTime = 0x5A3C8001;
+  EXPECT_EQ(SourceStamp::check(dir, epub), SourceStamp::State::Changed);
+  HalFile::stubModificationTime = 0;  // a card without timestamps compares size only
+  EXPECT_EQ(SourceStamp::check(dir, epub), SourceStamp::State::Same);
+  EXPECT_EQ(SourceStamp::check(dir, dir + "/missing.epub"), SourceStamp::State::Unknown);
 }
 
 // book.bin cut short inside a window: the window answers the total before it, never less.

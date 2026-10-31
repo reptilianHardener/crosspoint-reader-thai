@@ -41,6 +41,10 @@ class HalFile {
   }
   size_t write(uint8_t byte) { return write(&byte, 1); }
   bool flush() { return file_ && std::fflush(file_) == 0; }
+  size_t fileSize() const { return size(); }
+  // Fixture files have no FAT timestamp; tests set this to model one.
+  static inline uint32_t stubModificationTime = 0;
+  uint32_t modificationTime() const { return stubModificationTime; }
   bool seek(size_t pos) { return file_ && std::fseek(file_, static_cast<long>(pos), SEEK_SET) == 0; }
   bool seekCur(size_t offset) { return file_ && std::fseek(file_, static_cast<long>(offset), SEEK_CUR) == 0; }
   bool close() {

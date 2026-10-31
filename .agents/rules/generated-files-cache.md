@@ -53,7 +53,7 @@ release conversion downloads source fonts, so verify asset hashes before publish
 
 ### Cache Structure on SD Card
 
-Book data uses `/.crosspoint/epub_<hash>/{book.bin,progress.bin,cover.bmp,sections/*.bin}`.
+Book data uses `/.crosspoint/epub_<hash>/{book.bin,source.bin,progress.bin,cover.bmp,sections/*.bin}`.
 The directory key is `std::hash<std::string>{}(filepath)`, not content identity.
 Rename/move flows must preserve progress and other book state; replacing contents
 at the same path leaves this key unchanged.

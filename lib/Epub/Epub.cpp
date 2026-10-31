@@ -20,6 +20,7 @@
 #include <string_view>
 #include <vector>
 
+#include "Epub/SourceStamp.h"
 #include "Epub/parsers/ContainerParser.h"
 #include "Epub/parsers/ContentOpfParser.h"
 #include "Epub/parsers/TocNavParser.h"
@@ -646,10 +647,18 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss) {
     LOG_ERR("EBP", "Failed to reload cache after writing");
     return false;
   }
+  stampSource();
 
   LOG_DBG("EBP", "Loaded ePub: %s", filepath.c_str());
   return true;
 }
+
+SourceStamp::State Epub::sourceState() const {
+  if (Txt::isTxtOrMd(filepath)) return SourceStamp::State::Same;
+  return SourceStamp::check(cachePath, filepath);
+}
+
+void Epub::stampSource() const { SourceStamp::write(cachePath, filepath); }
 
 bool Epub::loadMetadata(std::string& title, std::string& author, SyncMetadata* package) {
   title.clear();
