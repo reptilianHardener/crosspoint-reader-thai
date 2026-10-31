@@ -65,8 +65,12 @@ static_assert(std::size(WORD_SPACING_IDS) == (WORD_SPACING_MAX - WORD_SPACING_MI
 }  // namespace
 
 TextSettingsActivity::TextSettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
-                                           const SdCardFontRegistry* registry, Tab initialTab)
-    : UiTabListActivity("TextSettings", renderer, mappedInput), registry_(registry), tab_(initialTab) {}
+                                           const SdCardFontRegistry* registry, const LineScript previewScript,
+                                           Tab initialTab)
+    : UiTabListActivity("TextSettings", renderer, mappedInput),
+      registry_(registry),
+      previewScript_(previewScript),
+      tab_(initialTab) {}
 
 const char* TextSettingsActivity::tabLabel(const int index) const { return I18N.get(TAB_NAME_IDS[index]); }
 
@@ -291,8 +295,8 @@ void TextSettingsActivity::drawChrome() {
   const int clipRight = std::min(previewBounds.x + previewBounds.width, savedX + savedWidth);
   const int clipBottom = std::min(previewBounds.y + previewBounds.height, savedY + savedHeight);
   renderer.setClipRect(clipLeft, clipTop, std::max(0, clipRight - clipLeft), std::max(0, clipBottom - clipTop));
-  textsettings::renderPreview(renderer, previewLayout_, metrics_.previewPadding, metrics_.verticalSpacing,
-                              previewBounds, labelBuf);
+  textsettings::renderPreview(renderer, previewLayout_, previewScript_, metrics_.previewPadding,
+                              metrics_.verticalSpacing, previewBounds, labelBuf);
   renderer.setClipRect(savedX, savedY, savedWidth, savedHeight);
 }
 

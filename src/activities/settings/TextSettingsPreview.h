@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 
+#include "ScriptLineSpacing.h"
 #include "components/themes/BaseTheme.h"
 
 class GfxRenderer;
@@ -37,9 +38,14 @@ struct PreviewLayout {
   PreviewKey key;
 };
 
+// The script of the interface language, for a preview opened with no book.
+LineScript scriptForUiLanguage();
+
 // Draws the sample-text pane via the reader engine, reusing layout across redraws.
-// The caption is borrowed for this draw; only the sample layout is cached.
-void renderPreview(const GfxRenderer& renderer, PreviewLayout& layout, int previewPadding, int labelGap, Rect bounds,
-                   const char* caption);
+// The sample text and line pitch follow script, so a preview opened from a Thai or
+// Japanese book shows that script. The caption is borrowed for this draw; only the
+// sample layout is cached.
+void renderPreview(const GfxRenderer& renderer, PreviewLayout& layout, LineScript script, int previewPadding,
+                   int labelGap, Rect bounds, const char* caption);
 
 }  // namespace textsettings

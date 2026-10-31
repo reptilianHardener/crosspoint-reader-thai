@@ -1224,21 +1224,22 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       break;
     }
     case EpubReaderMenuActivity::MenuAction::TEXT_SETTINGS: {
-      startActivityForResult(std::make_unique<TextSettingsActivity>(renderer, mappedInput, &sdFontSystem.registry(),
-                                                                    TextSettingsActivity::Tab::Family),
-                             [this](const ActivityResult&) {
-                               {
-                                 RenderLock lock;
-                                 if (section) {
-                                   rememberCurrentContentOffset();
-                                   cachedSpineIndex = currentSpineIndex;
-                                   cachedChapterTotalPageCount = section->pageCount;
-                                   nextPageNumber = section->currentPage;
-                                 }
-                                 section.reset();
-                               }
-                               openReaderMenu();
-                             });
+      startActivityForResult(
+          std::make_unique<TextSettingsActivity>(renderer, mappedInput, &sdFontSystem.registry(), bookLineScript(),
+                                                 TextSettingsActivity::Tab::Family),
+          [this](const ActivityResult&) {
+            {
+              RenderLock lock;
+              if (section) {
+                rememberCurrentContentOffset();
+                cachedSpineIndex = currentSpineIndex;
+                cachedChapterTotalPageCount = section->pageCount;
+                nextPageNumber = section->currentPage;
+              }
+              section.reset();
+            }
+            openReaderMenu();
+          });
       break;
     }
     case EpubReaderMenuActivity::MenuAction::BLUETOOTH:
@@ -1419,14 +1420,17 @@ bool EpubReaderActivity::wantsVerticalLayout() const {
   return SETTINGS.verticalJapanese && epub && ReaderUtils::isJapaneseBookLanguage(epub->getLanguage());
 }
 
+LineScript EpubReaderActivity::bookLineScript() const {
+  const std::string_view language = epub ? std::string_view(epub->getLanguage()) : std::string_view();
+  if (ReaderUtils::isThaiBookLanguage(language)) return LineScript::Thai;
+  if (ReaderUtils::isJapaneseBookLanguage(language)) return LineScript::Japanese;
+  return LineScript::Other;
+}
+
 ReaderRenderSpec EpubReaderActivity::makeRenderSpec(const uint16_t viewportWidth, const uint16_t viewportHeight) const {
   ReaderRenderSpec spec = SETTINGS.readerRenderSpec(viewportWidth, viewportHeight);
   spec.verticalText = verticalLayout;
-  const std::string_view language = epub ? std::string_view(epub->getLanguage()) : std::string_view();
-  applyScriptLineSpacing(spec, renderer,
-                         ReaderUtils::isThaiBookLanguage(language)       ? LineScript::Thai
-                         : ReaderUtils::isJapaneseBookLanguage(language) ? LineScript::Japanese
-                                                                         : LineScript::Other);
+  applyScriptLineSpacing(spec, renderer, bookLineScript());
   return spec;
 }
 
@@ -2981,15 +2985,16 @@ void EpubReaderActivity::handleOverlayInput() {
           RenderLock lock;  // the picker paints the framebuffer next
           settleOverlayRefresh();
         }
-        startActivityForResult(std::make_unique<TextSettingsActivity>(renderer, mappedInput, &sdFontSystem.registry(),
-                                                                      TextSettingsActivity::Tab::Family),
-                               [this](const ActivityResult&) {
-                                 applyReaderTextSettings();
-                                 overlay = Overlay::Text;  // back to the Text panel
-                                 panelIndex = 0;
-                                 if (toolbarUi) toolbarUi->begin();  // the picker drew its own FUI screen
-                                 requestUpdate();                    // re-render page + Text panel
-                               });
+        startActivityForResult(
+            std::make_unique<TextSettingsActivity>(renderer, mappedInput, &sdFontSystem.registry(), bookLineScript(),
+                                                   TextSettingsActivity::Tab::Family),
+            [this](const ActivityResult&) {
+              applyReaderTextSettings();
+              overlay = Overlay::Text;  // back to the Text panel
+              panelIndex = 0;
+              if (toolbarUi) toolbarUi->begin();  // the picker drew its own FUI screen
+              requestUpdate();                    // re-render page + Text panel
+            });
       } else if (panelIndex == 4) {
         // Focus Reading is a genuine on/off: a tap toggles and applies live.
         SETTINGS.focusReadingEnabled = SETTINGS.focusReadingEnabled ? 0 : 1;

@@ -17,6 +17,8 @@ class I18n {
 
   // Get localized string by ID
   const char* get(StrId id) const;
+  // The same string in another language; English when that language is not built in.
+  const char* get(StrId id, Language lang) const;
 
   const char* operator[](StrId id) const { return get(id); }
 
