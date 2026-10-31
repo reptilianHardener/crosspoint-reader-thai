@@ -20,6 +20,17 @@ Example, from the Home screen into the Library and back:
         WAIT:3 SHOT:library KEY:BACK WAIT:12 MEM
 
 Heap lines are printed every 10 seconds, so wait at least that long before MEM.
+
+Golden pages: with --golden <dir>, each SHOT is also compared pixel for pixel
+with <dir>/<name>.png. A difference is reported with its pixel count and saved
+as <out>/<name>.diff.png (changed pixels in black), and the run exits with
+status 1. --record saves the screenshots of this run as the new goldens.
+Capture the pages once on a known-good firmware, then rerun the same steps
+file after a change:
+
+    python3 scripts/device_steps.py --file pages.steps --golden device-steps/golden --record
+    python3 scripts/device_steps.py --file pages.steps --golden device-steps/golden
+
 Requires pyserial and Pillow (python3 -m pip install -r scripts/requirements.txt).
 """
 
@@ -28,13 +39,14 @@ from __future__ import annotations
 import argparse
 import glob
 import platform
+import shutil
 import re
 import sys
 import time
 from pathlib import Path
 
 import serial
-from PIL import Image
+from PIL import Image, ImageChops
 
 KEYS = {"BACK", "CONFIRM", "LEFT", "RIGHT", "UP", "DOWN", "POWER"}
 MEM_LINE = re.compile(rb"\[(\d+)\] \[INF\] \[MEM\] Free: (\d+) bytes.*?Min Free: (\d+) bytes, MaxAlloc: (\d+)")
@@ -115,6 +127,22 @@ class Device:
         image.save(path)
 
 
+def compare_golden(shot: Path, golden: Path, diff: Path) -> str | None:
+    """Compares a screenshot with its golden; returns a problem description, or None when they match."""
+    if not golden.exists():
+        return f"no golden {golden}"
+    with Image.open(shot) as actual, Image.open(golden) as expected:
+        if actual.size != expected.size:
+            return f"size {actual.size[0]}x{actual.size[1]} differs from golden {expected.size[0]}x{expected.size[1]}"
+        changed = ImageChops.difference(actual.convert("1"), expected.convert("1"))
+    count = sum(1 for pixel in changed.getdata() if pixel)
+    if count == 0:
+        diff.unlink(missing_ok=True)  # a leftover from an earlier failing run
+        return None
+    ImageChops.invert(changed).save(diff)  # black where the pixels differ
+    return f"{count} pixels differ from {golden}; see {diff}"
+
+
 def valid_step(step: str) -> bool:
     kind, _, value = step.partition(":")
     kind = kind.upper()
@@ -135,7 +163,11 @@ def main() -> None:
     parser.add_argument("--settle", type=float, default=1.2, help="seconds to wait after each click (default 1.2)")
     parser.add_argument("--panel", default="800x480", help="native framebuffer size (default 800x480)")
     parser.add_argument("--landscape", action="store_true", help="save screenshots unrotated")
+    parser.add_argument("--golden", type=Path, help="folder of golden screenshots to compare each SHOT with")
+    parser.add_argument("--record", action="store_true", help="save this run's screenshots as the goldens")
     args = parser.parse_args()
+    if args.record and not args.golden:
+        parser.error("--record needs --golden")
 
     steps = list(args.steps)
     if args.file:
@@ -161,6 +193,9 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     device = Device(port, args.out / "serial.log")
     device.read_for(0.5)
+    if args.record:
+        args.golden.mkdir(parents=True, exist_ok=True)
+    problems: list[str] = []
 
     for step in steps:
         kind, _, value = step.partition(":")
@@ -170,8 +205,19 @@ def main() -> None:
         elif kind == "WAIT":
             device.read_for(float(value))
         elif kind == "SHOT":
-            device.screenshot(args.out / f"{value}.png", width, height, not args.landscape)
-            print(f"saved {args.out / value}.png")
+            shot = args.out / f"{value}.png"
+            device.screenshot(shot, width, height, not args.landscape)
+            print(f"saved {shot}")
+            if args.record:
+                shutil.copyfile(shot, args.golden / f"{value}.png")
+                print(f"recorded {args.golden / value}.png")
+            elif args.golden:
+                problem = compare_golden(shot, args.golden / f"{value}.png", args.out / f"{value}.diff.png")
+                if problem:
+                    problems.append(f"{value}: {problem}")
+                    print(f"DIFF {value}: {problem}")
+                else:
+                    print(f"same {value}")
         elif kind == "MEM":
             samples = MEM_LINE.findall(device.pending)
             print("MEM", "no sample yet" if not samples else "free=%s maxalloc=%s" % (samples[-1][1].decode(), samples[-1][3].decode()))
@@ -181,6 +227,9 @@ def main() -> None:
         print(f"{'time ms':>9} {'free':>8} {'min free':>9} {'max alloc':>10}")
         for t, free, min_free, max_alloc in samples:
             print(f"{t.decode():>9} {free.decode():>8} {min_free.decode():>9} {max_alloc.decode():>10}")
+
+    if problems:
+        sys.exit(f"{len(problems)} screenshot(s) differ from the goldens")
 
 
 if __name__ == "__main__":
