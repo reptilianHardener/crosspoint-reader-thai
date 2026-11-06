@@ -41,6 +41,7 @@
 #include "util/PluginPickerLayout.h"
 #include "util/QrUtils.h"
 #include "util/StringUtils.h"
+#include "util/UrlUtils.h"
 
 namespace fui = freeink::ui;
 
@@ -133,6 +134,20 @@ bool matchesCapabilities(const std::string& required) {
   });
 }
 
+// List-index "requires" is an optional all-of array. Missing means public;
+// malformed or excessive requirements never expose an unsupported list.
+bool matchesListRequirements(JsonVariantConst requirements) {
+  if (requirements.isUnbound()) return true;
+  JsonArrayConst required = requirements.as<JsonArrayConst>();
+  if (required.isNull() || required.size() > 32) return false;
+  for (JsonVariantConst v : required) {
+    const char* capability = v.as<const char*>();
+    if (!capability || !*capability || !csvContainsToken(firmwareidentity::PLUGIN_CAPABILITIES, capability))
+      return false;
+  }
+  return true;
+}
+
 bool catalogEntryCompatible(const std::string& family, const std::string& apiMin,
                             const std::string& requiredCapabilities) {
   return matchesCsvRestriction(family, firmwareidentity::FAMILY) && matchesPluginApiMinimum(apiMin) &&
@@ -196,6 +211,21 @@ void readPluginMetadata(const std::string& path, PluginRef& ref, const bool clas
     const bool hasEvents = !doc["events"].as<JsonObjectConst>().isNull() && doc["events"].size() > 0;
     ref.deviceKind = PluginLocations::classifyDeviceManifest(browseUrl[0] != '\0', hasEvents);
   }
+}
+// Use the same installed-version semantics as the catalog's Update badge,
+// without retaining catalog entries or installed manifests in heap memory.
+bool catalogItemHasUpdate(const std::string& id, const std::string& version) {
+  if (id.empty() || version.empty()) return false;
+  const std::string dir = PluginLocations::findPluginDir(id.c_str());
+  std::string raw;
+  if (dir.empty() || !Storage.readFileToString("PCAT", dir + "/manifest.json", MAX_MANIFEST_SIZE, raw)) return false;
+  JsonDocument filter;
+  filter["version"] = true;
+  JsonDocument doc;
+  std::string installed;
+  if (deserializeJson(doc, raw, DeserializationOption::Filter(filter)) == DeserializationError::Ok)
+    installed = doc["version"] | "";
+  return PluginLocations::isNewerVersion(version, installed);
 }
 }  // namespace
 
@@ -279,8 +309,10 @@ bool PluginCatalogActivity::loadManifest() {
   manifest.listsTitlePath = listFields["title"] | "title";
   manifest.listsUrlPath = listFields["url"] | "url";
   manifest.listsIdPath = listFields["id"] | "id";
+  manifest.listsRequiresPath = listFields["requires"] | "requires";
   manifest.browseLists.reserve(browse["lists"].size());
   for (JsonVariantConst l : browse["lists"].as<JsonArrayConst>()) {
+    if (!matchesListRequirements(l["requires"])) continue;
     Manifest::BrowseList entry;
     entry.title = l["title"] | "";
     entry.url = l["url"] | "";
@@ -381,9 +413,11 @@ bool PluginCatalogActivity::loadBrowseListIndex(int& status) {
       LOG_ERR("PCAT", "browse list index truncated to %u lists", static_cast<unsigned>(MAX_BROWSE_LISTS));
       break;
     }
+    if (!matchesListRequirements(resolvePath(l, manifest.listsRequiresPath))) continue;
     Manifest::BrowseList entry;
     entry.title = variantToString(resolvePath(l, manifest.listsTitlePath));
     entry.url = variantToString(resolvePath(l, manifest.listsUrlPath));
+    UrlUtils::resolveServerPath(entry.url, url);
     entry.id = variantToString(resolvePath(l, manifest.listsIdPath));
     entry.body = l["body"] | "";
     JsonVariantConst notice = l["notice"];
@@ -864,8 +898,125 @@ void PluginCatalogActivity::fetchPage(const int newPage) {
   requestUpdate();
 }
 
+// Static version-tracked feeds can put Update entries before all other rows,
+// even when an update occurs on a later page. Stream the existing SD response
+// three times: count eligible updates, select only this page's source row
+// indexes, then decode its complete items. Peak row storage stays <= 16.
+bool PluginCatalogActivity::parseUpdateFirstBrowseResponse(const size_t pageOffset) {
+  const std::string unused;
+  // The six parser slots also carry compatibility metadata during ranking.
+  const std::string* const rankingFields[] = {&manifest.titlePath,   &manifest.compatFamilyPath,
+                                              &manifest.idPath,      &manifest.compatRequiresPath,
+                                              &manifest.versionPath, &manifest.compatApiMinPath};
+  const auto eligible = [this](const JsonListParser::Row& row) {
+    return !row.field[JsonListParser::F_TITLE].empty() &&
+           (!manifest.filtersCompatibility() ||
+            catalogEntryCompatible(row.field[JsonListParser::F_AUTHOR], row.field[JsonListParser::F_BASE],
+                                   row.field[JsonListParser::F_URL]));
+  };
+
+  size_t eligibleCount = 0;
+  size_t updateCount = 0;
+  auto count = [&](JsonListParser::Row& row) {
+    if (!eligible(row)) return;
+    ++eligibleCount;
+    if (catalogItemHasUpdate(row.field[JsonListParser::F_ID], row.field[JsonListParser::F_VERSION])) ++updateCount;
+  };
+  {
+    auto parser = makeUniqueNoThrow<JsonListParser>(
+        manifest.itemsPath, rankingFields, unused,
+        [](void* context, JsonListParser::Row& row) { (*static_cast<decltype(count)*>(context))(row); }, &count);
+    if (!streamBrowseFile(parser.get())) {
+      fail(StrId::STR_PARSE_FEED_FAILED);
+      return false;
+    }
+  }
+
+  releaseRows();
+  items.clear();
+  const size_t visibleCount =
+      pageOffset < eligibleCount ? std::min<size_t>(manifest.pageSize, eligibleCount - pageOffset) : 0;
+  if (!visibleCount) {
+    hasMore = false;
+    return true;
+  }
+
+  struct RankedRow {
+    size_t sourceIndex;
+    size_t displayIndex;
+  };
+  RankedRow chosen[MAX_PAGE_SIZE] = {};
+  bool usedSlots[MAX_PAGE_SIZE] = {};
+  bool inconsistentRanking = false;
+  size_t chosenCount = 0;
+  size_t sourceIndex = 0;
+  size_t seenUpdates = 0;
+  size_t seenOthers = 0;
+  auto choose = [&](JsonListParser::Row& row) {
+    const size_t thisRow = sourceIndex++;
+    if (!eligible(row)) return;
+    const bool update = catalogItemHasUpdate(row.field[JsonListParser::F_ID], row.field[JsonListParser::F_VERSION]);
+    const size_t rank = update ? seenUpdates++ : updateCount + seenOthers++;
+    if (rank >= pageOffset && rank - pageOffset < visibleCount) {
+      const size_t slot = rank - pageOffset;
+      if (chosenCount >= visibleCount || usedSlots[slot]) {
+        inconsistentRanking = true;
+        return;
+      }
+      usedSlots[slot] = true;
+      chosen[chosenCount++] = {thisRow, slot};
+    }
+  };
+  {
+    auto parser = makeUniqueNoThrow<JsonListParser>(
+        manifest.itemsPath, rankingFields, unused,
+        [](void* context, JsonListParser::Row& row) { (*static_cast<decltype(choose)*>(context))(row); }, &choose);
+    if (!streamBrowseFile(parser.get()) || inconsistentRanking || chosenCount != visibleCount ||
+        seenUpdates + seenOthers != eligibleCount) {
+      fail(StrId::STR_PARSE_FEED_FAILED);
+      return false;
+    }
+  }
+
+  // The selected source indexes are in feed order; the display indexes place
+  // updates first while retaining the original order within each group.
+  items.resize(visibleCount);
+  size_t parsedIndex = 0;
+  size_t chosenIndex = 0;
+  auto append = [&](JsonListParser::Row& row) {
+    const size_t thisRow = parsedIndex++;
+    if (chosenIndex >= chosenCount || chosen[chosenIndex].sourceIndex != thisRow) return;
+    Item& item = items[chosen[chosenIndex++].displayIndex];
+    item.title = std::move(row.field[JsonListParser::F_TITLE]);
+    item.author = std::move(row.field[JsonListParser::F_AUTHOR]);
+    item.id = std::move(row.field[JsonListParser::F_ID]);
+    item.url = std::move(row.field[JsonListParser::F_URL]);
+    item.version = std::move(row.field[JsonListParser::F_VERSION]);
+    item.base = std::move(row.field[JsonListParser::F_BASE]);
+    item.files = std::move(row.files);
+  };
+  const std::string* const itemFields[] = {&manifest.titlePath, &manifest.authorPath,  &manifest.idPath,
+                                           &manifest.urlPath,   &manifest.versionPath, &manifest.bundleBasePath};
+  {
+    auto parser = makeUniqueNoThrow<JsonListParser>(
+        manifest.itemsPath, itemFields, manifest.bundleFilesPath,
+        [](void* context, JsonListParser::Row& row) { (*static_cast<decltype(append)*>(context))(row); }, &append);
+    if (!streamBrowseFile(parser.get()) || chosenIndex != chosenCount) {
+      fail(StrId::STR_PARSE_FEED_FAILED);
+      return false;
+    }
+  }
+  hasMore = eligibleCount > pageOffset + visibleCount;
+  computeInstallStatus();
+  return true;
+}
+
 bool PluginCatalogActivity::parseBrowseResponse() {
   if (manifest.isXmlList()) return parseXmlList();
+  if (manifest.tracksInstalls() && browsePaging() == plugincatalogpaging::Paging::Static) {
+    const size_t offset = static_cast<size_t>(std::max(0, page - 1)) * manifest.pageSize;
+    return parseUpdateFirstBrowseResponse(offset);
+  }
 
   // Requests with {page} or {offset} are already sliced server-side. Static
   // JSON files need a bounded client-side page window into the streamed response.
@@ -1062,9 +1213,24 @@ void PluginCatalogActivity::downloadItem(const int itemIndex) {
   requestUpdateAndWait();
   const auto result = manifest.isBundle() && !item.files.empty() ? downloadBundle(item) : downloadBook(item);
   session.reset();
+  const std::string selectedId = std::move(item.id);
   item = {};
   // Reuse the SD response without another network request or resetting navigation.
   if (!parseBrowseResponse()) return;
+  // An updated plugin can move down the list. Reselect only when its ID
+  // identifies exactly one row on this page; otherwise retain the highlight.
+  if (result == HttpDownloader::OK && !selectedId.empty()) {
+    size_t matchCount = 0;
+    size_t matchIndex = 0;
+    for (size_t i = 0; i < items.size(); ++i) {
+      if (items[i].id != selectedId) continue;
+      ++matchCount;
+      matchIndex = i;
+      if (matchCount > 1) break;
+    }
+    if (matchCount == 1)
+      nav.requestSelection(static_cast<int>(matchIndex) + (!manifest.isXmlList() && page > 1 ? 1 : 0));
+  }
   session = makeUniqueNoThrow<freeink::SecureHttpClient>();
   if (!session) LOG_ERR("PCAT", "OOM: browse client; using per-request connections");
   finishDownload(result);
@@ -1160,6 +1326,9 @@ HttpDownloader::DownloadError PluginCatalogActivity::downloadBundle(const Item& 
 HttpDownloader::DownloadError PluginCatalogActivity::downloadBook(const Item& item) {
   // Resolve the file URL: either the template itself, or one API hop away.
   std::string fileUrl;
+  // The file GET carries the download headers unless url_path answered with a
+  // full URL, which may be pre-signed and reject a second Authorization.
+  bool sendDownloadHeaders = manifest.dlUrlPath.empty();
   if (!manifest.dlUrlPath.empty()) {
     String response;
     int status = apiRequest(substitutedRequest(manifest.downloadReq, &item), response);
@@ -1175,6 +1344,7 @@ HttpDownloader::DownloadError PluginCatalogActivity::downloadBook(const Item& it
       return HttpDownloader::HTTP_ERROR;
     }
     fileUrl = variantToString(resolvePath(doc.as<JsonVariantConst>(), manifest.dlUrlPath));
+    sendDownloadHeaders = UrlUtils::resolveServerPath(fileUrl, substituted(manifest.downloadReq.url, &item));
   } else {
     fileUrl = substituted(manifest.downloadReq.url, &item);
   }
@@ -1208,20 +1378,18 @@ HttpDownloader::DownloadError PluginCatalogActivity::downloadBook(const Item& it
     return HttpDownloader::FILE_ERROR;
   }
 
-  // url_path already authenticated the JSON hop; the resolved file URL must not
-  // inherit those headers (S3 pre-signed GETs reject a second Authorization).
   const auto fetchFile = [&] {
     const std::vector<HttpDownloader::Header> fileHeaders =
-        manifest.dlUrlPath.empty() ? substitutedHeaders(manifest.downloadReq.headers, &item)
-                                   : std::vector<HttpDownloader::Header>{};
+        sendDownloadHeaders ? substitutedHeaders(manifest.downloadReq.headers, &item)
+                            : std::vector<HttpDownloader::Header>{};
     return downloadFile(pluginhttp::escapeUrl(fileUrl), dest, substituted(manifest.dlUser, &item),
                         substituted(manifest.dlPass, &item), fileHeaders);
   };
   session.reset();  // free browse TLS before the large file GET
   auto result = fetchFile();
-  // The direct GET carries the catalog's token templates (never a pre-signed
-  // url_path target): an expired password-grant token gets one mint-and-retry.
-  if (result == HttpDownloader::UNAUTHORIZED && manifest.dlUrlPath.empty() && manifest.hasPasswordGrant() &&
+  // A GET with the catalog's token templates gets one mint-and-retry when an
+  // expired password-grant token is refused.
+  if (result == HttpDownloader::UNAUTHORIZED && sendDownloadHeaders && manifest.hasPasswordGrant() &&
       refreshCredentialToken()) {
     result = fetchFile();
   }
@@ -1541,7 +1709,8 @@ void PluginCatalogActivity::showItemDetails(const int itemIndex) {
   if (!details.repository.empty()) spec.source = std::string(tr(STR_REPOSITORY)) + ": " + details.repository;
   if (!details.detailsUrl.empty()) {
     String response;
-    const std::string url = substituted(details.detailsUrl, &item);
+    std::string url = substituted(details.detailsUrl, &item);
+    UrlUtils::resolveServerPath(url, substituted(activeBrowseUrl(), nullptr));
     const int status = pluginhttp::request(session.get(), url, "GET", "", {}, response, MAX_ITEM_DETAILS_RESPONSE);
     const bool html = details.detailsFormat == "html";
     if (status < 200 || status >= 300 || response.length() == 0) {

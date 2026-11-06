@@ -217,6 +217,15 @@ void moveFinishedBookToReadFolder(const std::string& srcPath, const std::string&
 // key only; on other boards a press stops the build once the loop has debounced it.
 bool buttonContactClosed() { return gpio.rawInputActive(); }
 
+// Only single-page selections can be restored: the reader moves to the end page
+// after a clipping, so a multi-page range can no longer be mapped back.
+ClipSelectionActivity::Selection lookupReturnSelectionFor(const ClippingResult& clipping) {
+  if (clipping.startPageOffset != clipping.endPageOffset) return {};
+  // The restored cursor lands on lastWord, so make that the end the user was extending.
+  if (clipping.cursorAtStart) return {0, 0, clipping.endWordIndex, clipping.startWordIndex, true};
+  return {0, 0, clipping.startWordIndex, clipping.endWordIndex, true};
+}
+
 }  // namespace
 
 EpubReaderActivity::~EpubReaderActivity() {
@@ -475,6 +484,7 @@ void EpubReaderActivity::backgroundBuildTick() {
 
 void EpubReaderActivity::openDictionaryWordSelect() {
   if (SETTINGS.dictionaryName[0] == '\0') {
+    pendingLookupSelection = {};
     showDictionaryMessage = true;
     dictionaryMessageTime = millis();
     requestUpdate();
@@ -485,6 +495,8 @@ void EpubReaderActivity::openDictionaryWordSelect() {
 
 void EpubReaderActivity::startClipSelection(const int initialX, const int initialY,
                                             const ClipSelectionActivity::Mode mode) {
+  const auto restoreSelection = pendingLookupSelection;
+  pendingLookupSelection = {};
   if (!section || !epub || section->currentPage < 0 || section->currentPage >= section->pageCount) return;
 
   const int pageNumber = section->currentPage;
@@ -540,6 +552,7 @@ void EpubReaderActivity::startClipSelection(const int initialX, const int initia
 
   auto activity = makeUniqueNoThrow<ClipSelectionActivity>(renderer, mappedInput, std::move(pages), pageX, marginTop,
                                                            initialX, initialY, mode, verticalLayout);
+  if (activity && restoreSelection.valid) activity->setInitialSelection(restoreSelection);
   if (!activity) {
     LOG_ERR("CLIP", "Failed to allocate clipping selection activity");
     requestUpdate();
@@ -584,8 +597,12 @@ void EpubReaderActivity::startClipSelection(const int initialX, const int initia
         requestUpdate();
         return;
       }
+      lookupReturnSelection = lookupReturnSelectionFor(clipping);
       startActivityForResult(std::move(lookup), [this](const ActivityResult& result) {
-        if (!result.isCancelled) openDictionaryWordSelect();
+        if (!result.isCancelled && !mappedInput.hasTouch()) {
+          pendingLookupSelection = lookupReturnSelection;
+          openDictionaryWordSelect();
+        }
       });
       return;
     }
