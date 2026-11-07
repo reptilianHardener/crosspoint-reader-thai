@@ -79,3 +79,19 @@ TEST(ThaiMarkStack, ToneMarkBeforeSaraAmClearsItsRing) {
   stack.seedFromSaraAm(22);  // nikhahit ring of the following sara am tops out at 22
   EXPECT_EQ(stack.raiseFor(MAI_EK, 23, 5, 16, LINE_ADVANCE), 7);  // bottom 18 -> 25
 }
+
+// ============================================================================
+// Yo ying before a below vowel.
+// ============================================================================
+
+TEST(ThaiBelowVowel, YoYingIsCutBeforeABelowVowel) {
+  constexpr uint32_t YO_YING = 0x0E0D;
+  EXPECT_TRUE(thaiCutsTailAtBaseline(YO_YING, "\u0E39"));         // sara uu
+  EXPECT_TRUE(thaiCutsTailAtBaseline(YO_YING, "\u0E38\u0E48"));   // sara u, then mai ek
+  EXPECT_TRUE(thaiCutsTailAtBaseline(YO_YING, "\u0E48\u0E39"));   // tone mark typed first
+  EXPECT_FALSE(thaiCutsTailAtBaseline(YO_YING, "\u0E48"));        // upper mark only
+  EXPECT_FALSE(thaiCutsTailAtBaseline(YO_YING, "\u0E32\u0E38"));  // the vowel belongs to the next base
+  EXPECT_FALSE(thaiCutsTailAtBaseline(YO_YING, ""));
+  EXPECT_FALSE(thaiCutsTailAtBaseline(0x0E10, "\u0E38"));  // tho than is not cut
+  EXPECT_FALSE(thaiCutsTailAtBaseline(0x0E01, "\u0E38"));
+}

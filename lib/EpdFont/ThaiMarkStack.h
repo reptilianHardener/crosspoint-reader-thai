@@ -5,6 +5,19 @@
 #include <algorithm>
 #include <cstdint>
 
+/// True for yo ying (U+0E0D) whose marks, which start at text, include a below vowel; text is
+/// not advanced. Thai fonts swap in a tail-less yo ying there, which the device fonts lack, so
+/// the renderer cuts it at the baseline. Upper marks may come first: Thai text is not reordered.
+inline bool thaiCutsTailAtBaseline(const uint32_t baseCp, const char* text) {
+  if (baseCp != 0x0E0D) return false;
+  const auto* peek = reinterpret_cast<const uint8_t*>(text);
+  uint32_t cp;
+  while ((cp = utf8NextCodepoint(&peek)) != 0 && utf8IsThaiCombiningMark(cp)) {
+    if (utf8IsThaiLowerCombiningMark(cp)) return true;
+  }
+  return false;
+}
+
 /// Vertical placement of Thai marks above a base consonant.
 ///
 /// Thai stacks up to two marks above a consonant: an upper vowel (level two) and a

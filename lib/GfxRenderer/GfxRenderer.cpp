@@ -609,10 +609,11 @@ static void renderCharVertical(const GfxRenderer& renderer, GfxRenderer::RenderM
   }
 }
 
+// cutAtBaseline: draw only the rows above the baseline (yo ying's tail, see thaiCutsTailAtBaseline).
 template <TextRotation rotation = TextRotation::None>
 static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode renderMode,
                            const EpdFontFamily& fontFamily, const uint32_t cp, int cursorX, int cursorY,
-                           const bool pixelState, const EpdFontFamily::Style style) {
+                           const bool pixelState, const EpdFontFamily::Style style, const bool cutAtBaseline = false) {
   if (renderer.grayPlanesAreAbsolute()) renderMode = GfxRenderer::BW;
   EpdGlyph solidFallback;
   const EpdGlyph* glyph = fontFamily.getGlyphMetrics(cp, solidFallback, style);
@@ -624,9 +625,12 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
   const EpdFontData* fontData = fontFamily.getData(style);
   const bool is2Bit = fontData->is2Bit;
   const uint8_t width = glyph->width;
-  const uint8_t height = glyph->height;
+  // Bitmap rows are packed back to back, so drawing fewer rows drops the bottom of the glyph.
+  const uint8_t height =
+      cutAtBaseline ? static_cast<uint8_t>(std::clamp<int>(glyph->top, 0, glyph->height)) : glyph->height;
   const int left = glyph->left;
   const int top = glyph->top;
+  if (height == 0) return;
 
   // Tiled-grayscale band culling: if this glyph's physical y-extent is entirely
   // outside the active strip, skip it before the expensive bitmap decode. This
@@ -848,14 +852,15 @@ void GfxRenderer::drawTextRun(const int fontId, const int x, const int y, const 
   }
   const auto& font = fontIt->second;
   // scaleNum/scaleDen: 1/2 for SUP/SUB, the small-caps factor, 1/1 otherwise.
+  // cutAtBaseline: only the unscaled horizontal path cuts the tail.
   const auto drawGlyph = [&](const uint32_t glyphCp, const int pen, const int glyphY, const int scaleNum,
-                             const int scaleDen) {
+                             const int scaleDen, const bool cutAtBaseline = false) {
     if (vertical) {
       renderCharVertical(*this, renderMode, font, glyphCp, x - (glyphY - y), pen, black, style, scaleNum, scaleDen);
     } else if (scaleNum != scaleDen) {
       renderCharScaled(*this, renderMode, font, glyphCp, pen, glyphY, black, style, scaleNum, scaleDen);
     } else {
-      renderCharImpl<TextRotation::None>(*this, renderMode, font, glyphCp, pen, glyphY, black, style);
+      renderCharImpl<TextRotation::None>(*this, renderMode, font, glyphCp, pen, glyphY, black, style, cutAtBaseline);
     }
   };
 
@@ -905,6 +910,7 @@ void GfxRenderer::drawTextRun(const int fontId, const int x, const int y, const 
     } else {
       cp = font.applyLigatures(cp, textCursor, style);
     }
+    const bool cutTail = thaiCutsTailAtBaseline(cp, textCursor);
     thaiStack.resetForBase();
 
     // Differential rounding: snap (previous advance + current kern) as one unit so
@@ -938,7 +944,7 @@ void GfxRenderer::drawTextRun(const int fontId, const int x, const int y, const 
     } else if (isSmallCap) {
       drawGlyph(cp, lastBaseX, yPos, SMALL_CAPS_SCALE_NUM, SMALL_CAPS_SCALE_DEN);
     } else {
-      drawGlyph(cp, lastBaseX, yPos, 1, 1);
+      drawGlyph(cp, lastBaseX, yPos, 1, 1, cutTail);
     }
     prevCp = cp;
   }
@@ -2530,6 +2536,7 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
     }
 
     cp = font.applyLigatures(cp, text, style);
+    const bool cutTail = thaiCutsTailAtBaseline(cp, text);
     thaiStack.resetForBase();
 
     // Differential rounding: snap (previous advance + current kern) as one unit,
@@ -2547,7 +2554,7 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
     lastBaseTop = glyph ? glyph->top : 0;
     prevAdvanceFP = glyph ? glyph->advanceX : 0;  // 12.4 fixed-point
 
-    renderCharImpl<TextRotation::Rotated90CW>(*this, renderMode, font, cp, x, lastBaseY, black, style);
+    renderCharImpl<TextRotation::Rotated90CW>(*this, renderMode, font, cp, x, lastBaseY, black, style, cutTail);
     prevCp = cp;
   }
 }

@@ -54,6 +54,7 @@ gtest_discover_tests(ThaiLineBreakingTest)
 # Vertical stacking of Thai marks.
 add_executable(ThaiMarkStackTest
   ThaiMarkStackTest.cpp
+  ${REPO_ROOT}/lib/Utf8/Utf8.cpp
 )
 target_include_directories(ThaiMarkStackTest PRIVATE
   ${REPO_ROOT}/lib/EpdFont
