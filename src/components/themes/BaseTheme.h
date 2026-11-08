@@ -150,15 +150,13 @@ enum UIIcon {
   Blocks
 };
 
-// Layout of a home menu drawn as a grid rather than a single column. Shared between the
-// theme (drawing) and HomeActivity (navigation and touch hit-testing) so the two cannot
-// drift apart.
+// Layout of a home menu drawn as one row of tiles rather than a column. Shared between the
+// theme (drawing) and HomeActivity (touch hit-testing) so the two cannot drift apart.
 struct HomeMenuGrid {
   int columns = 1;
-  int left = 0;     // x of the first column
-  int top = 0;      // y of the first row
-  int colStep = 0;  // column pitch (tile width + gap)
-  int rowStep = 0;  // row pitch (tile height + gap)
+  int left = 0;     // x of the first tile
+  int top = 0;      // y of the row
+  int colStep = 0;  // tile pitch (tile width + gap)
   int tileWidth = 0;
   int tileHeight = 0;
 };
@@ -333,30 +331,16 @@ class BaseTheme {
   // Thumb generation height for home covers; 0 means use metrics.homeCoverHeight.
   // Themes with slots wider than 0.6 aspect override this so covers still fill.
   virtual int homeCoverThumbHeight(const GfxRenderer&) const { return 0; }
-  // True when the home screen shows the recent books as a carousel: one book is centred
-  // and Left/Right rotate through the others, instead of every book having its own tile.
-  virtual bool homeIsCarousel() const { return false; }
   // Called when the home screen opens, before its first render, so a theme can drop
-  // any state it keeps between frames (the carousel's remembered centre book).
+  // any state it keeps between frames (the Tanzaku card's remembered book).
   virtual void onHomeEnter() const {}
-  // Further thumbnail heights the home screen draws besides homeCoverThumbHeight()
-  // (the carousel's smaller side covers). Writes up to `capacity` heights, returns the count.
-  virtual int homeExtraCoverThumbHeights(const GfxRenderer&, int* /*heights*/, int /*capacity*/) const { return 0; }
-  // Fills `grid` and returns true when drawButtonMenu lays the home menu out as a grid.
+  // Fills `grid` and returns true when drawButtonMenu lays the home menu out as a row of tiles.
   virtual bool homeMenuGrid(const GfxRenderer&, Rect, int /*buttonCount*/, HomeMenuGrid&) const { return false; }
-  // Vertical span of the recent-book covers inside the home cover tile, for touch
-  // hit-testing; false means the covers fill the whole tile.
-  virtual bool homeCoverBand(const GfxRenderer&, Rect /*tile*/, int& /*top*/, int& /*bottom*/) const { return false; }
   // True when the home screen is two rows, covers above and menu below: the front
   // Left/Right buttons move within a row and the side buttons switch rows.
   virtual bool homeRowNavigation() const { return false; }
   // Fills `columns` when the recent books are not the default equal split of the tile.
   virtual bool homeBookColumns(const GfxRenderer&, Rect /*tile*/, int /*count*/, HomeBookColumns&) const {
-    return false;
-  }
-  // Vertical span of the home tile kept in the cover snapshot; false means the whole tile.
-  // Parts of the tile outside it are redrawn every frame.
-  virtual bool homeSnapshotBand(const GfxRenderer&, Rect /*tile*/, int& /*top*/, int& /*bottom*/) const {
     return false;
   }
   // Fills `style` and returns true when the list reader menu opens as a sheet of tiles.

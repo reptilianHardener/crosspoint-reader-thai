@@ -1,6 +1,8 @@
 #include "TategakiTheme.h"
 
+#include <Bitmap.h>
 #include <GfxRenderer.h>
+#include <HalStorage.h>
 #include <I18n.h>
 #include <Utf8.h>
 
@@ -13,6 +15,13 @@
 
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
+#include "components/icons/blocks.h"
+#include "components/icons/book.h"
+#include "components/icons/cover.h"
+#include "components/icons/folder.h"
+#include "components/icons/library.h"
+#include "components/icons/settings2.h"
+#include "components/icons/transfer.h"
 #include "fontIds.h"
 
 namespace {
@@ -33,6 +42,11 @@ constexpr int kMarkSize = 14;
 constexpr int kSelectionInset = 4;
 constexpr int kCoverGap = 12;
 constexpr int kMinCoverHeight = 60;
+constexpr int kFrameWidth = 2;
+constexpr int kMenuHeight = 68;
+constexpr int kMenuGap = 10;
+constexpr int kIconSize = 32;
+constexpr int kMenuBottomGap = 6;
 
 struct TategakiLayout {
   int top = 0;
@@ -85,6 +99,55 @@ Rect tileRect(const GfxRenderer& renderer) {
   return Rect{content.x, metrics.homeTopPadding, content.width, metrics.homeCoverTileHeight};
 }
 
+// Top of the menu row: under the tile, pulled up when the screen is short (landscape).
+int menuTop(const GfxRenderer& renderer) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int belowTile = metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.homeMenuTopOffset;
+  const int aboveHints = renderer.getScreenHeight() - metrics.buttonHintsHeight - kMenuBottomGap - kMenuHeight;
+  return std::min(belowTile, aboveHints);
+}
+
+// Thumbs fit a (0.6h, h) box: ask for one wide enough to fill the slot and crop the height.
+int thumbHeightFor(const Rect slot) { return std::max(slot.height, slot.width * 5 / 3 + 2); }
+
+bool drawThumb(const GfxRenderer& renderer, const RecentBook& book, const Rect slot) {
+  if (book.coverBmpPath.empty()) return false;
+  HalFile file;
+  const std::string thumbPath = UITheme::getCoverThumbPath(book.coverBmpPath, thumbHeightFor(slot));
+  if (!Storage.openFileForRead("HOME", thumbPath, file)) return false;
+  Bitmap bitmap(file);
+  return bitmap.parseHeaders() == BmpReaderError::Ok && BaseTheme::drawCoverThumbFill(renderer, bitmap, slot);
+}
+
+// The book's cover cropped to the slot, or a gray placeholder when it has no usable thumb.
+void drawCover(const GfxRenderer& renderer, const RecentBook& book, const Rect slot) {
+  if (!drawThumb(renderer, book, slot)) {
+    renderer.fillRectDither(slot.x, slot.y, slot.width, slot.height, Color::LightGray);
+    renderer.drawIcon(CoverIcon, slot.x + (slot.width - 32) / 2, slot.y + (slot.height - 32) / 2, 32);
+  }
+  renderer.drawRect(slot.x, slot.y, slot.width, slot.height, true);
+}
+
+const uint8_t* iconFor(const UIIcon icon) {
+  switch (icon) {
+    case UIIcon::Folder:
+      return FolderIcon;
+    case UIIcon::Book:
+      return BookIcon;
+    case UIIcon::Library:
+      return LibraryIcon;
+    case UIIcon::Transfer:
+      return TransferIcon;
+    case UIIcon::Settings:
+      return Settings2Icon;
+    case UIIcon::Blocks:
+    case UIIcon::Plugins:
+      return BlocksIcon;
+    default:
+      return nullptr;
+  }
+}
+
 int spineCount(const TategakiLayout& l, const Rect rect, const int books) {
   const int room = l.spinesRight - (rect.x + kSidePadding);
   const int fit = std::max(0, (room + kSpineGap) / (kSpineWidth + kSpineGap));
@@ -118,8 +181,7 @@ int prefixLength(const GfxRenderer& renderer, const int fontId, const char* star
 // measurements (each may prepare SD fallback glyphs), not one per character. The last
 // column is truncated with an ellipsis when the text does not fit.
 std::vector<std::string> splitColumns(const GfxRenderer& renderer, const int fontId, const char* text,
-                                      const int maxLength, const int maxColumns,
-                                      const EpdFontFamily::Style style) {
+                                      const int maxLength, const int maxColumns, const EpdFontFamily::Style style) {
   std::vector<std::string> columns;
   columns.reserve(maxColumns);
   const char* p = text;
@@ -181,7 +243,7 @@ void drawVerticalCentered(const GfxRenderer& renderer, const int fontId, const i
 }
 
 void drawCurrentBook(const GfxRenderer& renderer, const TategakiLayout& l, const RecentBook& book) {
-  if (l.cover.height > 0) ShelfTheme::drawCover(renderer, book, l.cover);
+  if (l.cover.height > 0) drawCover(renderer, book, l.cover);
   const int height = l.bottom - l.textTop;
   const auto columns =
       splitColumns(renderer, kTitleFont, book.title.c_str(), height, l.titleColumns, EpdFontFamily::BOLD);
@@ -216,8 +278,7 @@ constexpr int kMarkCount = 6;
 
 bool finishInverted(const int finish) { return finish == 1 || finish == 4; }
 
-void drawFinish(const GfxRenderer& renderer, const Rect s, const int finish, const int capBottom,
-                const int footTop) {
+void drawFinish(const GfxRenderer& renderer, const Rect s, const int finish, const int capBottom, const int footTop) {
   switch (finish) {
     case 0:  // outlined
       renderer.drawRect(s.x, s.y, s.width, s.height, 2, true);
@@ -276,9 +337,7 @@ void drawMark(const GfxRenderer& renderer, const int x, const int y, const int m
   }
 }
 
-unsigned spinePattern(const RecentBook& book) {
-  return static_cast<unsigned>(std::hash<std::string>{}(book.path));
-}
+unsigned spinePattern(const RecentBook& book) { return static_cast<unsigned>(std::hash<std::string>{}(book.path)); }
 
 void drawSpine(const GfxRenderer& renderer, const Rect s, const RecentBook& book, const int finish, const int mark) {
   const bool inverted = finishInverted(finish);
@@ -304,14 +363,13 @@ void drawSpine(const GfxRenderer& renderer, const Rect s, const RecentBook& book
 }  // namespace
 
 int TategakiTheme::homeCoverThumbHeight(const GfxRenderer& renderer) const {
-  const TategakiLayout l =
-      computeLayout(renderer, tileRect(renderer), menuTop(renderer, MENU_HEIGHT) - kSectionGap, showCover);
-  return l.cover.height > 0 ? coverThumbHeight(l.cover) : -1;
+  const TategakiLayout l = computeLayout(renderer, tileRect(renderer), menuTop(renderer) - kSectionGap, showCover);
+  return l.cover.height > 0 ? thumbHeightFor(l.cover) : -1;
 }
 
 bool TategakiTheme::homeBookColumns(const GfxRenderer& renderer, const Rect tile, const int count,
                                     HomeBookColumns& columns) const {
-  const TategakiLayout l = computeLayout(renderer, tile, menuTop(renderer, MENU_HEIGHT) - kSectionGap, showCover);
+  const TategakiLayout l = computeLayout(renderer, tile, menuTop(renderer) - kSectionGap, showCover);
   columns.count = spineCount(l, tile, count);
   const Rect leftmost = spineRect(l, std::max(1, columns.count) - 1);
   columns.left = leftmost.x;
@@ -333,7 +391,7 @@ void TategakiTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
   (void)coverBufferStored;
   (void)bufferRestored;
   (void)storeCoverBuffer;
-  const TategakiLayout l = computeLayout(renderer, rect, menuTop(renderer, MENU_HEIGHT) - kSectionGap, showCover);
+  const TategakiLayout l = computeLayout(renderer, rect, menuTop(renderer) - kSectionGap, showCover);
   const int count = spineCount(l, rect, static_cast<int>(recentBooks.size()));
 
   renderer.fillRect(l.ruleX, l.top, 2, l.bottom - l.top, true);
@@ -365,6 +423,49 @@ void TategakiTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
     const Rect s = spineRect(l, selectorIndex);
     renderer.drawRect(s.x - kSelectionInset, s.y - kSelectionInset, s.width + 2 * kSelectionInset,
                       s.height + 2 * kSelectionInset, 3, true);
+  }
+}
+
+bool TategakiTheme::homeMenuGrid(const GfxRenderer& renderer, const Rect rect, const int buttonCount,
+                                 HomeMenuGrid& grid) const {
+  const int width = rect.width - 2 * kSidePadding;
+  const int columns = std::max(1, buttonCount);
+  grid.columns = columns;
+  grid.left = rect.x + kSidePadding;
+  grid.top = std::min(rect.y, menuTop(renderer));
+  grid.colStep = (width + kMenuGap) / columns;
+  grid.tileWidth = grid.colStep - kMenuGap;
+  grid.tileHeight = kMenuHeight;
+  return true;
+}
+
+void TategakiTheme::drawButtonMenu(GfxRenderer& renderer, const Rect rect, const int buttonCount,
+                                   const int selectedIndex, const std::function<std::string(int index)>& buttonLabel,
+                                   const std::function<UIIcon(int index)>& rowIcon) const {
+  HomeMenuGrid grid;
+  homeMenuGrid(renderer, rect, buttonCount, grid);
+  const int labelH = renderer.getLineHeight(SMALL_FONT_ID);
+  const int contentH = kIconSize + 4 + labelH;
+
+  for (int i = 0; i < buttonCount; i++) {
+    const int x = grid.left + i * grid.colStep;
+    const bool selected = selectedIndex == i;
+    if (selected) {
+      renderer.fillRect(x, grid.top, grid.tileWidth, grid.tileHeight, true);
+    } else {
+      renderer.drawRect(x, grid.top, grid.tileWidth, grid.tileHeight, kFrameWidth, true);
+    }
+    const int top = grid.top + (grid.tileHeight - contentH) / 2;
+    if (rowIcon != nullptr) {
+      if (const uint8_t* icon = iconFor(rowIcon(i))) {
+        renderer.drawIcon(icon, x + (grid.tileWidth - kIconSize) / 2, top, kIconSize, !selected);
+      }
+    }
+    if (buttonLabel != nullptr) {
+      const std::string label = renderer.truncatedText(SMALL_FONT_ID, buttonLabel(i).c_str(), grid.tileWidth - 6);
+      const int labelX = x + (grid.tileWidth - renderer.getTextWidth(SMALL_FONT_ID, label.c_str())) / 2;
+      renderer.drawText(SMALL_FONT_ID, labelX, top + kIconSize + 4, label.c_str(), !selected);
+    }
   }
 }
 

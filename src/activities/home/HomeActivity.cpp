@@ -160,11 +160,6 @@ void HomeActivity::loadGridCover(RecentBook& book, int height, bool& showingLoad
   book.coverBmpPath.clear();
 }
 
-namespace {
-// Thumbnail sizes a theme may ask for beyond the primary one (carousel side covers).
-constexpr int MAX_EXTRA_THUMB_HEIGHTS = 2;
-}  // namespace
-
 void HomeActivity::loadRecentCovers(int coverHeight) {
   recentsLoading = true;
   bool showingLoading = false;
@@ -182,17 +177,8 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
       continue;
     }
     if (!book.coverBmpPath.empty()) {
-      // A carousel theme draws the same cover at several sizes and needs a thumbnail for
-      // each: thumbnails are pre-dithered, so they cannot be rescaled at draw time.
-      int thumbHeights[1 + MAX_EXTRA_THUMB_HEIGHTS] = {thumbHeight};
-      const int thumbCount = 1 + GUI.homeExtraCoverThumbHeights(renderer, thumbHeights + 1, MAX_EXTRA_THUMB_HEIGHTS);
-      bool missing[1 + MAX_EXTRA_THUMB_HEIGHTS] = {};
-      bool anyMissing = false;
-      for (int t = 0; t < thumbCount; t++) {
-        missing[t] = !Storage.exists(UITheme::getCoverThumbPath(book.coverBmpPath, thumbHeights[t]).c_str());
-        anyMissing = anyMissing || missing[t];
-      }
-      if (anyMissing) {
+      std::string coverPath = UITheme::getCoverThumbPath(book.coverBmpPath, thumbHeight);
+      if (!Storage.exists(coverPath.c_str())) {
         // If epub/txt/md, try to load the metadata for title/author and cover
         if (FsHelpers::hasReflowableBookExtension(book.path)) {
           Epub epub(book.path, "/.crosspoint");
@@ -205,11 +191,7 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
             popupRect = GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
           }
           GUI.fillPopupProgress(renderer, popupRect, 10 + progress * (90 / recentBooks.size()));
-          // The primary size decides whether the book has a usable cover at all.
-          bool success = !missing[0];
-          for (int t = 0; t < thumbCount; t++) {
-            if (missing[t] && epub.generateThumbBmp(thumbHeights[t]) && t == 0) success = true;
-          }
+          bool success = epub.generateThumbBmp(thumbHeight);
           if (!success) {
             RECENT_BOOKS.updateBook(book.path, book.title, book.author, "");
             book.coverBmpPath = "";
@@ -226,10 +208,7 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
               popupRect = GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
             }
             GUI.fillPopupProgress(renderer, popupRect, 10 + progress * (90 / recentBooks.size()));
-            bool success = !missing[0];
-            for (int t = 0; t < thumbCount; t++) {
-              if (missing[t] && xtc.generateThumbBmp(thumbHeights[t]) && t == 0) success = true;
-            }
+            bool success = xtc.generateThumbBmp(thumbHeight);
             if (!success) {
               RECENT_BOOKS.updateBook(book.path, book.title, book.author, "");
               book.coverBmpPath = "";
@@ -356,12 +335,6 @@ void HomeActivity::loop() {
   const int menuCount = getMenuItemCount();
   const auto& metrics = UITheme::getInstance().getMetrics();
 
-  // Carousel themes own all of their input: four-way navigation instead of a flat cycle.
-  if (!coverGridUi && GUI.homeIsCarousel()) {
-    handleCarouselInput();
-    return;
-  }
-
   // Cover grid home splits navigation by button group (see below), as do row
   // themes (handleRowButtons); the flat next/previous cycle is for the list home.
   const bool rowNavigation = !coverGridUi && GUI.homeRowNavigation();
@@ -446,16 +419,13 @@ void HomeActivity::loop() {
   const int coverColumnCount = std::max(1, metrics.homeRecentBooksCount);
   const int recentCount = std::min(static_cast<int>(recentBooks.size()), coverColumnCount);
   const int coverColumnWidth = (content.width - 2 * metrics.contentSidePadding) / coverColumnCount;
-  int coverTop = metrics.homeTopPadding;
-  int coverBottom = metrics.homeTopPadding + metrics.homeCoverTileHeight;
   const Rect tile{content.x, metrics.homeTopPadding, content.width, metrics.homeCoverTileHeight};
-  GUI.homeCoverBand(renderer, tile, coverTop, coverBottom);
   HomeBookColumns columns;
   columns.left = content.x + metrics.contentSidePadding;
   columns.step = coverColumnWidth;
   columns.width = coverColumnWidth;
-  columns.top = coverTop;
-  columns.bottom = coverBottom;
+  columns.top = tile.y;
+  columns.bottom = tile.y + tile.height;
   columns.count = recentCount;
   if (GUI.homeBookColumns(renderer, tile, recentCount, columns)) columns.count = std::min(columns.count, recentCount);
   int touchedBook = -1;
@@ -485,7 +455,7 @@ void HomeActivity::loop() {
   MappedInputManager::RowTouch menuTouch;
   HomeMenuGrid grid;
   if (GUI.homeMenuGrid(renderer, homeMenuRect(), renderedMenuCount, grid) && grid.columns == renderedMenuCount) {
-    // A single row of menu tiles (Banner theme).
+    // A single row of menu tiles (Tanzaku themes).
     menuTouch = mappedInput.colTouch(menuRow, grid.left, grid.colStep, renderedMenuCount, grid.top,
                                      grid.top + grid.tileHeight, grid.tileWidth);
   } else {
@@ -571,140 +541,6 @@ Rect HomeActivity::homeMenuRect() const {
                                             metrics.homeMenuTopOffset + metrics.buttonHintsHeight)};
 }
 
-void HomeActivity::selectIndex(const int newIndex) {
-  if (newIndex == selectorIndex) return;
-  const int bookCount = static_cast<int>(recentBooks.size());
-  // The cached carousel shows one particular centre book and its selection outline, so
-  // any move into, out of or within the books invalidates it. render() runs on another
-  // task and reads the buffer, hence the lock.
-  if (newIndex < bookCount || selectorIndex < bookCount) {
-    RenderLock lock(*this);
-    coverRendered = false;
-    freeCoverBuffer();
-  }
-  if (newIndex < bookCount) {
-    lastBookIndex = newIndex;
-  }
-  selectorIndex = newIndex;
-  requestUpdate();
-}
-
-bool HomeActivity::handleCarouselTouch(const int bookCount, const int menuItemCount) {
-  const auto& metrics = UITheme::getInstance().getMetrics();
-
-  // Carousel band in thirds: the middle opens the centre book, the outer thirds rotate.
-  if (bookCount > 0) {
-    int third = -1;
-    const int thirdWidth = renderer.getScreenWidth() / 3;
-    const auto touch = mappedInput.colTouch(third, 0, thirdWidth, 3, metrics.homeTopPadding,
-                                            metrics.homeTopPadding + metrics.homeCoverTileHeight, thirdWidth);
-    if (touch != MappedInputManager::RowTouch::None) {
-      const int current = selectorIndex < bookCount ? selectorIndex : lastBookIndex;
-      if (touch == MappedInputManager::RowTouch::Down) {
-        selectIndex(current);
-      } else if (third == 1) {
-        selectIndex(current);
-        activateSelection();
-      } else {
-        selectIndex((current + (third == 0 ? bookCount - 1 : 1)) % bookCount);
-      }
-      return true;
-    }
-  }
-
-  // Menu grid: one row band per column, with the geometry the theme draws.
-  HomeMenuGrid grid;
-  if (!GUI.homeMenuGrid(renderer, homeMenuRect(), menuItemCount, grid)) return false;
-  const int rows = (menuItemCount + grid.columns - 1) / grid.columns;
-  for (int col = 0; col < grid.columns; col++) {
-    int row = -1;
-    const int x = grid.left + col * grid.colStep;
-    const auto touch = mappedInput.rowTouch(row, grid.top, grid.rowStep, rows, x, x + grid.tileWidth, grid.tileHeight);
-    if (touch == MappedInputManager::RowTouch::None) continue;
-    const int menuIndex = row * grid.columns + col;
-    if (menuIndex >= menuItemCount) return true;  // the empty cell of an odd-sized grid
-    lastMenuColumn = col;
-    selectIndex(bookCount + menuIndex);
-    if (touch == MappedInputManager::RowTouch::Tap) activateSelection();
-    return true;
-  }
-  return false;
-}
-
-void HomeActivity::handleCarouselInput() {
-  const int bookCount = static_cast<int>(recentBooks.size());
-  const int menuItemCount = getMenuItemCount() - bookCount;
-
-  if (handleCarouselTouch(bookCount, menuItemCount)) return;
-
-  HomeMenuGrid grid;
-  const int cols = GUI.homeMenuGrid(renderer, homeMenuRect(), menuItemCount, grid) ? std::max(1, grid.columns) : 1;
-  const bool inBooks = selectorIndex < bookCount;
-  const int menuIndex = selectorIndex - bookCount;
-
-  // Left/Right: rotate the carousel, or step across the grid row (wrapping within it).
-  const bool left = mappedInput.wasPressed(MappedInputManager::Button::Left);
-  const bool right = mappedInput.wasPressed(MappedInputManager::Button::Right);
-  if (left || right) {
-    if (inBooks) {
-      // "Previews" picks which way the row of covers travels under the buttons.
-      const bool previewsRight = SETTINGS.previewDirection == CrossPointSettings::PREVIEW_RIGHT;
-      const int step = (left == previewsRight) ? 1 : bookCount - 1;
-      selectIndex((selectorIndex + step) % bookCount);
-    } else {
-      const int row = menuIndex / cols;
-      const int target = row * cols + (menuIndex % cols + (left ? cols - 1 : 1)) % cols;
-      if (target < menuItemCount) {
-        lastMenuColumn = target % cols;
-        selectIndex(bookCount + target);
-      }
-    }
-    return;
-  }
-
-  // Down: from the carousel into the grid's first row, or one grid row down.
-  if (mappedInput.wasPressed(MappedInputManager::Button::Down)) {
-    if (inBooks) {
-      selectIndex(bookCount + (lastMenuColumn < menuItemCount ? lastMenuColumn : 0));
-    } else {
-      int target = menuIndex + cols;
-      // A short last row: fall back to its first cell.
-      if (target >= menuItemCount) target = (menuIndex / cols + 1) * cols;
-      if (target < menuItemCount) {
-        lastMenuColumn = target % cols;
-        selectIndex(bookCount + target);
-      }
-    }
-    return;
-  }
-
-  // Up: one grid row up, or from the first row back to the book that was centred.
-  if (mappedInput.wasPressed(MappedInputManager::Button::Up)) {
-    if (!inBooks) {
-      lastMenuColumn = menuIndex % cols;
-      if (menuIndex >= cols) {
-        selectIndex(selectorIndex - cols);
-      } else if (bookCount > 0) {
-        selectIndex(std::min(lastBookIndex, bookCount - 1));
-      }
-    }
-    return;
-  }
-
-  // Back: jump from the grid straight to the carousel.
-  if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
-    if (!inBooks && bookCount > 0) {
-      lastMenuColumn = menuIndex % cols;
-      selectIndex(std::min(lastBookIndex, bookCount - 1));
-    }
-    return;
-  }
-
-  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    activateSelection();
-  }
-}
-
 void HomeActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto pageWidth = renderer.getScreenWidth();
@@ -760,14 +596,6 @@ void HomeActivity::render(RenderLock&&) {
   coverRectY = metrics.homeTopPadding;
   coverRectW = content.width;
   coverRectH = metrics.homeCoverTileHeight;
-  int snapshotTop = 0;
-  int snapshotBottom = 0;
-  if (GUI.homeSnapshotBand(renderer, Rect{content.x, metrics.homeTopPadding, content.width, coverRectH}, snapshotTop,
-                           snapshotBottom) &&
-      snapshotBottom > snapshotTop) {
-    coverRectY = snapshotTop;
-    coverRectH = snapshotBottom - snapshotTop;
-  }
 
   GUI.drawRecentBookCover(renderer, Rect{content.x, metrics.homeTopPadding, content.width, metrics.homeCoverTileHeight},
                           recentBooks, selectorIndex, coverRendered, coverBufferStored, bufferRestored,
@@ -795,12 +623,10 @@ void HomeActivity::render(RenderLock&&) {
       [&menuItems](int index) { return std::string(menuItems[index]); },
       [&menuIcons](int index) { return menuIcons[index]; });
 
-  // Carousel themes: Left/Right rotate the books or switch grid column, the side buttons
-  // move between rows, and Back returns from the grid to the carousel.
-  const bool carousel = GUI.homeIsCarousel();
-  const bool horizontal = carousel || GUI.homeRowNavigation();
-  const char* backLabel = recentBooks.empty() ? "" : (carousel ? tr(STR_BOOK) : tr(STR_RESUME));
-  const auto labels = mappedInput.mapLabels(backLabel, tr(STR_SELECT), horizontal ? tr(STR_DIR_LEFT) : tr(STR_DIR_UP),
+  // Row themes: Left/Right move within the books or the menu row, the side buttons switch rows.
+  const bool horizontal = GUI.homeRowNavigation();
+  const auto labels = mappedInput.mapLabels(recentBooks.empty() ? "" : tr(STR_RESUME), tr(STR_SELECT),
+                                            horizontal ? tr(STR_DIR_LEFT) : tr(STR_DIR_UP),
                                             horizontal ? tr(STR_DIR_RIGHT) : tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 

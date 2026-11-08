@@ -34,11 +34,9 @@
 #include "StatusBarSettingsActivity.h"
 #include "TextSettingsActivity.h"
 #include "ThaiDictionaryActivity.h"
-#include "activities/home/FileBrowserActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/IntervalSelectionActivity.h"
 #include "components/UITheme.h"
-#include "components/themes/banner/BannerTheme.h"
 #include "components/UIThemeTokens.h"
 #include "components/UiAppHelpers.h"
 #include "fontIds.h"
@@ -123,13 +121,7 @@ void SettingsActivity::rebuildSettings() {
 
   for (auto& setting : all) {
     if (sectionFor(setting) != section || !showOnDevice(setting)) continue;
-    const bool bannerRows =
-        setting.valuePtr == &CrossPointSettings::uiTheme && SETTINGS.uiTheme == CrossPointSettings::BANNER;
     settings.push_back(std::move(setting));
-    if (bannerRows) {
-      settings.push_back(SettingInfo::Action(StrId::STR_HOME_TOP_IMAGE, SettingAction::HomeTopImage));
-      settings.push_back(SettingInfo::Action(StrId::STR_HOME_MIDDLE_IMAGE, SettingAction::HomeMiddleImage));
-    }
   }
 
   // Clock configuration only exists where the RTC probe found hardware.
@@ -424,10 +416,6 @@ void SettingsActivity::toggleSelectedSetting() {
           LOG_ERR("SETTINGS", "OOM: ThaiDictionaryActivity");
         }
         break;
-      case SettingAction::HomeTopImage:
-      case SettingAction::HomeMiddleImage:
-        openHomeImageSetting(setting.action, setting.nameId);
-        return;
       case SettingAction::None:
         // Do nothing
         break;
@@ -484,60 +472,8 @@ void SettingsActivity::openSleepTimeoutPicker() {
       });
 }
 
-void SettingsActivity::openHomeImageSetting(const SettingAction action, const StrId nameId) {
-  char* field = action == SettingAction::HomeTopImage ? SETTINGS.homeTopImage : SETTINGS.homeMiddleImage;
-  if (field[0] == '\0') {
-    pickHomeImage(field);
-    return;
-  }
-  static constexpr StrId OPTIONS[] = {StrId::STR_CHOOSE_IMAGE, StrId::STR_NONE_OPT};
-  optionPopup.show(nameId, OPTIONS, static_cast<int>(std::size(OPTIONS)), 0, [this, field](int idx) {
-    if (idx == 0) {
-      pickHomeImage(field);
-      return;
-    }
-    field[0] = '\0';
-    SETTINGS.saveToFile();
-    BannerTheme::forgetConvertedImages(field == SETTINGS.homeTopImage ? BannerTheme::TOP_SLOT
-                                                                      : BannerTheme::MIDDLE_SLOT);
-    requestUpdate();
-  });
-  requestUpdate();
-}
-
-void SettingsActivity::pickHomeImage(char* field) {
-  auto picker =
-      makeUniqueNoThrow<FileBrowserActivity>(renderer, mappedInput, "/", FileBrowserActivity::Mode::PickImage);
-  if (!picker) {
-    LOG_ERR("SET", "OOM: image picker");
-    return;
-  }
-  startActivityForResult(std::move(picker), [this, field](const ActivityResult& result) {
-    const auto* path = std::get_if<FilePathResult>(&result.data);
-    if (!result.isCancelled && path) {
-      if (path->path.size() >= CrossPointSettings::HOME_IMAGE_PATH_LEN) {
-        LOG_ERR("SET", "Image path too long: %s", path->path.c_str());
-      } else {
-        strncpy(field, path->path.c_str(), CrossPointSettings::HOME_IMAGE_PATH_LEN - 1);
-        field[CrossPointSettings::HOME_IMAGE_PATH_LEN - 1] = '\0';
-        SETTINGS.saveToFile();
-        BannerTheme::forgetConvertedImages(field == SETTINGS.homeTopImage ? BannerTheme::TOP_SLOT
-                                                                          : BannerTheme::MIDDLE_SLOT);
-      }
-    }
-    requestUpdate();
-  });
-}
-
 std::string SettingsActivity::settingValueText(const SettingInfo& setting) {
   if (setting.action == SettingAction::HomeButton) return tr(STR_CONFIGURE);
-  if (setting.action == SettingAction::HomeTopImage || setting.action == SettingAction::HomeMiddleImage) {
-    const char* path =
-        setting.action == SettingAction::HomeTopImage ? SETTINGS.homeTopImage : SETTINGS.homeMiddleImage;
-    if (path[0] == '\0') return tr(STR_NONE_OPT);
-    const char* slash = strrchr(path, '/');
-    return slash ? slash + 1 : path;
-  }
   if (setting.action == SettingAction::Plugins) return SETTINGS.pluginsEnabled ? tr(STR_ENABLED) : tr(STR_DISABLED);
   if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
     // Guard like the valueGetter branch below: a corrupt/migrated settings

@@ -105,11 +105,8 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
   if (dictionaryName[0] != '\0') {
     doc["dictionaryName"] = dictionaryName;
   }
-  // Banner theme images — picked through their own screen, not in SettingsList.
-  if (homeTopImage[0] != '\0') doc["homeTopImage"] = homeTopImage;
-  if (homeMiddleImage[0] != '\0') doc["homeMiddleImage"] = homeMiddleImage;
-  // Marks uiTheme as using the current UI_THEME numbering.
-  doc["uiThemeOrder"] = 4;
+  // Marks uiTheme and sleepScreen as using the current numbering (see fromJson).
+  doc["uiThemeOrder"] = 5;
   // The displayed option list varies by board, so this setting uses a dynamic
   // display-index mapping and is skipped by the generic persistence loop.
   doc["longPressMenuFunction"] = longPressMenuFunction;
@@ -299,25 +296,41 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   if (storedFontFamily != STORED_NOTOSANS) needsResave = true;
   // Dictionary folder name — uses dynamic getter/setter in SettingsList, load manually
   copyToField(dictionaryName, doc["dictionaryName"] | "", sizeof(dictionaryName));
-  copyToField(homeTopImage, doc["homeTopImage"] | "", sizeof(homeTopImage));
-  copyToField(homeMiddleImage, doc["homeMiddleImage"] | "", sizeof(homeMiddleImage));
-  // Older numberings, read from the stored value (the loop above clamped it to the new list):
-  // no marker had COVER_GRID at 5, marker 1 added BANNER (COVER_GRID 6), marker 2 added SHELF
-  // and TATEGAKI (COVER_GRID 8). Classic, Lyra, Halo 2 and RoundedRaff (0, 1, 3, 4 in all of
-  // them) were dropped after that and become Lyra Extended. Marker 3 had COVER_GRID at 4,
-  // where marker 4 put TATEGAKI_NO_COVER.
+  // Older numberings, read from the stored value (the loop above clamped it to the new list).
+  // A file without "uiThemeOrder" comes from upstream (Classic, Lyra, Lyra Extended, RoundedRaff,
+  // Cover Grid; sleep screen 8 is Cover + Transparent) unless it holds the fork-only
+  // "previewDirection" key: then it is a 2.0.0rc file with the marker 1-2 numbering. Markers 1-2:
+  // Classic, Lyra, Lyra Extended, Halo 2, RoundedRaff, Banner, Shelf (2 only), Vertical, Cover
+  // Grid. Markers 3-4: Lyra Extended, Banner, Shelf, Vertical, Tanzaku (4 only), Cover Grid.
+  // Halo 2, Banner and Shelf become Lyra Extended. Fork files before marker 5 had the Halo 2 Cover
+  // sleep screen at 8 and Cover + Transparent at 9.
   const int themeOrder = doc["uiThemeOrder"] | 0;
-  if (themeOrder == 3) {
-    if ((doc["uiTheme"] | 0) == 4) uiTheme = UITheme::supportsCoverGrid() ? COVER_GRID : LYRA_3_COVERS;
-    needsResave = true;
-  } else if (themeOrder < 3) {
-    int stored = doc["uiTheme"] | 2;
-    if ((themeOrder == 0 && stored == 5) || (themeOrder == 1 && stored == 6)) stored = 8;
-    static constexpr uint8_t ORDER2_TO_CURRENT[] = {LYRA_3_COVERS, LYRA_3_COVERS, LYRA_3_COVERS,
-                                                    LYRA_3_COVERS, LYRA_3_COVERS, BANNER,
-                                                    SHELF,         TATEGAKI,      COVER_GRID};
-    uiTheme = stored >= 0 && stored < static_cast<int>(std::size(ORDER2_TO_CURRENT)) ? ORDER2_TO_CURRENT[stored]
-                                                                                     : LYRA_3_COVERS;
+  if (themeOrder < 5) {
+    const bool forkFile = themeOrder >= 1 || !doc["previewDirection"].isNull();
+    uint8_t theme = LYRA_3_COVERS;
+    if (!forkFile) {
+      static constexpr uint8_t UPSTREAM_TO_CURRENT[] = {CLASSIC, LYRA, LYRA_3_COVERS, ROUNDEDRAFF, COVER_GRID};
+      const int stored = doc["uiTheme"] | 2;
+      if (stored >= 0 && stored < static_cast<int>(std::size(UPSTREAM_TO_CURRENT))) theme = UPSTREAM_TO_CURRENT[stored];
+    } else if (themeOrder >= 3) {
+      int stored = doc["uiTheme"] | 0;
+      if (themeOrder == 3 && stored == 4) stored = 5;  // Cover Grid, before Tanzaku took 4
+      static constexpr uint8_t ORDER4_TO_CURRENT[] = {LYRA_3_COVERS, LYRA_3_COVERS,     LYRA_3_COVERS,
+                                                      TATEGAKI,      TATEGAKI_NO_COVER, COVER_GRID};
+      if (stored >= 0 && stored < static_cast<int>(std::size(ORDER4_TO_CURRENT))) theme = ORDER4_TO_CURRENT[stored];
+    } else {
+      int stored = doc["uiTheme"] | 2;
+      if ((themeOrder == 0 && stored == 5) || (themeOrder == 1 && stored == 6)) stored = 8;  // Cover Grid
+      static constexpr uint8_t ORDER2_TO_CURRENT[] = {
+          CLASSIC, LYRA, LYRA_3_COVERS, LYRA_3_COVERS, ROUNDEDRAFF, LYRA_3_COVERS, LYRA_3_COVERS, TATEGAKI, COVER_GRID};
+      if (stored >= 0 && stored < static_cast<int>(std::size(ORDER2_TO_CURRENT))) theme = ORDER2_TO_CURRENT[stored];
+    }
+    uiTheme = theme == COVER_GRID && !UITheme::supportsCoverGrid() ? LYRA_3_COVERS : theme;
+    if (forkFile) {
+      const int storedSleep = doc["sleepScreen"] | 0;
+      if (storedSleep == 8) sleepScreen = COVER;
+      if (storedSleep == 9) sleepScreen = COVER_TRANSPARENT;
+    }
     needsResave = true;
   }
 

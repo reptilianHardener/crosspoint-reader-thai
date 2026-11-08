@@ -19,7 +19,6 @@ void forEachBaseSetting(SettingVisitor visit, void* context) {
     values[CrossPointSettings::BLANK] = StrId::STR_NONE_OPT;
     values[CrossPointSettings::QUICK_RESUME] = StrId::STR_QUICK_RESUME;
     values[CrossPointSettings::TRANSPARENT_CUSTOM] = StrId::STR_TRANSPARENT;
-    values[CrossPointSettings::HALO2_COVER] = StrId::STR_HALO_2_COVER;
     values[CrossPointSettings::COVER_TRANSPARENT] = StrId::STR_COVER_TRANSPARENT;
     return values;
   }();
@@ -52,8 +51,6 @@ void forEachBaseSetting(SettingVisitor visit, void* context) {
                          "refreshFrequency", StrId::STR_CAT_DISPLAY));
   emit(SettingInfo::Enum(StrId::STR_UI_THEME, &CrossPointSettings::uiTheme, homeThemeValues(), "uiTheme",
                          StrId::STR_CAT_DISPLAY));
-  emit(SettingInfo::Enum(StrId::STR_PREVIEWS, &CrossPointSettings::previewDirection,
-                         {StrId::STR_DIR_LEFT, StrId::STR_DIR_RIGHT}, "previewDirection", StrId::STR_CAT_DISPLAY));
   if (!BoardConfig::hasTouch())
     emit(SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix, "fadingFix",
                              StrId::STR_CAT_DISPLAY));

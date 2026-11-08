@@ -1,6 +1,6 @@
-# CrossPoint Halo 2 Custom Firmware
+# CrossPoint Reader Thai
 
-> **Fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader)** — customised for Thai language support, improved typography, and Halo 2 UI improvements.
+> **Fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader)** — customised for Thai language support, improved typography, and vertical Japanese.
 >
 > 🤖 **Built with [Claude](https://claude.ai) via Vibe Coding.**
 > This firmware was developed collaboratively with AI. Using AI as a tool doesn't make the work less real — it just means the problems get solved faster. If that bothers you, that's okay.
@@ -10,7 +10,7 @@
 - **Thai reading**: dictionary-based word breaking so Thai text wraps between words, correct stacking of vowel and tone marks, a user dictionary for words the built-in list misses (**Settings > Reader > Thai Dictionary**), and Thai-aware wrapping for TXT files.
 - **Thai UI and keyboard**: a Thai translation and a Kedmanee on-screen keyboard layer.
 - **Vertical Japanese (tategaki)**: Japanese-language EPUBs are set in vertical lines running right to left, with upright kana and kanji, ruby to the right of its base, and Latin text and digits lying sideways. Pages advance leftward, so the front Left button and a rightward swipe turn forward. Turn it off under **Settings > Reader > Vertical Japanese Text**.
-- **Halo 2 theme**: a cover carousel on the home screen, a two-column menu, and a "Halo 2 Cover" sleep screen with the book's title and reading progress.
+- **Tanzaku themes**: a home screen after vertical Japanese print, with the highlighted book's cover (or only its title) beside a row of spines read right to left, and, with the list-style reader menu, a sheet of tiles for the EPUB reader menu.
 - **Bold Text**: a reader setting that lays the whole book out in bold.
 
 ### Thai fonts

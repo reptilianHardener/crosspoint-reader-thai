@@ -14,8 +14,8 @@ class HomeActivity final : public Activity {
   std::unique_ptr<CoverGridHomeUi> coverGridUi;
   ButtonNavigator buttonNavigator;
   int selectorIndex = 0;
-  // Carousel themes: where the selection returns to when moving between the book
-  // carousel and the menu grid.
+  // Row themes: where the selection returns to when moving between the books and the
+  // menu row.
   int lastMenuColumn = 0;
   int lastBookIndex = 0;
   bool recentsLoading = false;
@@ -77,11 +77,6 @@ class HomeActivity final : public Activity {
 
   int getMenuItemCount() const;
   void activateSelection();
-  // Carousel themes (GUI.homeIsCarousel()): four-way navigation between the book
-  // carousel and the menu grid, plus the matching touch hit-testing.
-  void handleCarouselInput();
-  bool handleCarouselTouch(int bookCount, int menuItemCount);
-  void selectIndex(int newIndex);
   // Row themes (GUI.homeRowNavigation()): Left/Right within a row, Up/Down between rows.
   bool handleRowButtons();
   Rect homeMenuRect() const;

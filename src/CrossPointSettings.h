@@ -26,10 +26,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     BLANK = 5,
     QUICK_RESUME = 6,
     TRANSPARENT_CUSTOM = 7,
-    // Cropped cover with a title and reading-progress panel along the bottom edge.
-    // Upstream uses 8 for COVER_TRANSPARENT; this fork keeps 8 for saved settings.
-    HALO2_COVER = 8,
-    COVER_TRANSPARENT = 9,
+    COVER_TRANSPARENT = 8,
     SLEEP_SCREEN_MODE_COUNT
   };
   enum SLEEP_SCREEN_COVER_MODE { FIT = 0, CROP = 1, SLEEP_SCREEN_COVER_MODE_COUNT };
@@ -209,13 +206,18 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   };
 
   // UI Theme
-  // COVER_GRID stays last: the settings list hides it on boards without PSRAM by dropping
-  // the final entry. fromJson() migrates older numberings by the "uiThemeOrder" marker.
-  enum UI_THEME { LYRA_3_COVERS = 0, BANNER = 1, SHELF = 2, TATEGAKI = 3, TATEGAKI_NO_COVER = 4, COVER_GRID = 5 };
-  // Banner theme images: BMP paths on the SD card (empty = section hidden).
-  static constexpr size_t HOME_IMAGE_PATH_LEN = 128;
-  // Which way the home carousel advances
-  enum PREVIEW_DIRECTION { PREVIEW_LEFT = 0, PREVIEW_RIGHT = 1, PREVIEW_DIRECTION_COUNT };
+  // Upstream's values for the shared themes; the fork's Tanzaku themes sit before COVER_GRID,
+  // which stays last: the settings list hides it on boards without PSRAM by dropping the
+  // final entry. fromJson() migrates older numberings by the "uiThemeOrder" marker.
+  enum UI_THEME {
+    CLASSIC = 0,
+    LYRA = 1,
+    LYRA_3_COVERS = 2,
+    ROUNDEDRAFF = 3,
+    TATEGAKI = 4,
+    TATEGAKI_NO_COVER = 5,
+    COVER_GRID = 6
+  };
 
   // Image rendering in EPUB reader. IMAGES_DISPLAY_BW lays images out like
   // IMAGES_DISPLAY but draws them as a B/W dither, so image pages skip the
@@ -367,8 +369,6 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t longPressMenuFunction = LP_MENU_DISABLED;
   // UI Theme
   uint8_t uiTheme = LYRA_3_COVERS;
-  // Home carousel direction (Modern theme)
-  uint8_t previewDirection = PREVIEW_RIGHT;
   // Sunlight fading compensation
   uint8_t fadingFix = 0;
   // Power button return from footnotes (1 = enabled, 0 = disabled)
@@ -384,9 +384,6 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t readerMenuStyle = READER_MENU_LIST;
   // SD card font family name (empty = use built-in fontFamily)
   char sdFontFamilyName[32] = "NotoSansThaiJP";
-  // Banner theme: images shown above and below the recent books (BMP paths, empty = none)
-  char homeTopImage[HOME_IMAGE_PATH_LEN] = "";
-  char homeMiddleImage[HOME_IMAGE_PATH_LEN] = "";
   // Dictionary folder name under /dictionaries (empty = no dictionary)
   char dictionaryName[32] = "";
   // Master switch for all SD-card plugin discovery/execution. New installs keep

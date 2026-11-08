@@ -33,8 +33,6 @@ enum class SettingAction {
   HomeButton,
   About,
   ThaiDictionary,
-  HomeTopImage,
-  HomeMiddleImage,
 };
 
 struct SettingInfo {
@@ -205,9 +203,6 @@ class SettingsActivity final : public UiListActivity {
   void rebuildRowItems();
   void toggleSelectedSetting();
   void openSleepTimeoutPicker();
-  // Banner theme image rows: pick a BMP from the SD card, or clear the current one.
-  void openHomeImageSetting(SettingAction action, StrId nameId);
-  void pickHomeImage(char* field);
   void applyUiSettingChange(uint8_t CrossPointSettings::* valuePtr);
   void syncQuickResumeTimeoutForSleepScreen(bool sleepScreenChanged, bool quickResumeTimeoutChanged);
   static std::string settingValueText(const SettingInfo& setting);
