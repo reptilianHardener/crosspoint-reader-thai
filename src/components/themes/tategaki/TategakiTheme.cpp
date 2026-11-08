@@ -113,25 +113,41 @@ int menuTop(const GfxRenderer& renderer) {
   return std::min(belowTile, aboveHints);
 }
 
-// Thumbs fit a (0.6h, h) box: ask for one wide enough to fill the slot and crop the height.
-int thumbHeightFor(const Rect slot) { return std::max(slot.height, slot.width * 5 / 3 + 2); }
+// Thumbs are whole covers scaled to fill a (0.6h, h) box; made for the slot's height, a
+// 3:5 to 2:3 cover fits the slot as it is.
+int thumbHeightFor(const Rect slot) { return slot.height; }
 
-bool drawThumb(const GfxRenderer& renderer, const RecentBook& book, const Rect slot) {
+// Draws the whole cover at the top right of the slot, shrunk to fit when it is wider or
+// taller than the slot; drawn is the rect it takes.
+bool drawThumb(const GfxRenderer& renderer, const RecentBook& book, const Rect slot, Rect& drawn) {
   if (book.coverBmpPath.empty()) return false;
   HalFile file;
   const std::string thumbPath = UITheme::getCoverThumbPath(book.coverBmpPath, thumbHeightFor(slot));
   if (!Storage.openFileForRead("HOME", thumbPath, file)) return false;
   Bitmap bitmap(file);
-  return bitmap.parseHeaders() == BmpReaderError::Ok && BaseTheme::drawCoverThumbFill(renderer, bitmap, slot);
+  if (bitmap.parseHeaders() != BmpReaderError::Ok || bitmap.getWidth() <= 0 || bitmap.getHeight() <= 0) return false;
+  // The scale and drawn extent drawBitmap uses for a slot-sized box, so the frame meets the image.
+  const int bw = bitmap.getWidth();
+  const int bh = bitmap.getHeight();
+  float scale = 1.0f;
+  if (bw > slot.width) scale = static_cast<float>(slot.width) / static_cast<float>(bw);
+  if (bh > slot.height) scale = std::min(scale, static_cast<float>(slot.height) / static_cast<float>(bh));
+  const int width = scale < 1.0f ? static_cast<int>(static_cast<float>(bw - 1) * scale) + 1 : bw;
+  const int height = scale < 1.0f ? static_cast<int>(static_cast<float>(bh - 1) * scale) + 1 : bh;
+  drawn = Rect{slot.x + slot.width - width, slot.y, width, height};
+  // drawBitmap shrinks the bitmap, keeping its shape, to fit the slot.
+  return renderer.drawBitmap(bitmap, drawn.x, drawn.y, slot.width, slot.height);
 }
 
-// The book's cover cropped to the slot, or a gray placeholder when it has no usable thumb.
+// The book's cover framed at its drawn size, or a gray placeholder when it has no usable thumb.
 void drawCover(const GfxRenderer& renderer, const RecentBook& book, const Rect slot) {
-  if (!drawThumb(renderer, book, slot)) {
+  Rect frame = slot;
+  if (!drawThumb(renderer, book, slot, frame)) {
+    frame = slot;
     renderer.fillRectDither(slot.x, slot.y, slot.width, slot.height, Color::LightGray);
     renderer.drawIcon(CoverIcon, slot.x + (slot.width - 32) / 2, slot.y + (slot.height - 32) / 2, 32);
   }
-  renderer.drawRect(slot.x, slot.y, slot.width, slot.height, true);
+  renderer.drawRect(frame.x, frame.y, frame.width, frame.height, true);
 }
 
 const uint8_t* iconFor(const UIIcon icon) {
