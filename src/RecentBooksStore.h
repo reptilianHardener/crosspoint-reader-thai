@@ -11,6 +11,10 @@ struct RecentBook {
   std::string author;
   std::string coverBmpPath;
   uint8_t progressPercent = 0;  // 0-100 whole-book reading progress; 0 = unknown or unread
+  // Series from the book's metadata, looked up on the home screen by themes that show it.
+  // seriesKnown false means not looked up yet; true with an empty series means none.
+  std::string series;
+  bool seriesKnown = false;
 
   bool operator==(const RecentBook& other) const { return path == other.path; }
 };
@@ -42,6 +46,10 @@ class RecentBooksStore : public PersistableStore<RecentBooksStore> {
   // Record a book's reading progress (0-100) for the home screen. Writes only when the
   // value changed, and callers invoke it on reader exit rather than per page turn.
   void updateProgress(const std::string& path, uint8_t progressPercent);
+
+  // Record a looked-up series without saving; the caller saves once after a batch.
+  // Returns true when an entry changed.
+  bool setSeries(const std::string& path, const std::string& series);
 
   // Remove the entry whose path matches (used when a book is removed from recents or finished/read).
   // Returns true if an entry was found and removed (no-op + false otherwise).

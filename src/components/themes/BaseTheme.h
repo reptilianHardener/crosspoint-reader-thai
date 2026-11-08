@@ -334,6 +334,9 @@ class BaseTheme {
   // Called when the home screen opens, before its first render, so a theme can drop
   // any state it keeps between frames (the Tanzaku card's remembered book).
   virtual void onHomeEnter() const {}
+  // True when the home screen shows each recent book's series, which the home screen then
+  // looks up once per book from its metadata.
+  virtual bool homeShowsSeries() const { return false; }
   // Fills `grid` and returns true when drawButtonMenu lays the home menu out as a row of tiles.
   virtual bool homeMenuGrid(const GfxRenderer&, Rect, int /*buttonCount*/, HomeMenuGrid&) const { return false; }
   // True when the home screen is two rows, covers above and menu below: the front
