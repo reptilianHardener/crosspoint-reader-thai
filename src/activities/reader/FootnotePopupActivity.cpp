@@ -20,7 +20,7 @@ constexpr int kBorder = 2;
 
 void FootnotePopupActivity::textArea(const GfxRenderer& renderer, int& width, int& height) {
   width = renderer.getScreenWidth() - 2 * kPanelMargin - 2 * kPadding;
-  // At most half the screen, so the page the note belongs to stays in view; the page
+  // At most half the screen, so part of the page the note belongs to stays in view; the page
   // indicator's line is always kept free.
   height = renderer.getScreenHeight() / 2 - 2 * kPadding - renderer.getLineHeight(SMALL_FONT_ID);
 }
@@ -51,7 +51,9 @@ void FootnotePopupActivity::layout() {
   panel.x = kPanelMargin;
   panel.width = textWidth + 2 * kPadding;
   panel.height = textHeight + 2 * kPadding + (pageCount() > 1 ? renderer.getLineHeight(SMALL_FONT_ID) : 0);
-  panel.y = renderer.getScreenHeight() - metrics.buttonHintsHeight - kPanelMargin - panel.height;
+  // Centred in the space above the button hints.
+  const int available = renderer.getScreenHeight() - metrics.buttonHintsHeight;
+  panel.y = std::max(kPanelMargin, (available - panel.height) / 2);
   notePage = 0;
 }
 

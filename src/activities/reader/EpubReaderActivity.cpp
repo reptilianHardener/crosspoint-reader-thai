@@ -720,6 +720,13 @@ bool EpubReaderActivity::readNote(const std::string& href, std::string& html) co
     return false;
   }
 
+  // Reading a large notes file to its note can take a moment; say so first. The book's
+  // metadata already holds each spine item's inflated size.
+  const size_t itemSize = epub->getCumulativeSpineItemSize(spineIndex) -
+                          (spineIndex > 0 ? epub->getCumulativeSpineItemSize(spineIndex - 1) : 0);
+  if (itemSize >= LOADING_POPUP_MIN_BYTES) GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
+  const std::string itemHref = epub->getSpineItem(spineIndex).href;
+
   auto extractor = makeUniqueNoThrow<FootnoteExtractor>(FsHelpers::decodeUriEscapes(href.substr(hash + 1)));
   if (!extractor) return false;
   // Short writes stop the zip stream once the note has been read.
@@ -732,7 +739,7 @@ bool EpubReaderActivity::readNote(const std::string& href, std::string& html) co
    private:
     FootnoteExtractor& extractor;
   } sink(*extractor);
-  epub->readItemContentsToStream(epub->getSpineItem(spineIndex).href, sink, 1024, true);
+  epub->readItemContentsToStream(itemHref, sink, 1024, true);
   if (extractor->result() != FootnoteExtractor::Result::Note) return false;
   html = extractor->takeHtml();
   return !html.empty();

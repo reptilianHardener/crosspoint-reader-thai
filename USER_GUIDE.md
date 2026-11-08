@@ -692,7 +692,7 @@ On the **Xteink X3**, the gyroscope can be used to turn pages by tilting the dev
 
 Internal EPUB links include chapter links, cross-references, and footnotes. Tap a link on a touchscreen device, or choose "Links and Footnotes" from the Reader Menu to select a link. Press Back to return to the previous location.
 
-A note link, one whose text is a short mark such as a number or an asterisk, opens the note in a window at the bottom of the page instead of leaving it. The note uses your reading font and spacing settings. Press **Back** (or tap outside the window) to close it, or **Confirm** (shown as Open) to go to the note in the book. A long note has more than one page in the window: use **Left**/**Right** or **Side Up**/**Side Down**, or tap inside the window (after the last page it returns to the first). Other links, and notes that cannot be read, go straight to their target.
+A note link, one whose text is a short mark such as a number or an asterisk, opens the note in a window in the middle of the page instead of leaving it. A note in a large notes file shows Loading while it is read. The note uses your reading font and spacing settings. Press **Back** (or tap outside the window) to close it, or **Confirm** (shown as Open) to go to the note in the book. A long note has more than one page in the window: use **Left**/**Right** or **Side Up**/**Side Down**, or tap inside the window (after the last page it returns to the first). Other links, and notes that cannot be read, go straight to their target.
 
 If the device sleeps or you close the book after following a link, the book reopens on the page you were viewing. Back still returns you to where you followed the link. The reader keeps the three most recent return positions.
 

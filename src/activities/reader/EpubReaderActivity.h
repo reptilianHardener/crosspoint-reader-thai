@@ -218,6 +218,8 @@ class EpubReaderActivity final : public ReaderActivity {
   // The note's HTML, balanced and with tag names only, ready for the chapter parser.
   bool readNote(const std::string& href, std::string& html) const;
   static constexpr size_t MAX_NOTE_MARK_CODEPOINTS = 4;
+  // Note files at least this large (inflated) show a Loading popup while the note is read.
+  static constexpr size_t LOADING_POPUP_MIN_BYTES = 128 * 1024;
   void openDictionaryWordSelect();
   // Selection to restore when returning from a dictionary lookup.
   ClipSelectionActivity::Selection pendingLookupSelection;
