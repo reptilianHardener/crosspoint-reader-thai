@@ -340,7 +340,7 @@ class BaseTheme {
   // Fills `grid` and returns true when drawButtonMenu lays the home menu out as a row of tiles.
   virtual bool homeMenuGrid(const GfxRenderer&, Rect, int /*buttonCount*/, HomeMenuGrid&) const { return false; }
   // True when the home screen is two rows, covers above and menu below: the front
-  // Left/Right buttons move within a row and the side buttons switch rows.
+  // Left/Right buttons move within a row and the side buttons step through every item.
   virtual bool homeRowNavigation() const { return false; }
   // Fills `columns` when the recent books are not the default equal split of the tile.
   virtual bool homeBookColumns(const GfxRenderer&, Rect /*tile*/, int /*count*/, HomeBookColumns&) const {

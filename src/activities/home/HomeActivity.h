@@ -14,10 +14,6 @@ class HomeActivity final : public Activity {
   std::unique_ptr<CoverGridHomeUi> coverGridUi;
   ButtonNavigator buttonNavigator;
   int selectorIndex = 0;
-  // Row themes: where the selection returns to when moving between the books and the
-  // menu row.
-  int lastMenuColumn = 0;
-  int lastBookIndex = 0;
   bool recentsLoading = false;
   bool recentsLoaded = false;
   bool firstRenderDone = false;
@@ -79,7 +75,7 @@ class HomeActivity final : public Activity {
 
   int getMenuItemCount() const;
   void activateSelection();
-  // Row themes (GUI.homeRowNavigation()): Left/Right within a row, Up/Down between rows.
+  // Row themes (GUI.homeRowNavigation()): Left/Right within a row, side buttons through every item.
   bool handleRowButtons();
   Rect homeMenuRect() const;
   bool storeCoverBuffer();    // Store frame buffer for cover image
