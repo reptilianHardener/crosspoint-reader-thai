@@ -274,8 +274,6 @@ void HomeActivity::onEnter() {
 
   const auto base = static_cast<int>(recentBooks.size());
   selectorIndex = initialMenuItem == HomeMenuItem::NONE ? 0 : base + menuItemToIndex(initialMenuItem, hasLibrarySlot());
-  lastBookIndex = 0;
-  lastMenuColumn = 0;
   GUI.onHomeEnter();
 
   // Trigger first update
@@ -359,8 +357,9 @@ void HomeActivity::loop() {
   const int menuCount = getMenuItemCount();
   const auto& metrics = UITheme::getInstance().getMetrics();
 
-  // Cover grid home splits navigation by button group (see below), as do row
-  // themes (handleRowButtons); the flat next/previous cycle is for the list home.
+  // Cover grid home splits navigation by button group (see below). Row themes use
+  // handleRowButtons: front Left/Right stay within a row, and only the books drawn are
+  // counted. The flat next/previous cycle here is for the list home.
   const bool rowNavigation = !coverGridUi && GUI.homeRowNavigation();
   if (!coverGridUi && !rowNavigation) {
     buttonNavigator.onNext([this, menuCount] {
@@ -541,19 +540,25 @@ bool HomeActivity::handleRowButtons() {
     return true;
   }
 
-  if (mappedInput.wasPressed(MappedInputManager::Button::Up) ||
-      mappedInput.wasPressed(MappedInputManager::Button::Down)) {
-    if (inBooks) {
-      lastBookIndex = selectorIndex;
-      selectorIndex = bookCount + std::min(lastMenuColumn, menuCount - 1);
-    } else if (shownBooks > 0) {
-      lastMenuColumn = menuIndex;
-      selectorIndex = std::min(lastBookIndex, shownBooks - 1);
-    }
+  // The side buttons step through every item in order, as on the list home: the books
+  // shown, then the menu, wrapping at either end. Holding one repeats.
+  bool stepped = false;
+  const auto step = [&](const int dir) {
+    const int total = shownBooks + menuCount;
+    // With no books drawn, a selection on a book steps from the menu's edge.
+    const int flat = inBooks ? (shownBooks > 0 ? std::min(selectorIndex, shownBooks - 1) : (dir > 0 ? -1 : 0))
+                             : shownBooks + menuIndex;
+    const int next = (flat + dir + total) % total;
+    selectorIndex = next < shownBooks ? next : bookCount + (next - shownBooks);
+    stepped = true;
     requestUpdate();
-    return true;
-  }
-  return false;
+  };
+  const bool swapped = mappedInput.isNavDirectionSwapped();
+  buttonNavigator.onPressAndContinuous({swapped ? MappedInputManager::Button::Up : MappedInputManager::Button::Down},
+                                       [&step] { step(1); });
+  buttonNavigator.onPressAndContinuous({swapped ? MappedInputManager::Button::Down : MappedInputManager::Button::Up},
+                                       [&step] { step(-1); });
+  return stepped;
 }
 
 Rect HomeActivity::homeMenuRect() const {
@@ -653,7 +658,7 @@ void HomeActivity::render(RenderLock&&) {
       [&menuItems](int index) { return std::string(menuItems[index]); },
       [&menuIcons](int index) { return menuIcons[index]; });
 
-  // Row themes: Left/Right move within the books or the menu row, the side buttons switch rows.
+  // Row themes: Left/Right move within the books or the menu row, the side buttons step through every item.
   const bool horizontal = GUI.homeRowNavigation();
   const auto labels = mappedInput.mapLabels(recentBooks.empty() ? "" : tr(STR_RESUME), tr(STR_SELECT),
                                             horizontal ? tr(STR_DIR_LEFT) : tr(STR_DIR_UP),
