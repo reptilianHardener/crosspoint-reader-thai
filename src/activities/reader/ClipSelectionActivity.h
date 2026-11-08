@@ -47,24 +47,17 @@ class ClipSelectionActivity final : public Activity {
   bool handleHomeGesture() override;
 
  private:
-  // x, y, width, height: the word's box on screen. textX, textY: where it is drawn from,
-  // the top-left corner, or on a vertical page the top of its column edge.
   struct WordBox {
     int16_t x = 0;
     int16_t y = 0;
     int16_t width = 0;
     int16_t height = 0;
-    int16_t textX = 0;
-    int16_t textY = 0;
     uint16_t row = 0;
     uint8_t pageOffset = 0;
-    int8_t characterSpacing = 0;
     uint16_t pageWordIndex = 0;
-    int fontId = 0;  // the word's font; headings and CSS font-size runs differ from the section font
     uint32_t startOffset = UINT32_MAX;
     uint32_t endOffset = UINT32_MAX;
     const char* text = nullptr;
-    EpdFontFamily::Style style = EpdFontFamily::REGULAR;
     bool paragraphStart = false;
     bool isRtl = false;
     bool discretionaryHyphen = false;
@@ -83,7 +76,6 @@ class ClipSelectionActivity final : public Activity {
   int alongStart(const WordBox& word) const { return vertical ? word.y : word.x; }
   int alongLength(const WordBox& word) const { return vertical ? word.height : word.width; }
   int closestInRow(uint16_t row, int center) const;
-  void drawWordText(const WordBox& word, int offsetX, int offset) const;
   Rect gapBetween(const WordBox& a, const WordBox& b) const;
   int wordAt(int x, int y) const;
   int dragWordAt(int x, int y) const;
@@ -105,11 +97,7 @@ class ClipSelectionActivity final : public Activity {
   bool buildSelectedText(int first, int last, std::string& text) const;
   void drawSelection() const;
   bool renderIncremental();
-  void drawWordHighlight(int index, int firstSelected, int lastSelected, int offsetX, int offset) const;
-  void drawWordClean(int index, int offsetX, int offset) const;
   void ditherGapBetween(const WordBox& a, const WordBox& b, int offsetX, int offset) const;
-  void clearGapBetween(const WordBox& a, const WordBox& b, int offsetX, int offset) const;
-  void prewarmWord(int index) const;
 
   std::vector<std::unique_ptr<Page>> pages;
   std::span<const std::unique_ptr<Page>> borrowedPages;

@@ -96,8 +96,8 @@ Rect clippingWordRect(const GfxRenderer& renderer, const int fontId, const PageL
   }
   const int lineFont = TextBlock::renderFontId(renderer, block->blockFontId(fontId), fontId);
   const int along = line.xPos + block->wordXpos(i) + skipX;
-  const int across = line.yPos + block->getRubyShift(renderer.getFontAscenderSize(lineFont)) +
-                     block->wordYOffset(renderer, fontId, i);
+  const int across =
+      line.yPos + block->getRubyShift(renderer.getFontAscenderSize(lineFont)) + block->wordYOffset(renderer, fontId, i);
   const int lineHeight = renderer.getLineHeight(wordFont);
   if (vertical) return Rect{left - across - lineHeight + 1, top + along, lineHeight, width};
   return Rect{left + along, top + across, width, lineHeight};
@@ -303,6 +303,7 @@ bool EpubReaderActivity::loadBook() {
     return false;
   }
   epub = std::move(loadedEpub);
+  vocabularyMetadata.reset();
 
   ImageBlock::clearRenderFailures();
   ImageBlock::setExtractor(epub.get(), [](void* ctx, const char* src, const char* dest) {
@@ -588,10 +589,34 @@ void EpubReaderActivity::startClipSelection(const int initialX, const int initia
       }
       int top, right, bottom, left;
       renderer.getOrientedViewableTRBL(&top, &right, &bottom, &left);
+      std::string chapter = chapterTitle;
+      if (section && currentSpineIndex == spineIndex) {
+        // TOC anchors are indexed by rendered page, not by the selected word's offset.
+        // Multiple chapter anchors on one page cannot be distinguished here.
+        const int selectedTocIndex = section->getTocIndexForPage(startPage);
+        if (selectedTocIndex >= 0) chapter = epub->getTocItem(selectedTocIndex).title;
+      }
+      VocabularyContext vocabulary;
+      vocabulary.title = std::move(bookTitle);
+      vocabulary.author = std::move(author);
+      vocabulary.chapter = std::move(chapter);
+      vocabulary.page = startPage + 1;
+      vocabulary.spine = spineIndex;
+      vocabulary.startOffset = clipping.startOffset;
+      if (SETTINGS.vocabularyHistoryEnabled && !vocabularyMetadata) {
+        auto metadata = makeUniqueNoThrow<Epub::SyncMetadata>();
+        if (metadata && epub->loadSyncMetadata(*metadata)) {
+          vocabularyMetadata = std::move(metadata);
+        }
+      }
+      if (vocabularyMetadata) {
+        vocabulary.series = vocabularyMetadata->series;
+        vocabulary.seriesIndex = vocabularyMetadata->seriesIndex;
+      }
       auto lookup = makeUniqueNoThrow<DictionaryWordSelectActivity>(
           renderer, mappedInput, std::move(page),
           pageOriginX(left + SETTINGS.screenMargin, right + SETTINGS.screenMargin), top + SETTINGS.screenMargin,
-          clipping.text, verticalLayout);
+          clipping.text, std::move(vocabulary), verticalLayout);
       if (!lookup) {
         LOG_ERR("CLIP", "OOM: dictionary lookup activity");
         requestUpdate();

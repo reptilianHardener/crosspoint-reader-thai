@@ -307,6 +307,8 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
 
 - **Dictionary**: Select the StarDict dictionary used for word lookups while reading, or "None" to disable lookups. *(Only shown when at least one dictionary folder exists under `/dictionaries/` on the SD card — see [docs/dictionary.md](docs/dictionary.md) for setup and usage.)*
 
+- **Save Vocabulary Lookups**: Off by default. When on, each successful lookup from a book page is added to `/Vocabulary.txt` on the SD card. *(Shown with the Dictionary setting.)*
+
 - **Text Anti-Aliasing**: Whether to show smooth grey edges (anti-aliasing) on text in reading mode. Note this slows down page turns slightly.
 
 - **Images**: How embedded images (JPG/PNG/GIF) in EPUB files are shown. GIFs render only the first frame; interlaced GIFs are not supported.
