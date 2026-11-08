@@ -17,7 +17,8 @@ void RecentBooksStore::toJson(JsonDocument& doc) const {
       obj["progressPercent"] = book.progressPercent;
     }
     if (book.seriesKnown) {
-      obj["series"] = book.series;
+      obj["seriesName"] = book.series;
+      if (book.seriesIndex >= 0.0f) obj["seriesIndex"] = book.seriesIndex;
     }
   }
 }
@@ -36,8 +37,12 @@ bool RecentBooksStore::fromJson(JsonVariantConst doc) {
     book.author = obj["author"] | "";
     book.coverBmpPath = obj["coverBmpPath"] | "";
     book.progressPercent = std::min<uint8_t>(obj["progressPercent"] | static_cast<uint8_t>(0), 100);
-    book.seriesKnown = obj["series"].is<const char*>();
-    if (book.seriesKnown) book.series = obj["series"].as<const char*>();
+    // A separate key, so entries written before the volume was stored are read again.
+    book.seriesKnown = obj["seriesName"].is<const char*>();
+    if (book.seriesKnown) {
+      book.series = obj["seriesName"].as<const char*>();
+      book.seriesIndex = obj["seriesIndex"] | -1.0f;
+    }
     recentBooks.push_back(book);
   }
 
@@ -63,6 +68,7 @@ void RecentBooksStore::addBook(const std::string& path, const std::string& title
     if (book.title != title || book.author != author) {
       book.seriesKnown = false;
       book.series.clear();
+      book.seriesIndex = -1.0f;
     }
     if (book.title != title) book.title = title;
     if (book.author != author) book.author = author;
@@ -86,6 +92,7 @@ void RecentBooksStore::updateBook(const std::string& path, const std::string& ti
     if (book.title != title || book.author != author) {
       book.seriesKnown = false;
       book.series.clear();
+      book.seriesIndex = -1.0f;
     }
     book.title = title;
     book.author = author;
@@ -105,11 +112,13 @@ void RecentBooksStore::updateProgress(const std::string& path, const uint8_t pro
   saveToFile();
 }
 
-bool RecentBooksStore::setSeries(const std::string& path, const std::string& series) {
+bool RecentBooksStore::setSeries(const std::string& path, const std::string& series, const float seriesIndex) {
   auto it =
       std::find_if(recentBooks.begin(), recentBooks.end(), [&](const RecentBook& book) { return book.path == path; });
-  if (it == recentBooks.end() || (it->seriesKnown && it->series == series)) return false;
+  if (it == recentBooks.end() || (it->seriesKnown && it->series == series && it->seriesIndex == seriesIndex))
+    return false;
   it->series = series;
+  it->seriesIndex = seriesIndex;
   it->seriesKnown = true;
   return true;
 }

@@ -4,6 +4,7 @@
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <I18n.h>
+#include <LibraryText.h>
 #include <Utf8.h>
 
 #include <algorithm>
@@ -250,11 +251,28 @@ void drawVerticalCentered(const GfxRenderer& renderer, const int fontId, const i
 void drawCurrentBook(const GfxRenderer& renderer, const TategakiLayout& l, const RecentBook& book) {
   if (l.cover.height > 0) drawCover(renderer, book, l.cover);
   const int height = l.bottom - l.textTop;
-  // The series heads the card; a book outside a series shows its title there.
-  const std::string& heading = book.series.empty() ? book.title : book.series;
-  if (!heading.empty()) {
-    const std::string series = renderer.truncatedText(SMALL_FONT_ID, heading.c_str(), height);
-    drawVerticalCentered(renderer, SMALL_FONT_ID, l.seriesX, l.seriesWidth, l.textTop, series.c_str(), true);
+  // The series and its volume number head the card; a book outside a series shows its
+  // title there. A long series name is shortened, never the volume number.
+  if (!book.series.empty()) {
+    std::string volume;
+    if (book.seriesIndex >= 0.0f) {
+      char label[32];
+      snprintf(label, sizeof(label), tr(STR_LIBRARY_SERIES_VOLUME),
+               library::seriesPositionText(book.seriesIndex).c_str());
+      volume = std::string(" ") + label;
+    }
+    const int volumeLength = volume.empty() ? 0 : renderer.getTextWidth(SMALL_FONT_ID, volume.c_str());
+    const std::string name =
+        renderer.truncatedText(SMALL_FONT_ID, book.series.c_str(), std::max(0, height - volumeLength));
+    drawVerticalCentered(renderer, SMALL_FONT_ID, l.seriesX, l.seriesWidth, l.textTop, name.c_str(), true);
+    // A run of its own, so a Thai name with a Japanese label (or the reverse) gets each font.
+    if (!volume.empty()) {
+      const int volumeTop = l.textTop + renderer.getTextWidth(SMALL_FONT_ID, name.c_str());
+      drawVerticalCentered(renderer, SMALL_FONT_ID, l.seriesX, l.seriesWidth, volumeTop, volume.c_str(), true);
+    }
+  } else if (!book.title.empty()) {
+    const std::string heading = renderer.truncatedText(SMALL_FONT_ID, book.title.c_str(), height);
+    drawVerticalCentered(renderer, SMALL_FONT_ID, l.seriesX, l.seriesWidth, l.textTop, heading.c_str(), true);
   }
   const auto columns =
       splitColumns(renderer, kTitleFont, book.title.c_str(), height, l.titleColumns, EpdFontFamily::BOLD);

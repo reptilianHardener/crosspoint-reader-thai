@@ -72,8 +72,9 @@ void HomeActivity::resolveSeries() {
     // A failed read may be a passing memory or SD error, so the book is tried again next time.
     if (!epub->loadSyncMetadata(*metadata)) continue;
     book.series = metadata->series;
+    book.seriesIndex = metadata->seriesIndex.value_or(-1.0f);
     book.seriesKnown = true;
-    changed |= RECENT_BOOKS.setSeries(book.path, book.series);
+    changed |= RECENT_BOOKS.setSeries(book.path, book.series, book.seriesIndex);
   }
   if (changed) RECENT_BOOKS.saveToFile();
 }
