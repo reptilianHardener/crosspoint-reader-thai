@@ -183,6 +183,94 @@ BitmapPlacement calculateBitmapPlacement(const int bitmapWidth, const int bitmap
   return placement;
 }
 
+// Screen area drawBitmap covers at this placement; same scaling as GfxRenderer::drawBitmap.
+struct BitmapRect {
+  int left = 0;
+  int top = 0;
+  int right = 0;
+  int bottom = 0;
+};
+
+BitmapRect bitmapScreenRect(const Bitmap& bitmap, const BitmapPlacement& placement, const GfxRenderer& renderer) {
+  const int cropPixX = std::floor(bitmap.getWidth() * placement.cropX / 2.0f);
+  const int cropPixY = std::floor(bitmap.getHeight() * placement.cropY / 2.0f);
+  const int sourceWidth = bitmap.getWidth() - cropPixX * 2;
+  const int sourceHeight = bitmap.getHeight() - cropPixY * 2;
+  const float croppedWidth = (1.0f - placement.cropX) * static_cast<float>(bitmap.getWidth());
+  const float croppedHeight = (1.0f - placement.cropY) * static_cast<float>(bitmap.getHeight());
+  float scale = 1.0f;
+  if (croppedWidth > 0.0f && croppedHeight > 0.0f) {
+    scale = std::min({1.0f, static_cast<float>(renderer.getScreenWidth()) / croppedWidth,
+                      static_cast<float>(renderer.getScreenHeight()) / croppedHeight});
+  }
+  const bool isScaled = scale < 1.0f;
+  const int width = isScaled ? static_cast<int>(std::floor((sourceWidth - 1) * scale)) + 1 : sourceWidth;
+  const int height = isScaled ? static_cast<int>(std::floor((sourceHeight - 1) * scale)) + 1 : sourceHeight;
+  BitmapRect rect;
+  rect.left = std::clamp(placement.x, 0, renderer.getScreenWidth());
+  rect.top = std::clamp(placement.y, 0, renderer.getScreenHeight());
+  rect.right = std::clamp(placement.x + width, rect.left, renderer.getScreenWidth());
+  rect.bottom = std::clamp(placement.y + height, rect.top, renderer.getScreenHeight());
+  return rect;
+}
+
+bool hasEmptyBars(const BitmapRect& rect, const GfxRenderer& renderer) {
+  return rect.left > 0 || rect.top > 0 || rect.right < renderer.getScreenWidth() ||
+         rect.bottom < renderer.getScreenHeight();
+}
+
+// Auto background: true when the image edges next to the empty bars are mostly dark.
+// Leaves the file position anywhere; the caller rewinds before drawing.
+bool imageEdgesAreDark(const Bitmap& bitmap, const BitmapRect& rect, const GfxRenderer& renderer) {
+  const int width = bitmap.getWidth();
+  const int height = bitmap.getHeight();
+  // One luminance row and one raw row (a few KB at most), freed on return.
+  auto buffer = makeUniqueNoThrow<uint8_t[]>(static_cast<size_t>(width) + bitmap.getRowBytes());
+  if (!buffer) {
+    LOG_ERR("SLP", "OOM: cover edge rows");
+    return false;
+  }
+  uint8_t* gray = buffer.get();
+  uint8_t* raw = buffer.get() + width;
+  const bool topBottomBars = rect.top > 0 || rect.bottom < renderer.getScreenHeight();
+  const bool sideBars = rect.left > 0 || rect.right < renderer.getScreenWidth();
+
+  uint32_t sum = 0;
+  uint32_t count = 0;
+  if (topBottomBars) {
+    for (const int y : {0, height - 1}) {
+      if (bitmap.readRowGray(y, gray, raw) != BmpReaderError::Ok) return false;
+      for (int x = 0; x < width; x++) sum += gray[x];
+      count += width;
+    }
+  }
+  if (sideBars) {
+    // Sampled rows are enough to judge the color of the side edges. Read in file order so
+    // each seek moves forward (most BMPs store the bottom row first).
+    constexpr int SIDE_ROW_SAMPLES = 64;
+    for (int i = 0; i <= SIDE_ROW_SAMPLES; i++) {
+      const int sample = bitmap.isTopDown() ? i : SIDE_ROW_SAMPLES - i;
+      if (bitmap.readRowGray(sample * (height - 1) / SIDE_ROW_SAMPLES, gray, raw) != BmpReaderError::Ok) return false;
+      sum += gray[0] + gray[width - 1];
+      count += 2;
+    }
+  }
+  return count > 0 && sum < count * 128u;
+}
+
+// The bars are painted black in each pass: BW and both gray planes write level 0 for black.
+void fillEmptyBars(const GfxRenderer& renderer, const BitmapRect& rect) {
+  const int screenWidth = renderer.getScreenWidth();
+  const int screenHeight = renderer.getScreenHeight();
+  const int middleHeight = rect.bottom - rect.top;
+  if (rect.top > 0) renderer.fillRect(0, 0, screenWidth, rect.top);
+  if (rect.bottom < screenHeight) renderer.fillRect(0, rect.bottom, screenWidth, screenHeight - rect.bottom);
+  if (rect.left > 0 && middleHeight > 0) renderer.fillRect(0, rect.top, rect.left, middleHeight);
+  if (rect.right < screenWidth && middleHeight > 0) {
+    renderer.fillRect(rect.right, rect.top, screenWidth - rect.right, middleHeight);
+  }
+}
+
 bool parseOverlayBmpHeader(HalFile& file, OverlayBmpInfo& info, const bool logErrors) {
   if (!file) return false;
   if (!file.seek(0)) return false;
@@ -847,6 +935,29 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const bool pre
 
   LOG_DBG("SLP", "bitmap %d x %d, screen %d x %d", bitmap.getWidth(), bitmap.getHeight(), pageWidth, pageHeight);
   LOG_DBG("SLP", "drawing to %d x %d", x, y);
+
+  // Dark bars around an image that does not fill the screen. Drawn before the cover filter, so
+  // Inverted inverts them with the image. Not with an overlay: its passes redraw the cover alone.
+  const BitmapRect imageRect = bitmapScreenRect(bitmap, placement, renderer);
+  bool darkBars = false;
+  if (!preserveBackground && overlayCover != &bitmap && hasEmptyBars(imageRect, renderer)) {
+    switch (SETTINGS.sleepScreenCoverBackground) {
+      case CrossPointSettings::COVER_BACKGROUND_DARK:
+        darkBars = true;
+        break;
+      case CrossPointSettings::COVER_BACKGROUND_AUTO:
+        darkBars = imageEdgesAreDark(bitmap, imageRect, renderer);
+        if (bitmap.rewindToData() != BmpReaderError::Ok) {
+          LOG_ERR("SLP", "Failed to rewind sleep image after reading its edges");
+          renderer.clearScreen();
+          renderer.displayBuffer(kSleepClean);
+          return;
+        }
+        break;
+      default:
+        break;
+    }
+  }
   if (!preserveBackground) renderer.clearScreen();
 
   const bool hasGreyscale = (bitmap.hasGreyscale() || (preserveBackground && overlayGrayCover)) &&
@@ -857,6 +968,7 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const bool pre
     renderer.displayBuffer(kSleepClean);
     return;
   }
+  if (darkBars) fillEmptyBars(renderer, imageRect);
 
   if (!preserveBackground &&
       SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE) {
@@ -912,6 +1024,7 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const bool pre
         ready = false;
         break;
       }
+      if (darkBars) fillEmptyBars(renderer, imageRect);
       if (plane == GfxRenderer::GRAYSCALE_LSB)
         renderer.copyGrayscaleLsbBuffers();
       else

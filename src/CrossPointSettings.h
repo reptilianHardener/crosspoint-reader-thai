@@ -30,6 +30,13 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     SLEEP_SCREEN_MODE_COUNT
   };
   enum SLEEP_SCREEN_COVER_MODE { FIT = 0, CROP = 1, SLEEP_SCREEN_COVER_MODE_COUNT };
+  // Color of the empty space around a sleep image that does not fill the screen.
+  enum SLEEP_SCREEN_COVER_BACKGROUND {
+    COVER_BACKGROUND_LIGHT = 0,
+    COVER_BACKGROUND_DARK = 1,
+    COVER_BACKGROUND_AUTO = 2,  // dark when the image's edges are mostly dark
+    SLEEP_SCREEN_COVER_BACKGROUND_COUNT
+  };
   enum SLEEP_SCREEN_COVER_FILTER {
     NO_FILTER = 0,
     BLACK_AND_WHITE = 1,
@@ -272,6 +279,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t screenInverted = 0;
   // Sleep screen cover mode settings
   uint8_t sleepScreenCoverMode = FIT;
+  uint8_t sleepScreenCoverBackground = COVER_BACKGROUND_LIGHT;
   // Sleep screen cover filter
   uint8_t sleepScreenCoverFilter = NO_FILTER;
   // Status bar settings
