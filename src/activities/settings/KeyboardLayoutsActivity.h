@@ -16,14 +16,18 @@ class KeyboardLayoutsActivity final : public UiListActivity {
   void onExit() override;
 
  private:
-  int listCount() const override { return keyboard_layouts::COUNT; }
+  // The SDK layouts, then the app-defined Thai row.
+  static constexpr int THAI_ROW = keyboard_layouts::COUNT;
+  static constexpr int ROW_COUNT = keyboard_layouts::COUNT + 1;
+  int listCount() const override { return ROW_COUNT; }
+  static uint16_t rowBit(int row);
   void buildScreen(UiScreen& screen) override;
   void activateIndex(int index) override;
   const char* headerTitle() const override;
 
-  bool isLocked(uint8_t i) const;
+  bool isLocked(int row) const;
 
-  freeink::ui::ListItem rowItems[keyboard_layouts::COUNT]{};
+  freeink::ui::ListItem rowItems[ROW_COUNT]{};
 
   uint16_t workingMask = 0;
   // Do not persist a derived default merely because the screen was visited.

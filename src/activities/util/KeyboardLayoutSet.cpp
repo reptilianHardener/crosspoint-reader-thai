@@ -51,6 +51,11 @@ freeink::ui::KeyboardLayoutId startingLayout() {
   return next(preferred);
 }
 
+bool thaiEnabled() {
+  return I18N.getLanguage() == Language::TH || SETTINGS.keyboardLayouts == 0 ||
+         (SETTINGS.keyboardLayouts & THAI_BIT) != 0;
+}
+
 freeink::ui::KeyboardLayoutId next(const freeink::ui::KeyboardLayoutId current) {
   const uint16_t mask = enabled();
   const uint8_t from = indexOf(current);

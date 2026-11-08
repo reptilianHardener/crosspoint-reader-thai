@@ -64,7 +64,7 @@ class KeyboardEntryActivity : public Activity {
   // is an app-defined table in the .cpp. It takes the last place in the language-key
   // cycle, after the enabled SDK layouts.
   const bool openInThai;
-  bool thaiAvailable = false;     // resolved in onEnter(): text fields with a Thai UI, or openInThai
+  bool thaiAvailable = false;     // resolved in onEnter(): text fields with Thai enabled, or openInThai
   bool thaiLayer = false;         // the Thai table is the active letter layer
   uint8_t sdkLayoutsVisited = 1;  // SDK layouts stepped through since the cycle last restarted
 

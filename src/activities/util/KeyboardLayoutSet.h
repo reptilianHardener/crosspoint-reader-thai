@@ -33,9 +33,16 @@ inline constexpr uint16_t bitAt(const uint8_t i) { return static_cast<uint16_t>(
 // Symbol layers have no Latin letters, so credentials and URLs require at
 // least one of these layouts to remain enabled.
 inline constexpr uint16_t LATIN_BITS = bitAt(0) | bitAt(1) | bitAt(2) | bitAt(3);
+// The fork's app-defined Thai layer (see KeyboardEntryActivity) is not an SDK
+// layout, so it takes the top bit, which rows appended to ALL never reach.
+inline constexpr uint16_t THAI_BIT = bitAt(15);
+static_assert(COUNT < 15, "THAI_BIT must stay outside the ALL table bits");
 
 uint16_t enabled();
 freeink::ui::KeyboardLayoutId startingLayout();
 freeink::ui::KeyboardLayoutId next(freeink::ui::KeyboardLayoutId current);
+// Thai is always offered with a Thai UI. Otherwise it follows THAI_BIT, and an
+// unconfigured mask offers it, since this firmware is built for Thai books.
+bool thaiEnabled();
 
 }  // namespace keyboard_layouts

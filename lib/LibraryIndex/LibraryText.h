@@ -46,8 +46,8 @@ std::string joinLibraryPath(std::string_view folder, std::string_view name);
 // Maps a handful of Latin letters that have no canonical decomposition,
 // decomposes Latin accents, lowercases ASCII, preserves Unicode letters and
 // numbers, and turns punctuation into a single space. Combining marks are
-// dropped. Apostrophes survive as ASCII '\'' so names and elisions keep their
-// shape.
+// dropped, Thai vowel and tone marks included, and Thai digits become ASCII. Apostrophes survive as ASCII '\'' so names
+// and elisions keep their shape.
 std::string fold(std::string_view text);
 
 // A series position as shown to the reader: "2" for a whole volume, "2.5" otherwise.
@@ -96,6 +96,9 @@ std::string authorKey(std::string_view author);
 // repaint, so the reader wants to stop typing as early as possible. "dar mat"
 // — six keys — finds "Wuthering Heights", where a plain substring test would demand the
 // whole of one word and give nothing for the effort of a second.
+//
+// Thai, kana and Han are written without spaces, so a query word in one of those
+// scripts may match anywhere in the book's text, not only at a word start.
 //
 // An empty query matches everything, so the list is the unfiltered shelf before
 // the first key is pressed.

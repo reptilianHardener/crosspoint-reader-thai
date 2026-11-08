@@ -444,8 +444,8 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t slideSwitchAction = SLIDE_SWITCH_FRONTLIGHT;
   // Language setting (Language enum index, default 0 = EN)
   uint8_t language = 0;
-  // Keyboard layouts the user can reach, using keyboard_layouts::ALL table bits.
-  // 0 means "not configured", resolved to the UI language's layout plus English.
+  // Keyboard layouts the user can reach, using keyboard_layouts::ALL table bits plus THAI_BIT.
+  // 0 means "not configured", resolved to the UI language's layout plus English, and Thai.
   // Any other value is an explicit choice and is used as-is: the language of the
   // books someone reads is not necessarily the language of their UI.
   // See keyboard_layouts:: for the bit assignment and the defaulting rules.
