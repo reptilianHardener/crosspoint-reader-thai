@@ -111,6 +111,7 @@ constexpr CodepointRange LETTER_RANGES[] = {
     {0x10A0, 0x10C5},   {0x10D0, 0x10FF},   {0x1C90, 0x1CBF},   {0x2D00, 0x2D25},  // Georgian
     {0x1200, 0x135A},   {0x1380, 0x138F},   {0x2D80, 0x2DDE},                      // Ethiopic
     {0x13A0, 0x13F5},   {0x13F8, 0x13FD},   {0xAB70, 0xABBF},                      // Cherokee
+    {0x0E01, 0x0E30},   {0x0E32, 0x0E33},   {0x0E40, 0x0E46},                      // Thai
     {0x2D30, 0x2D67},                                                              // Tifinagh
     {0x3041, 0x3096},   {0x30A1, 0x30FA},   {0x3105, 0x312F},   {0x31A0, 0x31BF},  // Kana/Bopomofo
     {0x3400, 0x4DBF},   {0x4E00, 0x9FFF},   {0xF900, 0xFAFF},                      // Han
@@ -191,6 +192,14 @@ std::string fold(const std::string_view text) {
     if (cp == 0) break;
 
     if (isUnicodeMark(cp)) continue;
+
+    // Thai digits fold to ASCII so "๓" and "3" find the same volume.
+    if (cp >= 0x0E50 && cp <= 0x0E59) {
+      if (pendingSpace && !out.empty()) out.push_back(' ');
+      pendingSpace = false;
+      out.push_back(static_cast<char>('0' + (cp - 0x0E50)));
+      continue;
+    }
 
     const char* mapped = explicitMapping(cp);
     if (mapped != nullptr) {
@@ -357,6 +366,24 @@ std::string authorKey(const std::string_view author) {
 // reach "d'a cote". Treating it as a word boundary here leaves the sort untouched.
 bool isWordBreak(const char c) { return c == ' ' || c == '\''; }
 
+// Scripts written without spaces between words: Thai, kana and Han.
+bool isUnspacedScript(const uint32_t cp) {
+  return (cp >= 0x0E01 && cp <= 0x0E5B) || (cp >= 0x3041 && cp <= 0x30FF) || (cp >= 0x3400 && cp <= 0x9FFF) ||
+         (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0x20000 && cp <= 0x323AF);
+}
+
+bool hasUnspacedScript(const std::string_view word) {
+  const auto* cursor = reinterpret_cast<const unsigned char*>(word.data());
+  const auto* end = cursor + word.size();
+  while (cursor < end) {
+    // Folded text is whole code points, so the decoder never reads past the word.
+    const uint32_t cp = utf8NextCodepoint(&cursor);
+    if (cp == 0) break;
+    if (isUnspacedScript(cp)) return true;
+  }
+  return false;
+}
+
 bool matchesQuery(const std::string_view haystack, const std::string_view needle) {
   if (needle.empty()) return true;
 
@@ -371,6 +398,13 @@ bool matchesQuery(const std::string_view haystack, const std::string_view needle
     size_t qe = qs;
     while (qe < needle.size() && !isWordBreak(needle[qe])) qe++;
     const std::string_view word = needle.substr(qs, qe - qs);
+
+    // A Thai or Japanese title is one long "word", so its query words may match anywhere.
+    if (hasUnspacedScript(word)) {
+      if (haystack.find(word) == std::string_view::npos) return false;
+      qs = qe;
+      continue;
+    }
 
     bool found = false;
     size_t hs = 0;

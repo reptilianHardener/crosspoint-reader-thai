@@ -211,7 +211,7 @@ void KeyboardEntryActivity::onEnter() {
   // language's layout, or on an enabled one if the user switched that off.
   layoutId = inputType == InputType::Url ? fui::KeyboardLayoutId::QwertyEn : keyboard_layouts::startingLayout();
   // Thai is offered on plain text fields only: URLs and credentials are ASCII.
-  thaiAvailable = inputType == InputType::Text && (openInThai || I18N.getLanguage() == Language::TH);
+  thaiAvailable = inputType == InputType::Text && (openInThai || keyboard_layouts::thaiEnabled());
   thaiLayer = thaiAvailable && openInThai;
   sdkLayoutsVisited = 1;
   // The key only earns its slot in the bottom row with somewhere to go.

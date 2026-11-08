@@ -141,6 +141,8 @@ On a button-only device:
 - While the tabs are focused, hold **Confirm** to open Search.
 - In the Title or Author views, hold **Confirm** on a book to collapse the list to its letter or author groups. The matching group remains selected. Press **Confirm** to enter a group, or **Back** to restore the exact book and position you came from.
 
+Search looks through titles and authors. Each word you type must match the start of a word in the book, but Thai and Japanese words can match anywhere, because those scripts have no spaces between words. Thai and ASCII digits match each other. Use the keyboard's language key to reach the Thai layout. Turn it on or off with the Thai row in **Keyboard Layouts** (System settings); it is always on when the interface language is Thai. Thai vowels and tone marks written above or below a letter are ignored when matching.
+
 On a touch device, tap tabs, books, and the Search icon directly. Tap an active indexed tab again to reverse its sort direction. Swipe to scroll. Long-press a book in the Recent view to remove it from the list. Long-press a book in a Title or Author view to collapse to the group list, then tap a group to expand it. In the Series view, tap a series to open it; long-press a book inside a series to delete it.
 
 The index is created automatically the first time the Library is opened. To pick up later file changes or updated metadata, use **Settings → System → Rebuild library index**. The **Use book metadata** setting controls whether the index reads titles, authors, and series stored inside books.

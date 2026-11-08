@@ -450,11 +450,18 @@ void LibraryListActivity::promptDeleteBookByPath(const std::string& path, const 
 
 void LibraryListActivity::openSearch() {
   app.clearTapFlash();
+  // Refining a Thai query should not start with a trip through the language key.
+  bool thaiQuery = false;
+  for (const auto* p = reinterpret_cast<const unsigned char*>(query.c_str()); !thaiQuery;) {
+    const uint32_t cp = utf8NextCodepoint(&p);
+    if (cp == 0) break;
+    thaiQuery = utf8IsThaiCodepoint(cp);
+  }
   // No key filtering here on purpose. Greying out the letters that lead nowhere
   // was built, tested on device and removed: a letter you can see but cannot
   // reach reads as a broken keyboard, and the eye keeps returning to it.
   auto keyboard = makeUniqueNoThrow<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_LIBRARY_SEARCH), query, 48,
-                                                           InputType::Text);
+                                                           InputType::Text, thaiQuery);
   if (!keyboard) {
     LOG_ERR("LIB", "OOM: search keyboard");
     return;

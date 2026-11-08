@@ -95,6 +95,17 @@ TEST(LibraryFold, PreservesHebrewLettersAndDropsNiqqud) {
   EXPECT_FALSE(authorKey("\u05E2\u05DE\u05D5\u05E1 \u05E2\u05D5\u05D6").empty());
 }
 
+// Thai letters were once dropped as punctuation, so a Thai title folded to nothing
+// and every Thai query matched every book.
+TEST(LibraryFold, KeepsThaiLettersAndDropsVowelAndToneMarks) {
+  EXPECT_EQ(fold("แฮร์รี่ พอตเตอร์"), "แฮรร พอตเตอร");
+  EXPECT_EQ(fold("เล่ม ๓"), "เลม 3");
+  EXPECT_EQ(fold("น้ำ"), "นำ");
+  EXPECT_FALSE(fold("ศิลาอาถรรพ์").empty());
+  EXPECT_FALSE(authorKey("เจ.เค. โรว์ลิ่ง").empty());
+  EXPECT_EQ(library::foldedGroupInitial(fold("กาลครั้งหนึ่ง")), 0x0E01u);
+}
+
 TEST(LibraryFold, GroupInitialUsesUnicodeLettersAndBucketsNumbers) {
   EXPECT_EQ(library::foldedGroupInitial(fold("Alpha")), static_cast<uint32_t>('a'));
   EXPECT_EQ(library::foldedGroupInitial(fold("\u05E9\u05DC\u05D5\u05DD")), 0x05E9u);
@@ -235,6 +246,30 @@ TEST(MatchesQuery, LongTitlesAreOnlySearchableWithinTheStoredFold) {
   const std::string longTitle(120, 'a');
   const std::string folded = library::fold(longTitle + " needle").substr(0, 96);
   EXPECT_FALSE(library::matchesQuery(folded, library::fold("needle")));
+}
+
+// Thai and Japanese titles have no spaces between words, so a query word in those
+// scripts may match inside a word.
+TEST(MatchesQuery, ThaiQueryMatchesInsideAWord) {
+  const std::string title = library::fold("แฮร์รี่พอตเตอร์กับศิลาอาถรรพ์");
+  EXPECT_TRUE(library::matchesQuery(title, library::fold("ศิลา")));
+  EXPECT_TRUE(library::matchesQuery(title, library::fold("พอตเตอร์ ศิลา")));
+  EXPECT_FALSE(library::matchesQuery(title, library::fold("ห้องแห่งความลับ")));
+  // Tone marks are optional on both sides.
+  EXPECT_TRUE(library::matchesQuery(title, library::fold("แฮรรี")));
+}
+
+TEST(MatchesQuery, ThaiDigitsFindAsciiVolumes) {
+  EXPECT_TRUE(library::matchesQuery(library::fold("ดาบพิฆาตอสูร 3"), library::fold("๓")));
+}
+
+TEST(MatchesQuery, JapaneseQueryMatchesInsideAWord) {
+  EXPECT_TRUE(library::matchesQuery(library::fold("吾輩は猫である"), library::fold("猫")));
+}
+
+TEST(MatchesQuery, LatinWordsStillMatchOnlyAtWordStart) {
+  EXPECT_FALSE(library::matchesQuery(library::fold("แฮร์รี่ Heights"), library::fold("eights")));
+  EXPECT_TRUE(library::matchesQuery(library::fold("แฮร์รี่ Heights"), library::fold("hei")));
 }
 
 // --- inverted author names ---------------------------------------------------
