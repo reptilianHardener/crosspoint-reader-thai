@@ -516,7 +516,11 @@ int findPrior(WalkState& st, const uint64_t pathHash) {
     // Clamped as a float first, so lround never sees a value outside its range.
     s.volume = s.hasIndex ? static_cast<uint32_t>(std::llround(std::clamp(*seriesIndex * 100.0f, 0.0f, 4.0e9f)))
                           : NO_SERIES_VOLUME;
-    memcpy(s.key, seriesFold.data(), std::min(seriesFold.size(), sizeof(s.key)));
+    // Three bytes past the key let a vowel swap at its end see the consonant after it.
+    char seriesOrder[sizeof(s.key) + 3];
+    const size_t seriesBytes = std::min(seriesFold.size(), sizeof(seriesOrder));
+    collate(std::string_view(seriesFold.data(), seriesBytes), seriesOrder);
+    memcpy(s.key, seriesOrder, std::min(seriesBytes, sizeof(s.key)));
     s.hash = fnv1a32(seriesFold.data(), seriesFold.size());
     st.seriesBooks++;
   }
@@ -1523,8 +1527,12 @@ bool buildLibraryIndex(const char* rootPath, BuildStats& stats, const bool readM
           Storage.remove(folderStagePath.c_str());
           return false;
         }
+        // The key prefix plus three bytes, so a vowel swap at its end sees the next consonant.
+        char collated[sizeof(keys[i].key) + 3];
+        const size_t titleBytes = std::min<size_t>(r.foldLen, sizeof(collated));
+        collate(std::string_view(r.fold, titleBytes), collated);
         memset(keys[i].key, 0, sizeof(keys[i].key));
-        memcpy(keys[i].key, r.fold, std::min<size_t>(r.foldLen, sizeof(keys[i].key)));
+        memcpy(keys[i].key, collated, std::min(titleBytes, sizeof(keys[i].key)));
         keys[i].ordinal = i;
       }
       if (!stage.close()) {

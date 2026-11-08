@@ -129,7 +129,7 @@ The Browse Files screen acts as a file and folder browser. The full path to the 
 The Library indexes up to 4,096 supported books on the SD card and shows their titles and authors without requiring you to remember their folders. Its four tabs provide different views. An arrow beside an indexed tab shows the sort direction:
 
 - **Recent** lists the ten books you opened most recently, then the rest by when they arrived on the card. Hold a book to remove it from this list.
-- **Title** groups books by the first letter of the title. Up sorts A-Z and down sorts Z-A. Titles beginning with numbers or punctuation appear under `#`; letters from non-English scripts, including Hebrew, have their own groups.
+- **Title** groups books by the first letter of the title. Up sorts A-Z and down sorts Z-A. Titles beginning with numbers or punctuation appear under `#`; letters from non-English scripts, including Hebrew, have their own groups. Thai titles, authors and series are filed by their first consonant, as in a Thai dictionary: one that starts with เ แ โ ใ or ไ is filed under the consonant after that vowel.
 - **Author** groups books by author. Up sorts A-Z and down sorts Z-A.
 - **Series** lists the series named in the books' metadata, with how many books each has. Select a series to see its books in volume order. Each book shows the percent of it you have read, and the series opens on the book you read most recently if that book is in the **Recent** list. **Back** returns to the series list. Books with no volume number come last. Series has no sort direction, and a search from this tab looks only through books that are in a series. Needs **Use book metadata** turned on.
 
