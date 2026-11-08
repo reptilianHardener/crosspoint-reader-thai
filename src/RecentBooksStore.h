@@ -14,6 +14,7 @@ struct RecentBook {
   // Series from the book's metadata, looked up on the home screen by themes that show it.
   // seriesKnown false means not looked up yet; true with an empty series means none.
   std::string series;
+  float seriesIndex = -1.0f;  // volume number in the series; below 0 when the book gives none
   bool seriesKnown = false;
 
   bool operator==(const RecentBook& other) const { return path == other.path; }
@@ -49,7 +50,7 @@ class RecentBooksStore : public PersistableStore<RecentBooksStore> {
 
   // Record a looked-up series without saving; the caller saves once after a batch.
   // Returns true when an entry changed.
-  bool setSeries(const std::string& path, const std::string& series);
+  bool setSeries(const std::string& path, const std::string& series, float seriesIndex);
 
   // Remove the entry whose path matches (used when a book is removed from recents or finished/read).
   // Returns true if an entry was found and removed (no-op + false otherwise).
