@@ -267,7 +267,7 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
   - "Lyra" - The new theme for Crosspoint featuring rounded elements and menu icons
   - "Lyra Extended" (default) - Lyra, but displays 3 books instead of 1 on the **[Home Screen](#31-home-screen)**
   - "RoundedRaff" - A rounded theme with additional visual styling
-  - "Tanzaku" - The highlighted book's cover and vertical title beside a row of spines, read right to left, with vertical tabs and a right-to-left EPUB reader menu sheet. A small column right of the title shows the book's series and volume number (when the book gives one) from its EPUB metadata, or the title again when the book is not in a series
+  - "Tanzaku" - The highlighted book's whole cover and vertical title beside a row of spines, read right to left, with vertical tabs and a right-to-left EPUB reader menu sheet. A small column right of the title shows the book's series and volume number (when the book gives one) from its EPUB metadata, or the title again when the book is not in a series
   - "Tanzaku (Without Cover)" - Like "Tanzaku", without the cover: a narrower card with the highlighted book's series and volume number (or title) in a small column, its title in one column (shortened with "…" when long) and the author, and no cover images are made for the home screen
   - "Cover Grid" - A grid of covers (boards with PSRAM only)
 
