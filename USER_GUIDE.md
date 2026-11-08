@@ -223,8 +223,16 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
   - "Cover + Transparent" - The transparent overlay image drawn over the cover of the last opened book, falls back to "Transparent" behavior if there is no book cover
 - **Sleep Screen Cover Mode**: How to display the book cover or custom sleep image:
   
-  - "Fit" (default) - Scale the image to fit centered on the screen, padding with white borders as necessary
+  - "Fit" (default) - Scale the image to fit centered on the screen, padding with borders as necessary (see Sleep Screen Cover Background)
   - "Crop" - Scale the image and crop as necessary to try to fill the screen
+
+- **Sleep Screen Cover Background**: The color of the borders around a sleep image that does not fill the screen:
+  
+  - "Light" (default) - White borders
+  - "Dark" - Black borders
+  - "Auto" - Black borders when the image's edges next to the borders are mostly dark, white otherwise
+  
+  The "Inverted" cover filter inverts the borders too. With "Cover + Transparent", the borders stay white while an overlay is shown.
 
 - **Sleep Screen Cover Filter**: What filter will be applied to the book cover when "Cover" sleep screen is selected:
   
@@ -578,9 +586,10 @@ The **Sleep Screen** setting controls what is displayed when the device goes to 
 
 #### Cover settings
 
-When using **Custom**, **Cover**, **Cover + Custom** or **Cover + Transparent**, two additional settings apply:
+When using **Custom**, **Cover**, **Cover + Custom** or **Cover + Transparent**, three additional settings apply:
 
-- **Sleep Screen Cover Mode**: **Fit** (scale to fit, white borders) or **Crop** (scale and crop to fill the screen).
+- **Sleep Screen Cover Mode**: **Fit** (scale to fit, with borders) or **Crop** (scale and crop to fill the screen).
+- **Sleep Screen Cover Background**: **Light**, **Dark**, or **Auto** (matches the image's edges) borders around an image that does not fill the screen.
 - **Sleep Screen Cover Filter**: **None** (grayscale), **Contrast** (black & white), or **Inverted** (inverted black & white).
 
 #### Custom images
