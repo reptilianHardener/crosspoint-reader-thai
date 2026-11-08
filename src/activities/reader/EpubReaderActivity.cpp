@@ -9,6 +9,7 @@
 #include <HalDisplay.h>
 #include <HalFrontlight.h>
 #include <HalGPIO.h>
+#include <HalMemory.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Logging.h>
@@ -37,6 +38,7 @@
 #include "EpubReaderFootnoteSelectActivity.h"
 #include "EpubReaderPercentSelectionActivity.h"
 #include "EpubReaderUtils.h"
+#include "FootnotePopupActivity.h"
 #include "KOReaderCredentialStore.h"
 #include "KOReaderSyncActivity.h"
 #include "MappedInputManager.h"
@@ -60,6 +62,8 @@
 #include "fontIds.h"
 #include "util/BookmarkUtil.h"
 #include "util/ButtonNavigator.h"
+#include "util/DictHtmlPages.h"
+#include "util/FootnoteExtract.h"
 #include "util/ScreenshotUtil.h"
 
 namespace {
@@ -653,7 +657,7 @@ void EpubReaderActivity::startClipSelection(const int initialX, const int initia
 void EpubReaderActivity::openFootnoteSelect(const bool reopenMenuOnCancel) {
   if (!section || currentPageFootnotes.empty()) return;
   if (currentPageFootnotes.size() == 1) {
-    navigateToHref(currentPageFootnotes[0].href, true);
+    openLink(currentPageFootnotes[0].href);
     return;
   }
 
@@ -683,7 +687,97 @@ void EpubReaderActivity::openFootnoteSelect(const bool reopenMenuOnCancel) {
       return;
     }
     const auto& footnoteResult = std::get<FootnoteResult>(result.data);
-    navigateToHref(footnoteResult.href, true);
+    openLink(footnoteResult.href);
+  });
+}
+
+// A note link's visible text is a short mark: "1", "*", "iv". Contents entries, cross-
+// references and other long links jump without reading their target.
+bool EpubReaderActivity::isNoteLink(const std::string& href) const {
+  for (const auto& footnote : currentPageFootnotes) {
+    if (href != footnote.href) continue;
+    size_t codepoints = 0;
+    for (const char* p = footnote.number; *p; ++p) {
+      if ((static_cast<unsigned char>(*p) & 0xC0) != 0x80) ++codepoints;
+    }
+    return codepoints > 0 && codepoints <= MAX_NOTE_MARK_CODEPOINTS;
+  }
+  return false;
+}
+
+bool EpubReaderActivity::readNote(const std::string& href, std::string& html) const {
+  const size_t hash = href.find('#');
+  if (!epub || hash == std::string::npos || hash + 1 >= href.size()) return false;
+  const int spineIndex = hash == 0 ? currentSpineIndex : epub->resolveHrefToSpineIndex(href);
+  if (spineIndex < 0) return false;
+  // Reading inflates the target file through one contiguous 32 KB window plus its state,
+  // and laying the note out needs about the same again afterwards.
+  constexpr size_t MIN_FREE_BYTES = 64 * 1024;
+  constexpr size_t MIN_BLOCK_BYTES = 40 * 1024;
+  const auto heap = HalMemory::getDefaultHeap();
+  if (heap.freeBytes < MIN_FREE_BYTES || heap.largestBlockBytes < MIN_BLOCK_BYTES) {
+    LOG_DBG("ERS", "Low heap for footnote popup; jumping");
+    return false;
+  }
+
+  auto extractor = makeUniqueNoThrow<FootnoteExtractor>(FsHelpers::decodeUriEscapes(href.substr(hash + 1)));
+  if (!extractor) return false;
+  // Short writes stop the zip stream once the note has been read.
+  class NoteSink final : public Print {
+   public:
+    explicit NoteSink(FootnoteExtractor& extractor) : extractor(extractor) {}
+    size_t write(const uint8_t c) override { return write(&c, 1); }
+    size_t write(const uint8_t* data, const size_t size) override { return extractor.feed(data, size) ? size : 0; }
+
+   private:
+    FootnoteExtractor& extractor;
+  } sink(*extractor);
+  epub->readItemContentsToStream(epub->getSpineItem(spineIndex).href, sink, 1024, true);
+  if (extractor->result() != FootnoteExtractor::Result::Note) return false;
+  html = extractor->takeHtml();
+  return !html.empty();
+}
+
+void EpubReaderActivity::openLink(const std::string& href) {
+  std::vector<std::unique_ptr<Page>> notePages;
+  std::unique_ptr<Page> page;
+  if (section && isNoteLink(href)) {
+    // A radio start in flight takes about 50 KB; let it finish before the heap check.
+    bleturner::settleStart();
+    // Layout measures text through the shared font caches the render task draws with.
+    RenderLock lock;
+    std::string html;
+    int width = 0;
+    int height = 0;
+    FootnotePopupActivity::textArea(renderer, width, height);
+    // The note is laid out like the book's text: same font, spacing and Thai word breaks.
+    if (readNote(href, html) && width > 0 && height > 0 &&
+        buildDictionaryHtmlPages(renderer, html, static_cast<uint16_t>(width), static_cast<uint16_t>(height),
+                                 notePages) &&
+        !notePages.empty()) {
+      page = section->loadPage(section->currentPage);
+    }
+  }
+  if (!page) {
+    navigateToHref(href, true);
+    return;
+  }
+  int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
+  renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
+                                   &orientedMarginLeft);
+  orientedMarginTop += SETTINGS.screenMargin;
+  orientedMarginLeft += SETTINGS.screenMargin;
+  orientedMarginRight += SETTINGS.screenMargin;
+  auto popup = makeUniqueNoThrow<FootnotePopupActivity>(renderer, mappedInput, std::move(page),
+                                                        pageOriginX(orientedMarginLeft, orientedMarginRight),
+                                                        orientedMarginTop, verticalLayout, std::move(notePages), href);
+  if (!popup) {
+    LOG_ERR("ERA", "OOM: FootnotePopupActivity");
+    navigateToHref(href, true);
+    return;
+  }
+  startActivityForResult(std::move(popup), [this, href](const ActivityResult& result) {
+    if (!result.isCancelled) navigateToHref(href, true);
     requestUpdate();
   });
 }
@@ -991,8 +1085,8 @@ void EpubReaderActivity::loop() {
                          : EpubReaderUtils::linkAtPoint(currentPageLinks, touchX, touchY, currentPageLinkMarginLeft,
                                                         currentPageLinkMarginTop);
       if (link) {
-        navigateToHref(link->href, true);
         haptic_feedback::touchAction();
+        openLink(link->href);
         return;
       }
     }
