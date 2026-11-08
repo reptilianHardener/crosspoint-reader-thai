@@ -117,6 +117,10 @@ const fui::KeyboardKey URL_SNIP_BOTTOM[] = {UKS("abc", fui::KeyKind::Mode, fui::
 // one table per shift state. Like the URL layers these are app-defined tables
 // over the public KeyboardLayout structs, because the SDK ships no Thai layout.
 //
+// A vowel or tone mark has no width of its own and drew off-centre alone on its key,
+// so its label sits on a dash, as Thai textbooks write it; the key still types the
+// mark alone.
+//
 // Key ids are the Unicode code point (all below 0x0E80, so they fit int16_t and
 // cannot collide with the ASCII ids). Twelve keys per row is what a 480 px
 // panel can hold, so the two obsolete consonants of the 13th column ride as
@@ -125,23 +129,23 @@ const fui::KeyboardKey URL_SNIP_BOTTOM[] = {UKS("abc", fui::KeyKind::Mode, fui::
 // ---------------------------------------------------------------------------
 
 const fui::KeyboardKey TH_ROW1[] = {UK("ๅ", "ๅ", 0x0E45), UK("/", "/", '/'),          UK("-", "-", '-'),
-                                    UK("ภ", "ภ", 0x0E20), UK("ถ", "ถ", 0x0E16),       UK("ุ", "ุ", 0x0E38),
-                                    UK("ึ", "ึ", 0x0E36),   UKA("ค", "ค", 0x0E04, "ฅ"), UK("ต", "ต", 0x0E15),
+                                    UK("ภ", "ภ", 0x0E20), UK("ถ", "ถ", 0x0E16),       UK("–ุ", "ุ", 0x0E38),
+                                    UK("–ึ", "ึ", 0x0E36),  UKA("ค", "ค", 0x0E04, "ฅ"), UK("ต", "ต", 0x0E15),
                                     UK("จ", "จ", 0x0E08), UKA("ข", "ข", 0x0E02, "ฃ"), UK("ช", "ช", 0x0E0A)};
 const fui::KeyboardKey TH_ROW2[] = {UK("ๆ", "ๆ", 0x0E46), UK("ไ", "ไ", 0x0E44), UK("ำ", "ำ", 0x0E33),
-                                    UK("พ", "พ", 0x0E1E), UK("ะ", "ะ", 0x0E30), UK("ั", "ั", 0x0E31),
-                                    UK("ี", "ี", 0x0E35),   UK("ร", "ร", 0x0E23), UK("น", "น", 0x0E19),
+                                    UK("พ", "พ", 0x0E1E), UK("ะ", "ะ", 0x0E30), UK("–ั", "ั", 0x0E31),
+                                    UK("–ี", "ี", 0x0E35),  UK("ร", "ร", 0x0E23), UK("น", "น", 0x0E19),
                                     UK("ย", "ย", 0x0E22), UK("บ", "บ", 0x0E1A), UK("ล", "ล", 0x0E25)};
 const fui::KeyboardKey TH_ROW3[] = {UK("ฟ", "ฟ", 0x0E1F), UK("ห", "ห", 0x0E2B), UK("ก", "ก", 0x0E01),
-                                    UK("ด", "ด", 0x0E14), UK("เ", "เ", 0x0E40), UK("้", "้", 0x0E49),
-                                    UK("่", "่", 0x0E48),   UK("า", "า", 0x0E32), UK("ส", "ส", 0x0E2A),
+                                    UK("ด", "ด", 0x0E14), UK("เ", "เ", 0x0E40), UK("–้", "้", 0x0E49),
+                                    UK("–่", "่", 0x0E48),  UK("า", "า", 0x0E32), UK("ส", "ส", 0x0E2A),
                                     UK("ว", "ว", 0x0E27), UK("ง", "ง", 0x0E07)};
 const fui::KeyboardKey TH_ROW4[] = {UK("ผ", "ผ", 0x0E1C),
                                     UK("ป", "ป", 0x0E1B),
                                     UK("แ", "แ", 0x0E41),
                                     UK("อ", "อ", 0x0E2D),
-                                    UK("ิ", "ิ", 0x0E34),
-                                    UK("ื", "ื", 0x0E37),
+                                    UK("–ิ", "ิ", 0x0E34),
+                                    UK("–ื", "ื", 0x0E37),
                                     UK("ท", "ท", 0x0E17),
                                     UK("ม", "ม", 0x0E21),
                                     UK("ใ", "ใ", 0x0E43),
@@ -149,23 +153,23 @@ const fui::KeyboardKey TH_ROW4[] = {UK("ผ", "ผ", 0x0E1C),
                                     UKS("Del", fui::KeyKind::Delete, fui::QWERTY_KEY_BACKSPACE, 2)};
 
 const fui::KeyboardKey TH_SHIFT_ROW1[] = {UK("+", "+", '+'),    UK("๑", "๑", 0x0E51), UK("๒", "๒", 0x0E52),
-                                          UK("๓", "๓", 0x0E53), UK("๔", "๔", 0x0E54), UK("ู", "ู", 0x0E39),
+                                          UK("๓", "๓", 0x0E53), UK("๔", "๔", 0x0E54), UK("–ู", "ู", 0x0E39),
                                           UK("฿", "฿", 0x0E3F), UK("๕", "๕", 0x0E55), UK("๖", "๖", 0x0E56),
                                           UK("๗", "๗", 0x0E57), UK("๘", "๘", 0x0E58), UK("๙", "๙", 0x0E59)};
 const fui::KeyboardKey TH_SHIFT_ROW2[] = {UK("๐", "๐", 0x0E50), UK("\"", "\"", '"'),  UK("ฎ", "ฎ", 0x0E0E),
-                                          UK("ฑ", "ฑ", 0x0E11), UK("ธ", "ธ", 0x0E18), UK("ํ", "ํ", 0x0E4D),
-                                          UK("๊", "๊", 0x0E4A),   UK("ณ", "ณ", 0x0E13), UK("ฯ", "ฯ", 0x0E2F),
+                                          UK("ฑ", "ฑ", 0x0E11), UK("ธ", "ธ", 0x0E18), UK("–ํ", "ํ", 0x0E4D),
+                                          UK("–๊", "๊", 0x0E4A),  UK("ณ", "ณ", 0x0E13), UK("ฯ", "ฯ", 0x0E2F),
                                           UK("ญ", "ญ", 0x0E0D), UK("ฐ", "ฐ", 0x0E10), UK(",", ",", ',')};
 const fui::KeyboardKey TH_SHIFT_ROW3[] = {UK("ฤ", "ฤ", 0x0E24), UK("ฆ", "ฆ", 0x0E06), UK("ฏ", "ฏ", 0x0E0F),
-                                          UK("โ", "โ", 0x0E42), UK("ฌ", "ฌ", 0x0E0C), UK("็", "็", 0x0E47),
-                                          UK("๋", "๋", 0x0E4B),   UK("ษ", "ษ", 0x0E29), UK("ศ", "ศ", 0x0E28),
+                                          UK("โ", "โ", 0x0E42), UK("ฌ", "ฌ", 0x0E0C), UK("–็", "็", 0x0E47),
+                                          UK("–๋", "๋", 0x0E4B),  UK("ษ", "ษ", 0x0E29), UK("ศ", "ศ", 0x0E28),
                                           UK("ซ", "ซ", 0x0E0B), UK(".", ".", '.')};
 const fui::KeyboardKey TH_SHIFT_ROW4[] = {UK("(", "(", '('),
                                           UK(")", ")", ')'),
                                           UK("ฉ", "ฉ", 0x0E09),
                                           UK("ฮ", "ฮ", 0x0E2E),
-                                          UK("ฺ", "ฺ", 0x0E3A),
-                                          UK("์", "์", 0x0E4C),
+                                          UK("–ฺ", "ฺ", 0x0E3A),
+                                          UK("–์", "์", 0x0E4C),
                                           UK("?", "?", '?'),
                                           UK("ฒ", "ฒ", 0x0E12),
                                           UK("ฬ", "ฬ", 0x0E2C),
