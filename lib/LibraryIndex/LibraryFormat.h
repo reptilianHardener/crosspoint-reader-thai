@@ -34,9 +34,9 @@ inline constexpr uint8_t CLIX_FORMAT_VERSION = 3;
 // Bump when the fold or a permutation's sort key changes.
 // Forces fold and ranks to be rebuilt while firstSeen values are preserved, so
 // arrival history survives.
-// Fork-owned (Thai letters in the fold): kept far above upstream's 4 so an upstream bump
-// cannot reuse it. Re-bump on any merge that changes the fold.
-inline constexpr uint8_t CLIX_FOLD_VERSION = 100;
+// Fork-owned (Thai letters in the fold, Thai dictionary order): kept far above upstream's 4
+// so an upstream bump cannot reuse it. Re-bump on any merge that changes the fold.
+inline constexpr uint8_t CLIX_FOLD_VERSION = 101;
 
 inline constexpr uint32_t CLIX_ALIGN = 512;
 inline constexpr size_t CLIX_FOLD_BYTES = 96;

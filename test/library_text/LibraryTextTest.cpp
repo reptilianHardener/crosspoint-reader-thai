@@ -106,6 +106,41 @@ TEST(LibraryFold, KeepsThaiLettersAndDropsVowelAndToneMarks) {
   EXPECT_EQ(library::foldedGroupInitial(fold("กาลครั้งหนึ่ง")), 0x0E01u);
 }
 
+std::string collated(const std::string& text) {
+  const std::string folded = library::fold(text);
+  std::string out(folded.size(), '\0');
+  library::collate(folded, out.data());
+  return out;
+}
+
+// Thai dictionaries file a word under its first consonant: a leading vowel moves after it.
+TEST(LibraryCollate, LeadingThaiVowelSortsAfterItsConsonant) {
+  EXPECT_EQ(collated("เด็ก"), "ดเก");
+  EXPECT_EQ(collated("ไก่ แมว"), "กไ มแว");
+  EXPECT_EQ(collated("Harry"), "harry");
+  // So "เกม" files with the ก words, after "กา", before "ขา".
+  EXPECT_LT(collated("กา"), collated("เกม"));
+  EXPECT_LT(collated("เกม"), collated("ขา"));
+  // A leading vowel with no consonant after it stays where it is.
+  EXPECT_EQ(collated("เ"), "เ");
+}
+
+TEST(LibraryCollate, WorksInPlace) {
+  std::string text = library::fold("เมฆ");
+  library::collate(text, text.data());
+  EXPECT_EQ(text, "มเฆ");
+}
+
+TEST(LibraryCollate, GroupInitialIsTheConsonantAfterALeadingVowel) {
+  EXPECT_EQ(library::foldedGroupInitial(library::fold("เด็กชาย")), 0x0E14u);  // ด
+  EXPECT_EQ(library::foldedGroupInitial(library::fold("ไก่")), 0x0E01u);      // ก
+}
+
+TEST(LibraryCollate, AuthorAndSurnameKeysUseThaiOrder) {
+  EXPECT_EQ(library::authorKey("เสกสรร"), collated("เสกสรร").substr(0, library::AUTHOR_KEY_MAX_BYTES));
+  EXPECT_EQ(library::surnameKey("แดน บุรี"), collated("บุรี แดน"));
+}
+
 TEST(LibraryFold, GroupInitialUsesUnicodeLettersAndBucketsNumbers) {
   EXPECT_EQ(library::foldedGroupInitial(fold("Alpha")), static_cast<uint32_t>('a'));
   EXPECT_EQ(library::foldedGroupInitial(fold("\u05E9\u05DC\u05D5\u05DD")), 0x05E9u);

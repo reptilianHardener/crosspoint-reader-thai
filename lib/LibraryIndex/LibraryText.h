@@ -53,6 +53,12 @@ std::string fold(std::string_view text);
 // A series position as shown to the reader: "2" for a whole volume, "2.5" otherwise.
 std::string seriesPositionText(float position);
 
+// Sort order for an already-folded text, written to out (same length as folded).
+// Thai dictionaries file a word under its first consonant, not under a leading
+// vowel (เ แ โ ใ ไ), so each leading vowel is moved after the consonant that
+// follows it. Only sorting and grouping use this; search keeps the fold.
+void collate(std::string_view folded, char* out);  // out may be folded's own buffer
+
 // First letter of an already-folded sort key, or 0 when the key starts with a
 // number/non-letter. The Library renders 0 as its shared '#' group.
 uint32_t foldedGroupInitial(std::string_view folded);

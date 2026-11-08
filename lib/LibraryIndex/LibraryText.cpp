@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 
 namespace library {
 
@@ -242,8 +243,43 @@ std::string seriesPositionText(const float position) {
   return text;
 }
 
+namespace {
+bool isThaiLeadingVowel(const uint32_t cp) { return cp >= 0x0E40 && cp <= 0x0E44; }
+bool isThaiConsonant(const uint32_t cp) { return cp >= 0x0E01 && cp <= 0x0E2E; }
+// Thai code points are three bytes in UTF-8.
+constexpr size_t THAI_BYTES = 3;
+
+uint32_t thaiAt(const std::string_view text, const size_t i) {
+  if (i + THAI_BYTES > text.size()) return 0;
+  const auto* p = reinterpret_cast<const unsigned char*>(text.data() + i);
+  if (p[0] != 0xE0 || (p[1] != 0xB8 && p[1] != 0xB9)) return 0;
+  return 0x0E00 + ((p[1] - 0xB8) << 6) + (p[2] & 0x3F);
+}
+}  // namespace
+
+void collate(const std::string_view folded, char* out) {
+  size_t i = 0;
+  while (i < folded.size()) {
+    if (isThaiLeadingVowel(thaiAt(folded, i)) && isThaiConsonant(thaiAt(folded, i + THAI_BYTES))) {
+      // Through a copy: out may be folded's own buffer.
+      char vowel[THAI_BYTES];
+      memcpy(vowel, folded.data() + i, THAI_BYTES);
+      memmove(out + i, folded.data() + i + THAI_BYTES, THAI_BYTES);
+      memcpy(out + i + THAI_BYTES, vowel, THAI_BYTES);
+      i += 2 * THAI_BYTES;
+    } else {
+      out[i] = folded[i];
+      ++i;
+    }
+  }
+}
+
 uint32_t foldedGroupInitial(const std::string_view folded) {
   if (folded.empty()) return 0;
+  // A word with a leading Thai vowel belongs under the consonant after it.
+  if (isThaiLeadingVowel(thaiAt(folded, 0)) && isThaiConsonant(thaiAt(folded, THAI_BYTES))) {
+    return thaiAt(folded, THAI_BYTES);
+  }
   const auto* cursor = reinterpret_cast<const unsigned char*>(folded.data());
   const uint32_t cp = utf8NextCodepoint(&cursor);
   return isUnicodeLetter(cp) ? cp : 0;
@@ -349,6 +385,7 @@ std::string authorKey(const std::string_view author) {
     if (!key.empty()) key.push_back(' ');
     key.append(tokens[i]);
   }
+  collate(key, key.data());
   // Truncate on bytes, not on a token boundary. Sorting puts a short forename
   // first, so a whole-token cut would reduce "Wollstonecraft, Mary" to the key
   // "alex" and merge every Alex in the library; the byte cut keeps
@@ -424,8 +461,9 @@ bool matchesQuery(const std::string_view haystack, const std::string_view needle
 }
 
 std::string surnameKey(const std::string_view displayAuthor) {
-  const std::string folded = fold(displayAuthor);
+  std::string folded = fold(displayAuthor);
   if (folded.empty()) return {};
+  collate(folded, folded.data());
 
   // fold() defers its spaces, so the result has no leading, trailing or repeated
   // space. The last one is therefore the separator before the surname, and a name
