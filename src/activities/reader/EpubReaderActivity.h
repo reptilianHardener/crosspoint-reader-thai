@@ -210,6 +210,13 @@ class EpubReaderActivity final : public ReaderActivity {
   std::string moreRowValue(int row) const;
   void activateMoreRow(int row);
   void openFootnoteSelect(bool reopenMenuOnCancel);
+  // Shows a footnote link's note in a popup; other links, and notes that cannot be read,
+  // jump to their target as before.
+  void openLink(const std::string& href);
+  bool isNoteLink(const std::string& href) const;
+  // The note's HTML, balanced and with tag names only, ready for the chapter parser.
+  bool readNote(const std::string& href, std::string& html) const;
+  static constexpr size_t MAX_NOTE_MARK_CODEPOINTS = 4;
   void openDictionaryWordSelect();
   // Selection to restore when returning from a dictionary lookup.
   ClipSelectionActivity::Selection pendingLookupSelection;
