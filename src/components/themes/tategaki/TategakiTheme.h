@@ -53,6 +53,7 @@ class TategakiTheme : public Lyra3CoversTheme {
   bool homeBookColumns(const GfxRenderer& renderer, Rect tile, int count, HomeBookColumns& columns) const override;
   bool homeRowNavigation() const override { return true; }
   void onHomeEnter() const override { cardBookIndex = 0; }
+  bool homeShowsSeries() const override { return true; }
   bool readerMenuSheet(ReaderMenuSheetStyle& style) const override;
   bool verticalTabs() const override { return true; }
 

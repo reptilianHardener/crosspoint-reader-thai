@@ -32,9 +32,9 @@ constexpr int kSectionGap = 10;
 constexpr int kTitleColumns = 2;  // one without a cover, where the card is compact
 constexpr int kColumnGap = 6;
 constexpr int kBarWidth = 10;
-constexpr int kRuleGap = 12;
+constexpr int kRuleGap = 10;
 constexpr int kSpineCount = 5;
-constexpr int kSpineWidth = 44;
+constexpr int kSpineWidth = 40;
 constexpr int kSpineGap = 6;
 constexpr int kInfoGap = 10;  // between the author and progress columns
 constexpr int kSpinePadding = 10;
@@ -51,6 +51,8 @@ constexpr int kMenuBottomGap = 6;
 struct TategakiLayout {
   int top = 0;
   int bottom = 0;
+  int seriesX = 0;  // left edge of the series column, right of the title
+  int seriesWidth = 0;
   int titleRight = 0;  // right edge of the first (rightmost) title column
   int titleColumnWidth = 0;
   int titleColumns = 0;
@@ -71,7 +73,10 @@ TategakiLayout computeLayout(const GfxRenderer& renderer, const Rect rect, const
   l.top = rect.y + 8;
   l.bottom = std::min(rect.y + rect.height, bottomLimit) - 4;
   l.titleColumnWidth = renderer.getLineHeight(kTitleFont);
-  l.titleRight = rect.x + rect.width - kSidePadding;
+  const int cardRight = rect.x + rect.width - kSidePadding;
+  l.seriesWidth = renderer.getLineHeight(SMALL_FONT_ID);
+  l.seriesX = cardRight - l.seriesWidth;
+  l.titleRight = l.seriesX - kColumnGap;
   l.titleColumns = showCover ? kTitleColumns : 1;
   const int titleLeft = l.titleRight - l.titleColumns * l.titleColumnWidth - (l.titleColumns - 1) * kColumnGap;
   l.authorWidth = renderer.getLineHeight(SMALL_FONT_ID);
@@ -81,13 +86,13 @@ TategakiLayout computeLayout(const GfxRenderer& renderer, const Rect rect, const
   l.ruleX = l.progressX - kRuleGap;
   l.labelRight = l.ruleX - kRuleGap;
   l.spinesRight = l.labelRight - renderer.getLineHeight(SMALL_FONT_ID) - kRuleGap;
-  // The cover spans the title, author and progress columns and takes at most 2/5 of the height.
-  const int coverW = l.titleRight - l.progressX;
+  // The cover spans the series, title, author and progress columns and takes at most 2/5 of the height.
+  const int coverW = cardRight - l.progressX;
   const int coverH = std::min(coverW * 3 / 2, (l.bottom - l.top) * 2 / 5);
   l.textTop = l.top;
   if (showCover && coverH >= kMinCoverHeight) {
     const int width = std::min(coverW, coverH * 2 / 3 + 1);
-    l.cover = Rect{l.titleRight - width, l.top, width, coverH};
+    l.cover = Rect{cardRight - width, l.top, width, coverH};
     l.textTop = l.top + coverH + kCoverGap;
   }
   return l;
@@ -245,6 +250,12 @@ void drawVerticalCentered(const GfxRenderer& renderer, const int fontId, const i
 void drawCurrentBook(const GfxRenderer& renderer, const TategakiLayout& l, const RecentBook& book) {
   if (l.cover.height > 0) drawCover(renderer, book, l.cover);
   const int height = l.bottom - l.textTop;
+  // The series heads the card; a book outside a series shows its title there.
+  const std::string& heading = book.series.empty() ? book.title : book.series;
+  if (!heading.empty()) {
+    const std::string series = renderer.truncatedText(SMALL_FONT_ID, heading.c_str(), height);
+    drawVerticalCentered(renderer, SMALL_FONT_ID, l.seriesX, l.seriesWidth, l.textTop, series.c_str(), true);
+  }
   const auto columns =
       splitColumns(renderer, kTitleFont, book.title.c_str(), height, l.titleColumns, EpdFontFamily::BOLD);
   int columnRight = l.titleRight;

@@ -16,6 +16,9 @@ void RecentBooksStore::toJson(JsonDocument& doc) const {
     if (book.progressPercent > 0) {
       obj["progressPercent"] = book.progressPercent;
     }
+    if (book.seriesKnown) {
+      obj["series"] = book.series;
+    }
   }
 }
 
@@ -33,6 +36,8 @@ bool RecentBooksStore::fromJson(JsonVariantConst doc) {
     book.author = obj["author"] | "";
     book.coverBmpPath = obj["coverBmpPath"] | "";
     book.progressPercent = std::min<uint8_t>(obj["progressPercent"] | static_cast<uint8_t>(0), 100);
+    book.seriesKnown = obj["series"].is<const char*>();
+    if (book.seriesKnown) book.series = obj["series"].as<const char*>();
     recentBooks.push_back(book);
   }
 
@@ -54,6 +59,11 @@ void RecentBooksStore::addBook(const std::string& path, const std::string& title
     // largest free block once the reader exits.
     std::rotate(recentBooks.begin(), it, it + 1);
     RecentBook& book = recentBooks.front();
+    // New metadata may mean a replaced file, so its series is looked up again.
+    if (book.title != title || book.author != author) {
+      book.seriesKnown = false;
+      book.series.clear();
+    }
     if (book.title != title) book.title = title;
     if (book.author != author) book.author = author;
     if (book.coverBmpPath != coverBmpPath) book.coverBmpPath = coverBmpPath;
@@ -73,6 +83,10 @@ void RecentBooksStore::updateBook(const std::string& path, const std::string& ti
       std::find_if(recentBooks.begin(), recentBooks.end(), [&](const RecentBook& book) { return book.path == path; });
   if (it != recentBooks.end()) {
     RecentBook& book = *it;
+    if (book.title != title || book.author != author) {
+      book.seriesKnown = false;
+      book.series.clear();
+    }
     book.title = title;
     book.author = author;
     book.coverBmpPath = coverBmpPath;
@@ -89,6 +103,15 @@ void RecentBooksStore::updateProgress(const std::string& path, const uint8_t pro
   }
   it->progressPercent = clamped;
   saveToFile();
+}
+
+bool RecentBooksStore::setSeries(const std::string& path, const std::string& series) {
+  auto it =
+      std::find_if(recentBooks.begin(), recentBooks.end(), [&](const RecentBook& book) { return book.path == path; });
+  if (it == recentBooks.end() || (it->seriesKnown && it->series == series)) return false;
+  it->series = series;
+  it->seriesKnown = true;
+  return true;
 }
 
 bool RecentBooksStore::removeByPath(const std::string& path) {

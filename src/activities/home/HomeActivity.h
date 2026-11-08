@@ -87,6 +87,7 @@ class HomeActivity final : public Activity {
   void loadRecentCovers(int coverHeight);
   void fillCoverGridFromLibrary();
   void resolveGridCoverPaths();
+  void resolveSeries();
   void loadGridCover(RecentBook& book, int height, bool& showingLoading, Rect& popupRect);
 
  public:

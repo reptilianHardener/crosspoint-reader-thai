@@ -57,6 +57,27 @@ void HomeActivity::loadRecentBooks(int maxBooks) {
   }
 }
 
+// Looks up each shown EPUB's series once; a result, even "none", is kept in the
+// recent list. Runs here rather than in the reader, so no book's buffers are held.
+void HomeActivity::resolveSeries() {
+  bool changed = false;
+  for (auto& book : recentBooks) {
+    if (book.seriesKnown || !FsHelpers::hasEpubExtension(book.path)) continue;
+    auto epub = makeUniqueNoThrow<Epub>(book.path, "/.crosspoint");
+    auto metadata = makeUniqueNoThrow<Epub::SyncMetadata>();
+    if (!epub || !metadata) {
+      LOG_ERR("HOME", "OOM: series lookup");
+      break;
+    }
+    // A failed read may be a passing memory or SD error, so the book is tried again next time.
+    if (!epub->loadSyncMetadata(*metadata)) continue;
+    book.series = metadata->series;
+    book.seriesKnown = true;
+    changed |= RECENT_BOOKS.setSeries(book.path, book.series);
+  }
+  if (changed) RECENT_BOOKS.saveToFile();
+}
+
 void HomeActivity::fillCoverGridFromLibrary() {
   if (recentBooks.size() >= CoverGridHomeUi::MAX_BOOKS) return;
   // Keep the index and record together off the task stack; reuse for every row.
@@ -242,6 +263,7 @@ void HomeActivity::onEnter() {
     if (!coverGridUi) LOG_ERR("HOME", "OOM: cover grid UI; using standard home");
   }
   loadRecentBooks(coverGridUi ? CoverGridHomeUi::MAX_BOOKS : metrics.homeRecentBooksCount);
+  if (GUI.homeShowsSeries()) resolveSeries();
   hasContinueReading = !recentBooks.empty();
   if (coverGridUi) {
     fillCoverGridFromLibrary();
