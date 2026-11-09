@@ -540,16 +540,20 @@ bool HomeActivity::handleRowButtons() {
     return true;
   }
 
-  // The side buttons step through every item in order, as on the list home: the books
-  // shown, then the menu, wrapping at either end. Holding one repeats.
+  // The side buttons step through every item, as on the list home, in screen order: along
+  // the books from left to right (a theme may run them right to left), then along the menu,
+  // wrapping at either end. Next moves rightward. Holding one repeats.
   bool stepped = false;
   const auto step = [&](const int dir) {
     const int total = shownBooks + menuCount;
+    // Screen position: 0 is the leftmost book shown, shownBooks the first menu item.
+    const auto bookPosition = [&](const int book) { return columns.rightToLeft ? shownBooks - 1 - book : book; };
     // With no books drawn, a selection on a book steps from the menu's edge.
-    const int flat = inBooks ? (shownBooks > 0 ? std::min(selectorIndex, shownBooks - 1) : (dir > 0 ? -1 : 0))
-                             : shownBooks + menuIndex;
-    const int next = (flat + dir + total) % total;
-    selectorIndex = next < shownBooks ? next : bookCount + (next - shownBooks);
+    const int position =
+        inBooks ? (shownBooks > 0 ? bookPosition(std::min(selectorIndex, shownBooks - 1)) : (dir > 0 ? -1 : 0))
+                : shownBooks + menuIndex;
+    const int next = (position + dir + total) % total;
+    selectorIndex = next < shownBooks ? bookPosition(next) : bookCount + (next - shownBooks);
     stepped = true;
     requestUpdate();
   };
