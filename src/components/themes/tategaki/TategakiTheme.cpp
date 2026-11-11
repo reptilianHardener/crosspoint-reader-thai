@@ -43,11 +43,17 @@ constexpr int kMarkSize = 14;
 constexpr int kSelectionInset = 4;
 constexpr int kCoverGap = 12;
 constexpr int kMinCoverHeight = 60;
-constexpr int kFrameWidth = 2;
 constexpr int kMenuHeight = 68;
-constexpr int kMenuGap = 10;
+// Each menu icon sits in an unframed square, the squares spread edge to edge, and a rule under
+// the selected one marks it: the Cover Grid home's tab bar, with its 4 px top and 8 px bottom
+// insets inside the row.
+constexpr int kMenuSlotInset = 4;  // row top to the square
+constexpr int kMenuRuleInset = 8;  // row bottom to the square, where the rule sits
+constexpr int kMenuSlot = kMenuHeight - kMenuSlotInset - kMenuRuleInset;
+constexpr int kMenuRule = 2;
 constexpr int kIconSize = 32;
-constexpr int kMenuBottomGap = 6;
+constexpr int kMenuBottomGap = 6;        // above the button hints
+constexpr int kMenuBottomGapTouch = 16;  // above the screen edge when there are no hints
 
 struct TategakiLayout {
   int top = 0;
@@ -105,12 +111,22 @@ Rect tileRect(const GfxRenderer& renderer) {
   return Rect{content.x, metrics.homeTopPadding, content.width, metrics.homeCoverTileHeight};
 }
 
-// Top of the menu row: under the tile, pulled up when the screen is short (landscape).
-int menuTop(const GfxRenderer& renderer) {
+// Where the menu row would sit above a hint row: under the tile, pulled up when the screen is
+// short (landscape). The card above ends kSectionGap higher on every board, so its covers (and
+// the thumbnails made for them) keep one size whether or not the row itself moves.
+int cardBottom(const GfxRenderer& renderer) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int belowTile = metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.homeMenuTopOffset;
   const int aboveHints = renderer.getScreenHeight() - metrics.buttonHintsHeight - kMenuBottomGap - kMenuHeight;
-  return std::min(belowTile, aboveHints);
+  return std::min(belowTile, aboveHints) - kSectionGap;
+}
+
+// Top of the menu row. A board without a hint row (touch) has no buttons drawn below, so the
+// row sits at the bottom of the screen instead, as the Cover Grid home's tab bar does.
+int menuTop(const GfxRenderer& renderer) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  if (metrics.buttonHintsHeight == 0) return renderer.getScreenHeight() - kMenuBottomGapTouch - kMenuHeight;
+  return cardBottom(renderer) + kSectionGap;
 }
 
 // Thumbs are whole covers scaled to fill a (0.6h, h) box; made for the slot's height, a
@@ -408,13 +424,13 @@ void drawSpine(const GfxRenderer& renderer, const Rect s, const RecentBook& book
 }  // namespace
 
 int TategakiTheme::homeCoverThumbHeight(const GfxRenderer& renderer) const {
-  const TategakiLayout l = computeLayout(renderer, tileRect(renderer), menuTop(renderer) - kSectionGap, showCover);
+  const TategakiLayout l = computeLayout(renderer, tileRect(renderer), cardBottom(renderer), showCover);
   return l.cover.height > 0 ? thumbHeightFor(l.cover) : -1;
 }
 
 bool TategakiTheme::homeBookColumns(const GfxRenderer& renderer, const Rect tile, const int count,
                                     HomeBookColumns& columns) const {
-  const TategakiLayout l = computeLayout(renderer, tile, menuTop(renderer) - kSectionGap, showCover);
+  const TategakiLayout l = computeLayout(renderer, tile, cardBottom(renderer), showCover);
   columns.count = spineCount(l, tile, count);
   const Rect leftmost = spineRect(l, std::max(1, columns.count) - 1);
   columns.left = leftmost.x;
@@ -436,7 +452,7 @@ void TategakiTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
   (void)coverBufferStored;
   (void)bufferRestored;
   (void)storeCoverBuffer;
-  const TategakiLayout l = computeLayout(renderer, rect, menuTop(renderer) - kSectionGap, showCover);
+  const TategakiLayout l = computeLayout(renderer, rect, cardBottom(renderer), showCover);
   const int count = spineCount(l, rect, static_cast<int>(recentBooks.size()));
 
   renderer.fillRect(l.ruleX, l.top, 2, l.bottom - l.top, true);
@@ -473,13 +489,14 @@ void TategakiTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
 
 bool TategakiTheme::homeMenuGrid(const GfxRenderer& renderer, const Rect rect, const int buttonCount,
                                  HomeMenuGrid& grid) const {
-  const int width = rect.width - 2 * kSidePadding;
+  const int width = std::max(0, rect.width - 2 * kSidePadding);
   const int columns = std::max(1, buttonCount);
   grid.columns = columns;
   grid.left = rect.x + kSidePadding;
-  grid.top = std::min(rect.y, menuTop(renderer));
-  grid.colStep = (width + kMenuGap) / columns;
-  grid.tileWidth = grid.colStep - kMenuGap;
+  grid.top = menuTop(renderer);  // the theme places the row; rect supplies x and width
+  grid.tileWidth = std::min(kMenuSlot, width);
+  // The first slot starts at the left edge and the last ends at the right edge.
+  grid.colStep = columns > 1 ? (width - grid.tileWidth) / (columns - 1) : std::max(1, width);
   grid.tileHeight = kMenuHeight;
   return true;
 }
@@ -490,25 +507,22 @@ void TategakiTheme::drawButtonMenu(GfxRenderer& renderer, const Rect rect, const
   HomeMenuGrid grid;
   homeMenuGrid(renderer, rect, buttonCount, grid);
 
-  // Icons only, as on the Cover Grid home.
+  // Icons spread along the row, the selected one underlined, as on the Cover Grid home.
   for (int i = 0; i < buttonCount; i++) {
     const int x = grid.left + i * grid.colStep;
-    const bool selected = selectedIndex == i;
-    if (selected) {
-      renderer.fillRect(x, grid.top, grid.tileWidth, grid.tileHeight, true);
-    } else {
-      renderer.drawRect(x, grid.top, grid.tileWidth, grid.tileHeight, kFrameWidth, true);
-    }
+    const int slotTop = grid.top + kMenuSlotInset;
     const uint8_t* icon = rowIcon != nullptr ? iconFor(rowIcon(i)) : nullptr;
     if (icon != nullptr) {
-      renderer.drawIcon(icon, x + (grid.tileWidth - kIconSize) / 2, grid.top + (grid.tileHeight - kIconSize) / 2,
-                        kIconSize, !selected);
+      renderer.drawIcon(icon, x + (grid.tileWidth - kIconSize) / 2, slotTop + (kMenuSlot - kIconSize) / 2, kIconSize);
     } else if (buttonLabel != nullptr) {
-      // An item without an icon keeps its label, so no tile is left blank.
-      const std::string label = renderer.truncatedText(SMALL_FONT_ID, buttonLabel(i).c_str(), grid.tileWidth - 6);
+      // An item without an icon keeps its label, so no slot is left blank.
+      const std::string label = renderer.truncatedText(SMALL_FONT_ID, buttonLabel(i).c_str(), grid.tileWidth);
       const int labelX = x + (grid.tileWidth - renderer.getTextWidth(SMALL_FONT_ID, label.c_str())) / 2;
-      const int labelY = grid.top + (grid.tileHeight - renderer.getLineHeight(SMALL_FONT_ID)) / 2;
-      renderer.drawText(SMALL_FONT_ID, labelX, labelY, label.c_str(), !selected);
+      const int labelY = slotTop + (kMenuSlot - renderer.getLineHeight(SMALL_FONT_ID)) / 2;
+      renderer.drawText(SMALL_FONT_ID, labelX, labelY, label.c_str(), true);
+    }
+    if (selectedIndex == i) {
+      renderer.fillRect(x, grid.top + grid.tileHeight - kMenuRuleInset - kMenuRule, grid.tileWidth, kMenuRule, true);
     }
   }
 }
