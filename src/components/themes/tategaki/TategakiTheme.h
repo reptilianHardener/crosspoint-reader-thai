@@ -6,7 +6,7 @@ class GfxRenderer;
 
 // Square, right-to-left styling after vertical Japanese print (a tanzaku is the narrow strip
 // a poem is written on): the home screen shows the highlighted book's cover and its title
-// written vertically beside a row of spines, with a row of labelled menu buttons below; tab
+// written vertically beside a row of spines, with a row of icon menu buttons below; tab
 // bars run down the right edge, and the reader menu opens as a sheet of tiles that reads
 // from the right.
 namespace TategakiMetrics {

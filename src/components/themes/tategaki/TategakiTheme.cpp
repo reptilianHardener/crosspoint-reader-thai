@@ -489,9 +489,8 @@ void TategakiTheme::drawButtonMenu(GfxRenderer& renderer, const Rect rect, const
                                    const std::function<UIIcon(int index)>& rowIcon) const {
   HomeMenuGrid grid;
   homeMenuGrid(renderer, rect, buttonCount, grid);
-  const int labelH = renderer.getLineHeight(SMALL_FONT_ID);
-  const int contentH = kIconSize + 4 + labelH;
 
+  // Icons only, as on the Cover Grid home.
   for (int i = 0; i < buttonCount; i++) {
     const int x = grid.left + i * grid.colStep;
     const bool selected = selectedIndex == i;
@@ -500,16 +499,16 @@ void TategakiTheme::drawButtonMenu(GfxRenderer& renderer, const Rect rect, const
     } else {
       renderer.drawRect(x, grid.top, grid.tileWidth, grid.tileHeight, kFrameWidth, true);
     }
-    const int top = grid.top + (grid.tileHeight - contentH) / 2;
-    if (rowIcon != nullptr) {
-      if (const uint8_t* icon = iconFor(rowIcon(i))) {
-        renderer.drawIcon(icon, x + (grid.tileWidth - kIconSize) / 2, top, kIconSize, !selected);
-      }
-    }
-    if (buttonLabel != nullptr) {
+    const uint8_t* icon = rowIcon != nullptr ? iconFor(rowIcon(i)) : nullptr;
+    if (icon != nullptr) {
+      renderer.drawIcon(icon, x + (grid.tileWidth - kIconSize) / 2, grid.top + (grid.tileHeight - kIconSize) / 2,
+                        kIconSize, !selected);
+    } else if (buttonLabel != nullptr) {
+      // An item without an icon keeps its label, so no tile is left blank.
       const std::string label = renderer.truncatedText(SMALL_FONT_ID, buttonLabel(i).c_str(), grid.tileWidth - 6);
       const int labelX = x + (grid.tileWidth - renderer.getTextWidth(SMALL_FONT_ID, label.c_str())) / 2;
-      renderer.drawText(SMALL_FONT_ID, labelX, top + kIconSize + 4, label.c_str(), !selected);
+      const int labelY = grid.top + (grid.tileHeight - renderer.getLineHeight(SMALL_FONT_ID)) / 2;
+      renderer.drawText(SMALL_FONT_ID, labelX, labelY, label.c_str(), !selected);
     }
   }
 }
