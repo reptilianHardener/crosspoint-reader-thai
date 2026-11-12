@@ -15,6 +15,7 @@ class ThaiWordBreaker {
   // safe Thai cluster boundaries as a last resort. hintIndexes are positions where
   // the source had a zero-width space or soft hyphen; one counts as a break only
   // inside text the dictionary does not know, and only at a cluster boundary.
+  // No break is ever returned inside a user dictionary word.
   static std::vector<size_t> breakIndexes(const std::vector<CodepointInfo>& cps, bool includeFallback,
                                           const std::vector<size_t>* hintIndexes = nullptr);
 
@@ -22,6 +23,14 @@ class ThaiWordBreaker {
   // Words are stored as codepoint sequences for O(1) per-character matching.
   // Maximum 200 words to stay within ESP32-C3 memory constraints (~12 KB).
   static void setUserDictionary(const std::vector<std::string>& words);
+
+  // True for a usable user word: at least two codepoints, all Thai, starting and ending where a
+  // line may break. Other entries are dropped when the dictionary loads.
+  static bool isValidUserWord(const std::string& word);
+
+  // Byte offset in text[0, len) of the earliest user word that starts there but runs past len,
+  // or len when there is none. Cutting text at or before it cannot split that word.
+  static size_t userWordCutLimit(const char* text, size_t len);
 
   // Returns true if a user dictionary has been loaded.
   static bool hasUserDictionary();

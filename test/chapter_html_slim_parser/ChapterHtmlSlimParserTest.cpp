@@ -21,6 +21,7 @@
 
 #define class struct
 #define private public
+#include "Epub/hyphenation/ThaiWordBreaker.h"
 #include "Epub/parsers/ChapterHtmlSlimParser.h"
 #undef private
 #undef class
@@ -357,6 +358,38 @@ TEST_F(ChapterHtmlSlimParserTest, OverlongThaiRunIsCutAtAWordBoundary) {
   std::filesystem::remove(filepath);
   const std::vector<std::vector<std::string>> expected{std::vector<std::string>(8, "เด็กหญิง"), {"สมมติ"}};
   EXPECT_EQ(lines, expected);
+}
+
+TEST_F(ChapterHtmlSlimParserTest, OverlongThaiRunCutKeepsAUserWordWhole) {
+  // The same run as above, with the user word หญิงสมมติ crossing the buffer end. The cut after the
+  // eighth เด็กหญิง would split it, so the cut moves back to before its หญิง.
+  ThaiWordBreaker::setUserDictionary({"หญิงสมมติ"});
+  std::string run;
+  for (int i = 0; i < 8; ++i) run += "เด็กหญิง";
+  run += "สมมติ";
+  const std::string html = "<html><body><p>" + run + "</p></body></html>";
+  const auto tempDir = std::filesystem::temp_directory_path();
+  filepath = (tempDir / "crosspoint-thai-overlong-user-word.xhtml").string();
+  {
+    HalFile file;
+    ASSERT_TRUE(file.open(filepath.c_str(), "wb"));
+    ASSERT_EQ(file.write(html.data(), html.size()), html.size());
+  }
+  parser.viewportWidth = 400;
+  parser.paragraphIndentSpaces = 0;
+  std::vector<std::string> words;
+  parser.completePageFn = [&](std::unique_ptr<Page> page, auto, auto, auto) {
+    for (const auto& element : page->elements) {
+      if (element->getTag() != TAG_PageLine) continue;
+      const auto& block = *static_cast<const PageLine&>(*element).getBlock();
+      for (uint16_t i = 0; i < block.wordCount(); ++i) words.emplace_back(block.wordText(i));
+    }
+  };
+  EXPECT_TRUE(parser.parseAndBuildPages());
+  ThaiWordBreaker::setUserDictionary({});
+  std::filesystem::remove(filepath);
+  ASSERT_FALSE(words.empty());
+  EXPECT_EQ(words.back(), "หญิงสมมติ");
 }
 
 TEST_F(ChapterHtmlSlimParserTest, SpaceBeforeThaiMaiYamokDoesNotBreak) {

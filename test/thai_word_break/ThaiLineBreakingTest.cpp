@@ -1,6 +1,7 @@
 #include <Epub/ParsedText.h>
 #include <Epub/blocks/TextBlock.h>
 #include <Epub/hyphenation/Hyphenator.h>
+#include <Epub/hyphenation/ThaiWordBreaker.h>
 #include <GfxRenderer.h>
 #include <gtest/gtest.h>
 
@@ -200,5 +201,16 @@ TEST(ThaiLineBreaking, PaiyannoiStaysWithTheWordItAbbreviates) {
     EXPECT_NE(line.words.front().rfind("ฯ", 0), 0u) << "line starts with Paiyannoi";
   }
   const std::vector<std::vector<std::string>> expected{{"ก", "กรุง"}, {"เทพฯ"}};
+  EXPECT_EQ(wordsOf(lines), expected);
+}
+
+TEST(ThaiLineBreaking, UserWordWrapsWhole) {
+  Hyphenator::setPreferredLanguage("th");
+  // ตากลมกิน is ตาก|ลม|กิน by the dictionary. With กลม as a user word it is ตา|กลม|กิน, and
+  // in a 24 px measure กลม moves down whole instead of being cut after ก.
+  ThaiWordBreaker::setUserDictionary({"กลม"});
+  const auto lines = layout({{"ตากลมกิน"}}, true, 24);
+  ThaiWordBreaker::setUserDictionary({});
+  const std::vector<std::vector<std::string>> expected{{"ตา"}, {"กลม"}, {"กิน"}};
   EXPECT_EQ(wordsOf(lines), expected);
 }
