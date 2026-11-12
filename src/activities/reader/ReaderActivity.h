@@ -8,6 +8,7 @@
 #include "EndOfBookOptions.h"
 #include "ReaderSession.h"
 #include "activities/Activity.h"
+#include "util/ReadingSpeed.h"
 
 class ReaderActivity : public Activity {
   friend class ActivityManager;  // turns pages for a Bluetooth remote (ActivityManager::remoteTurn)
@@ -20,6 +21,8 @@ class ReaderActivity : public Activity {
   std::unique_ptr<EndOfBookOptions> endOfBookOptions;
   std::atomic<bool> endOfBookOptionsReady{false};
   ReaderSession readerSession;
+  // Seeded from APP_STATE in onEnter(), copied back in flushReaderSession().
+  ReadingSpeed readingSpeed;
   std::atomic<bool> pageRendered{false};
   bool bookRemembered = false;
   void markPageRendered() { pageRendered.store(true, std::memory_order_release); }
@@ -68,7 +71,7 @@ class ReaderActivity : public Activity {
   bool handleEndOfBookPageTurn(bool prevTriggered, bool nextTriggered);
   void clearEndOfBookOptionsIfNeeded();
   void disableFastInitialRefresh();
-  void notePageTurn(bool forward, bool succeeded);
+  void notePageTurn(bool forward, bool succeeded, bool readerPaced = true);
   void flushReaderSession();
 
  public:

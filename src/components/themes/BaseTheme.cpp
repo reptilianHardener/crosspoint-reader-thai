@@ -26,6 +26,7 @@
 #include "components/icons/cover.h"
 #include "components/icons/headerIcons.h"
 #include "fontIds.h"
+#include "util/ReadingSpeed.h"
 
 void BaseTheme::setCheckboxRow(freeink::ui::ListItem& item, const bool checked) {
   item.value = nullptr;
@@ -827,7 +828,8 @@ void BaseTheme::fillPopupProgress(const GfxRenderer& renderer, const Rect& layou
 
 void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, const int currentPage,
                               const int pageCount, std::string title, const int paddingBottom, const int textYOffset,
-                              const bool fillMargin, const bool isPageBookmarked, const bool pageCountEstimated) {
+                              const bool fillMargin, const bool isPageBookmarked, const bool pageCountEstimated,
+                              const int timeLeftMinutes) {
   auto metrics = UITheme::getInstance().getMetrics();
   int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
   renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
@@ -876,6 +878,17 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
     renderer.drawText(SMALL_FONT_ID, progressX + estimateWidth + estimateSpacing, textY, progressStr);
 
     rightClusterWidth += estimateWidth + estimateSpacing + progressTextWidth;
+  }
+
+  // Time left sits left of the progress text, spaced like the clock.
+  if (sb.showsTimeLeft() && timeLeftMinutes >= 0) {
+    char timeLeftStr[24];
+    formatTimeLeft(timeLeftStr, sizeof(timeLeftStr), timeLeftMinutes, tr(STR_TIME_LEFT_HOURS_MINUTES),
+                   tr(STR_TIME_LEFT_MINUTES));
+    const int timeLeftWidth = renderer.getTextWidth(SMALL_FONT_ID, timeLeftStr);
+    const int gap = rightClusterWidth > 0 ? 10 : 0;
+    renderer.drawText(SMALL_FONT_ID, rightClusterX - rightClusterWidth - gap - timeLeftWidth, textY, timeLeftStr);
+    rightClusterWidth += gap + timeLeftWidth;
   }
 
   // Draw Progress Bar

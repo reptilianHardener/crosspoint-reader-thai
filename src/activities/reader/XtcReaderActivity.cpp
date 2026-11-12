@@ -138,7 +138,15 @@ void XtcReaderActivity::renderStatusBarOverlay(GfxRenderer& renderer, const Stat
   const int displayPage = static_cast<int>(currentPage) + 1;
   const float progress = pageCount > 0 ? (static_cast<float>(displayPage) * 100.0f) / pageCount : 0.0f;
   const auto pageInfo = getStatusBarInfo();
-  GUI.drawStatusBar(renderer, progress, pageInfo.currentPage, pageInfo.pageCount, pageInfo.title, paddingBottom);
+  // XTC page counts are exact for both the chapter and the book; the current page counts as unread.
+  int timeLeftMinutes = -1;
+  if (sb.timeLeftMode == CrossPointSettings::TIME_LEFT_CHAPTER) {
+    timeLeftMinutes = readingSpeed.minutesFor(static_cast<float>(pageInfo.pageCount - pageInfo.currentPage + 1));
+  } else if (sb.timeLeftMode == CrossPointSettings::TIME_LEFT_BOOK) {
+    timeLeftMinutes = readingSpeed.minutesFor(static_cast<float>(pageCount - displayPage + 1));
+  }
+  GUI.drawStatusBar(renderer, progress, pageInfo.currentPage, pageInfo.pageCount, pageInfo.title, paddingBottom, 0,
+                    true, false, false, timeLeftMinutes);
 }
 
 void XtcReaderActivity::renderPage() {
