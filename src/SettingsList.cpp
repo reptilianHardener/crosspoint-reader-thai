@@ -80,6 +80,9 @@ void forEachBaseSetting(SettingVisitor visit, void* context) {
   emit(SettingInfo::StaticEnum(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacing, LINE_SPACING_IDS,
                                "lineHeight", StrId::STR_CAT_READER)
            .withTextSettings());
+  emit(SettingInfo::StaticEnum(StrId::STR_SCRIPT_LINE_SPACING, &CrossPointSettings::scriptLineSpacing,
+                               SCRIPT_LINE_SPACING_IDS, "scriptLineSpacing", StrId::STR_CAT_READER)
+           .withTextSettings());
   emit(SettingInfo::Value(StrId::STR_WORD_SPACING, &CrossPointSettings::wordSpacing,
                           {CrossPointSettings::WORD_SPACING_MIN, CrossPointSettings::WORD_SPACING_MAX,
                            CrossPointSettings::WORD_SPACING_STEP},

@@ -332,6 +332,9 @@ struct EpubReaderActivity {
   int currentSpineIndex = 0, buildViewportWidth = 480, buildViewportHeight = 800;
   bool verticalLayout = false;
   int pageOriginX(int marginLeft, int) const { return marginLeft; }
+  uint32_t clippingLayoutSignature() const {
+    return readerRenderSpecSignature(SETTINGS.readerRenderSpec(buildViewportWidth, buildViewportHeight));
+  }
   int clippingAtPoint(const Page&, int, int) const;
   void drawClippingHighlights(const Page&, int, int, int) const;
 };

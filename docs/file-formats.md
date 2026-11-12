@@ -148,7 +148,8 @@ page count:
   clear the content after them. It is at most 1 (usually below 1) in Japanese books and 1 otherwise.
 
 All four are part of the cache key. In Thai and Japanese books `lineCompression`
-is the Line Spacing multiplier times a script factor, so the default spacing
+is the Line Spacing multiplier times the Thai/JP Line Spacing multiplier times a
+script factor, so the default spacing
 keeps the script's own line pitch: the font's line height for Thai, 1.45 times a
 kanji's width for Japanese. Element positions on a vertical page are
 stored along and across the lines rather than as screen x and y: `xPos` runs

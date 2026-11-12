@@ -32,6 +32,7 @@ class TextSettingsActivity final : public UiTabListActivity {
   // silently confused with a StyleRow of equal value.
   enum class LayoutRow {
     LineSpacing,
+    ScriptLineSpacing,  // Thai/JP Line Spacing: listed only when previewScript_ is Thai or Japanese
     WordSpacing,
     CharacterSpacing,
     ParaSpacing,
@@ -61,12 +62,14 @@ class TextSettingsActivity final : public UiTabListActivity {
   // Repopulates sizes_ (and currentSizeIndex_) from the active family's
   // installed point sizes. Call after any family change.
   void rebuildSizeList();
-  void confirmLayoutRow(int row);
+  // Maps a Layout list index to its row, skipping rows hidden for this preview script.
+  LayoutRow layoutRowAt(int index) const;
+  void confirmLayoutRow(LayoutRow row);
   void confirmStyleRow(int row);
   // Applies the row at the given list index for the active tab (Confirm and tap share this).
   void activateRow(int row);
 
-  std::string layoutValueText(int row) const;
+  std::string layoutValueText(LayoutRow row) const;
   bool styleRowChecked(int row) const;
   // Button-hint label for Confirm at the current ring position.
   const char* confirmLabelText() const;

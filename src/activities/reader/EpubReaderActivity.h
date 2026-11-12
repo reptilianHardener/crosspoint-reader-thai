@@ -118,6 +118,7 @@ class EpubReaderActivity final : public ReaderActivity {
   bool wantsVerticalLayout() const;
   // The script the book's language tag puts it in; decides line pitch and the Text Settings sample.
   LineScript bookLineScript() const;
+  uint32_t clippingLayoutSignature() const;
   ReaderRenderSpec makeRenderSpec(uint16_t viewportWidth, uint16_t viewportHeight) const;
   // Screen position the page's elements are drawn from: its top-left corner, or on a
   // vertical page its top-right one (see PageElement::render).
@@ -195,10 +196,13 @@ class EpubReaderActivity final : public ReaderActivity {
   void handleOverlayInput();
   void renderOverlay();
   std::string currentChapterTitle() const;
-  // Text panel rows (font, size, line spacing, alignment, focus reading).
-  std::string textRowName(int row) const;
-  std::string textRowValue(int row) const;
-  void showTextRowPopup(int row);
+  // Text panel rows in display order. Thai/JP Line Spacing is listed only in Thai and Japanese books.
+  enum class TextRow : uint8_t { Font, FontSize, LineSpacing, ScriptLineSpacing, Alignment, FocusReading, Count };
+  int textRowCount() const;
+  TextRow textRowAt(int index) const;
+  std::string textRowName(TextRow row) const;
+  std::string textRowValue(TextRow row) const;
+  void showTextRowPopup(TextRow row);
   // Persist + re-paginate + re-render under the open panel (live preview).
   void applyTextSettingLive();
   void paintOverlayPopup();

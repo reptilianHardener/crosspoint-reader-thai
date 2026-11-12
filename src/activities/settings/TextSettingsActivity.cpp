@@ -26,8 +26,8 @@ namespace {
 constexpr StrId TAB_NAME_IDS[] = {StrId::STR_FONT, StrId::STR_SIZE, StrId::STR_LAYOUT, StrId::STR_STYLE};
 
 constexpr StrId LAYOUT_ROW_NAME_IDS[] = {
-    StrId::STR_LINE_SPACING,          StrId::STR_WORD_SPACING, StrId::STR_CHARACTER_SPACING, StrId::STR_EXTRA_SPACING,
-    StrId::STR_PARAGRAPH_INDENTATION, StrId::STR_ALIGNMENT,    StrId::STR_SCREEN_MARGIN};
+    StrId::STR_LINE_SPACING,  StrId::STR_SCRIPT_LINE_SPACING,   StrId::STR_WORD_SPACING, StrId::STR_CHARACTER_SPACING,
+    StrId::STR_EXTRA_SPACING, StrId::STR_PARAGRAPH_INDENTATION, StrId::STR_ALIGNMENT,    StrId::STR_SCREEN_MARGIN};
 constexpr StrId STYLE_ROW_NAME_IDS[] = {StrId::STR_FOCUS_READING, StrId::STR_BOLD_TEXT_NO_PREVIEW,
                                         StrId::STR_HYPHENATION_NO_PREVIEW, StrId::STR_EMBEDDED_STYLE_NO_PREVIEW,
                                         StrId::STR_TEXT_AA_NO_PREVIEW};
@@ -126,7 +126,7 @@ void TextSettingsActivity::rebuildRowItems() {
         item.label = sizes_[i].name.c_str();
         break;
       case Tab::Layout:
-        item.label = I18N.get(LAYOUT_ROW_NAME_IDS[i]);
+        item.label = I18N.get(LAYOUT_ROW_NAME_IDS[static_cast<int>(layoutRowAt(i))]);
         break;
       case Tab::Style:
         item.label = I18N.get(STYLE_ROW_NAME_IDS[i]);
@@ -233,7 +233,7 @@ void TextSettingsActivity::buildScreen(UiScreen& screen) {
         rowValues_[i] = (i == currentSizeIndex_) ? tr(STR_SELECTED) : "";
         break;
       case Tab::Layout:
-        rowValues_[i] = layoutValueText(i);
+        rowValues_[i] = layoutValueText(layoutRowAt(i));
         break;
       default:
         break;
@@ -241,7 +241,7 @@ void TextSettingsActivity::buildScreen(UiScreen& screen) {
     rowItems_[i].value = rowValues_[i].empty() ? nullptr : rowValues_[i].c_str();
     if (tab_ == Tab::Style) {
       GUI.setCheckboxRow(rowItems_[i], styleRowChecked(i));
-    } else if (tab_ == Tab::Layout && i == static_cast<int>(LayoutRow::ParaSpacing)) {
+    } else if (tab_ == Tab::Layout && layoutRowAt(i) == LayoutRow::ParaSpacing) {
       GUI.setCheckboxRow(rowItems_[i], SETTINGS.extraParagraphSpacing);
     }
   }
@@ -268,7 +268,7 @@ const char* TextSettingsActivity::confirmLabelText() const {
   }
   switch (tab_) {
     case Tab::Layout:
-      return ringPos() - 1 == static_cast<int>(LayoutRow::ParaSpacing) ? tr(STR_TOGGLE) : tr(STR_SELECT);
+      return layoutRowAt(ringPos() - 1) == LayoutRow::ParaSpacing ? tr(STR_TOGGLE) : tr(STR_SELECT);
     case Tab::Style:
       return tr(STR_TOGGLE);
     default:
@@ -367,7 +367,7 @@ void TextSettingsActivity::activateRow(int row) {
       }
       break;
     case Tab::Layout:
-      confirmLayoutRow(row);
+      confirmLayoutRow(layoutRowAt(row));
       break;
     case Tab::Style:
       confirmStyleRow(row);
@@ -387,8 +387,14 @@ void TextSettingsActivity::applySize(int listIndex) {
   sdFontSystem.ensureLoaded(renderer);
 }
 
-void TextSettingsActivity::confirmLayoutRow(int row) {
-  switch (static_cast<LayoutRow>(row)) {
+TextSettingsActivity::LayoutRow TextSettingsActivity::layoutRowAt(int index) const {
+  static_assert(std::size(LAYOUT_ROW_NAME_IDS) == static_cast<size_t>(LayoutRow::Count));
+  if (previewScript_ == LineScript::Other && index >= static_cast<int>(LayoutRow::ScriptLineSpacing)) ++index;
+  return static_cast<LayoutRow>(index);
+}
+
+void TextSettingsActivity::confirmLayoutRow(const LayoutRow row) {
+  switch (row) {
     case LayoutRow::ParaSpacing:
       SETTINGS.extraParagraphSpacing = !SETTINGS.extraParagraphSpacing;
       SETTINGS.saveToFile();
@@ -410,6 +416,14 @@ void TextSettingsActivity::confirmLayoutRow(int row) {
       optionPopup_.show(StrId::STR_LINE_SPACING, LINE_SPACING_IDS, static_cast<int>(std::size(LINE_SPACING_IDS)),
                         SETTINGS.lineSpacing, [](int idx) {
                           SETTINGS.lineSpacing = static_cast<uint8_t>(idx);
+                          SETTINGS.saveToFile();
+                        });
+      requestUpdate();
+      break;
+    case LayoutRow::ScriptLineSpacing:
+      optionPopup_.show(StrId::STR_SCRIPT_LINE_SPACING, SCRIPT_LINE_SPACING_IDS,
+                        static_cast<int>(std::size(SCRIPT_LINE_SPACING_IDS)), SETTINGS.scriptLineSpacing, [](int idx) {
+                          SETTINGS.scriptLineSpacing = static_cast<uint8_t>(idx);
                           SETTINGS.saveToFile();
                         });
       requestUpdate();
@@ -459,11 +473,16 @@ void TextSettingsActivity::confirmLayoutRow(int row) {
   }
 }
 
-std::string TextSettingsActivity::layoutValueText(int row) const {
-  switch (static_cast<LayoutRow>(row)) {
+std::string TextSettingsActivity::layoutValueText(const LayoutRow row) const {
+  switch (row) {
     case LayoutRow::LineSpacing: {
       const uint8_t v = SETTINGS.lineSpacing;
       return I18N.get(LINE_SPACING_IDS[v < std::size(LINE_SPACING_IDS) ? v : CrossPointSettings::LINE_SPACING_120]);
+    }
+    case LayoutRow::ScriptLineSpacing: {
+      const uint8_t v = SETTINGS.scriptLineSpacing;
+      return I18N.get(
+          SCRIPT_LINE_SPACING_IDS[v < std::size(SCRIPT_LINE_SPACING_IDS) ? v : CrossPointSettings::SCRIPT_SPACING_0]);
     }
     case LayoutRow::ParaIndentation: {
       const int spaces = std::clamp<int>(SETTINGS.paragraphIndentSpaces, 0, 5);
@@ -549,7 +568,7 @@ int TextSettingsActivity::listCount() const {
     case Tab::Size:
       return static_cast<int>(sizes_.size());
     case Tab::Layout:
-      return static_cast<int>(LayoutRow::Count);
+      return static_cast<int>(LayoutRow::Count) - (previewScript_ == LineScript::Other ? 1 : 0);
     case Tab::Style:
       return static_cast<int>(StyleRow::Count);
 
