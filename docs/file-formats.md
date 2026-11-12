@@ -862,3 +862,27 @@ Book moves rename the store and its `.deleted` journal (plus recovery sidecars)
 together. The stored source path is informational and is refreshed on the next
 save; the current file path selects the store. Local book deletion cleans up all
 of these sidecars but preserves the independent `My Clippings.txt` export.
+
+## Reading status (`/.crosspoint/reading_status.bin`)
+
+Written and read by `src/ReadingStatusStore.cpp`. It holds the reading state of
+each book for the Library's **Show** filter. All values are little-endian.
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 4 | Magic `CRST` |
+| 4 | 1 | Version, `1` |
+| 5 | 1 | Flags: bit 0 means older reading history was imported |
+| 6 | 2 | Record count, at most 2000 |
+| 8 | 9 × count | Records sorted by key, no duplicates |
+
+Each record is a uint64 key, `library::clixPathHash` of the book's absolute path
+(the hash the library index stores), and one state byte: 0 Unread, 1 Reading,
+2 Finished. A book with no record is Unread. An Unread record means the user
+marked the book unread, and the history import does not change it.
+
+Changes are written to `reading_status.bin.tmp` and moved into place. A file
+with a bad header, size, or records is treated as empty and unseeded; the next
+write replaces it and keeps the old file as `reading_status.bad`. A file that
+exists but cannot be read is never overwritten. Deleting a book removes its
+record; clearing a book's cache does not.

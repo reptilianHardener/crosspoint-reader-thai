@@ -25,6 +25,8 @@ class ReaderActivity : public Activity {
   ReadingSpeed readingSpeed;
   std::atomic<bool> pageRendered{false};
   bool bookRemembered = false;
+  // The first page shown was the end of the book: it was finished before this session.
+  bool openedAtEnd = false;
   void markPageRendered() { pageRendered.store(true, std::memory_order_release); }
   void rememberBookOnceRendered();
 

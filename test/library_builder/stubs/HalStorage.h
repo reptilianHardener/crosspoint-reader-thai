@@ -239,6 +239,10 @@ class HalStorage {
     return openFileForWrite(module, path.c_str(), file);
   }
   bool remove(const char* path) { return fake::files.erase(path) != 0; }
+  bool replaceFile(const char* tmpPath, const char* path) {
+    remove(path);
+    return rename(tmpPath, path);
+  }
   bool rename(const char* from, const char* to) {
     if (fake::fail(fake::failRename) || !exists(from) || exists(to)) return false;
     std::vector<std::pair<std::string, std::shared_ptr<fake::Node>>> moved;

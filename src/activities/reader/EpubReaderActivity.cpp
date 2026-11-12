@@ -49,6 +49,7 @@
 #include "ReaderLineSpacing.h"
 #include "ReaderToolbarUi.h"
 #include "ReaderUtils.h"
+#include "ReadingStatusStore.h"
 #include "RecentBooksStore.h"
 #include "ScriptLineSpacing.h"
 #include "SdCardFont.h"
@@ -211,6 +212,8 @@ void moveFinishedBookToReadFolder(const std::string& srcPath, const std::string&
   }
 
   RECENT_BOOKS.updatePath(srcPath, dstPath, oldCachePath, cacheMoved ? newCachePath : oldCachePath);
+  // Like recent books, moves made from the web server or WebDAV do not carry the state.
+  ReadingStatusStore::rename(srcPath, dstPath);
   if (APP_STATE.openEpubPath == srcPath) {
     APP_STATE.openEpubPath = dstPath;
     APP_STATE.saveToFile();

@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "ReadingStatusStore.h"
 #include "RecentBooksStore.h"
 #include "activities/UiTabListActivity.h"
 #include "components/OptionPopup.h"
@@ -80,12 +81,12 @@ class LibraryListActivity final : public UiTabListActivity {
   void openBookByPath(const std::string& path);
   void promptRebuildIndex();
   void resetAfterRebuild();
-  // Recent-row long-press menu: open / remove from recents / delete / rebuild.
-  void showRecentBookOptions(int entry);
+  // Book-row hold menu on every tab: open, mark, filter, groups, delete, rebuild.
+  void showBookOptions(int entry);
+  // Series-list hold menu: open the series or change the filter.
+  void showSeriesOptions(int group);
+  void showFilterMenu();
   void promptRemoveRecentBook(const std::string& path, const std::string& title);
-  // Long-press delete owns the gesture where grouping does not apply: the
-  // Recent sort, degraded lists, and any active search result.
-  bool deleteEligible() const;
   // Resolves the row's path and title, then confirms via promptDeleteBookByPath.
   void promptDeleteBook(int entry);
   void promptDeleteBookByPath(const std::string& path, const std::string& title);
@@ -103,7 +104,7 @@ class LibraryListActivity final : public UiTabListActivity {
   // Reading percent of a book in the open series (-1 when unread or unknown).
   int seriesPercentFor(int entry, const library::ClixRecord& record);
   // Entry of the open series' book read most recently, or 0 when none was.
-  int mostRecentSeriesEntry(int firstRow, int count);
+  int mostRecentSeriesEntry(int firstPosition, int count);
   void expandGroup(int groupEntry);
   void restoreExpandedList();
   void selectTab(int index, bool toggleIfActive);
@@ -117,8 +118,28 @@ class LibraryListActivity final : public UiTabListActivity {
   static void rebuildActionTrampoline(const freeink::ui::ActionEvent& event, void* user);
   static void backActionTrampoline(const freeink::ui::ActionEvent& event, void* user);
 
+  // Reading-state filter. It lasts while the Library screen is open and
+  // composes with the search query: a row must pass both.
+  enum class StatusFilter : uint8_t { All, Unread, Reading, Finished };
+  static const char* statusFilterLabel(StatusFilter filter);
+  bool statusFilterActive() const { return statusFilter != StatusFilter::All; }
+  bool filterActive() const { return !query.empty() || statusFilterActive(); }
+  bool matchesStatusFilter(uint64_t pathHash) const;
+  // focusList moves focus to the first row; false keeps it on the tabs.
+  void setStatusFilter(StatusFilter filter, bool focusList = true);
+  void refilter();
+  // Loads the store for the filter and imports older reading history once.
+  bool loadReadingStatus();
+  void seedReadingStatus();
+  void markBook(const std::string& path, ReadingState state);
+  void clampSelection();
+
   // Data
   void applyFilter();
+  // Fills `filtered`; applyFilter() has already cleared the previous result.
+  void filterRows();
+  // Sort row at a position of the status-filtered list (identity without a filter).
+  int rowAtPosition(int position) const;
   int bookRowCount() const;
   int rowFor(int entry) const;
   // fileName, when asked for, is the on-card name the row's icon derives from
@@ -141,6 +162,7 @@ class LibraryListActivity final : public UiTabListActivity {
   void drawPositionReadout() const;
   void drawHoldHelp() const;
   const char* headerTitle() const override;
+  void updateHeaderTitle();
 
   // Ring 0 is the strip; the selected BOOK is ring - 1, with the strip keeping
   // row 0 as the working selection exactly as the pre-ring code did.
@@ -152,10 +174,13 @@ class LibraryListActivity final : public UiTabListActivity {
   // read order; the modification-time list follows with those books skipped.
   // Entries below pinnedCount() are store rows; the rest go through rowFor().
   int pinnedCount() const;
+  // Store book shown at a pinned entry, or nullptr past the pins.
+  const RecentBook* pinnedBook(int entry) const;
   // Re-match the store against the index (chunked scan). Call whenever the
   // index or the store changes.
   void resolvePinned();
-  // Direction-space translation of the matched rows. Call on sort toggles.
+  // Direction-space translation of the matched rows, and which pins pass the
+  // status filter. Call on sort toggles; applyFilter() calls it too.
   void refreshOverlap();
 
   library::LibraryIndexFile index;
@@ -171,12 +196,21 @@ class LibraryListActivity final : public UiTabListActivity {
   // Empty query means no filtering and this owns no allocation, so the ordinary
   // shelf pays nothing proportional to the library for the feature.
   std::string query;
-  // The active query, pre-quoted for the header: headerTitle() returns a
-  // stable c_str the render task can hold across a build.
-  std::string headerSearchTitle;
+  // The active query, pre-quoted, and the status filter name for the header:
+  // headerTitle() returns a stable c_str the render task can hold across a build.
+  std::string headerTitleText;
+  // With a status filter but no query this holds every passing row too, so
+  // its cost is one fallible uint16_t per indexed book while a filter is set.
   std::unique_ptr<uint16_t[]> filtered;
   uint16_t filteredCount = 0;
   bool filterFailed = false;
+  StatusFilter statusFilter = StatusFilter::All;
+  // Loaded only while a status filter is set: 9 bytes per book with a state,
+  // at most ReadingStatusStore::MAX_ENTRIES.
+  ReadingStatusStore readingStatus;
+  // The filter menu opens after the row menu's callback returns, because
+  // OptionPopup cannot replace its callback while that callback runs.
+  bool filterMenuPending = false;
 
   // One start row per group. Grouping is only offered for the sorted <=512-book
   // index, so this fallible allocation is at most 1 KiB and is reused after its
@@ -212,17 +246,21 @@ class LibraryListActivity final : public UiTabListActivity {
   std::vector<std::string> winHeaders;
 
   // Pinned overlay state: per store entry its RecentAsc row (0xFFFF when the
-  // book is not in the index), and the current-direction rows to skip, sorted
-  // ascending, so unpinned entries map to sort rows with a <=10-step walk.
+  // book is not in the index), and the current-direction rows to skip (positions
+  // in `filtered` under a status filter), sorted ascending, so unpinned entries
+  // map to sort rows with a <=10-step walk.
   uint16_t pinnedAscRows[RecentBooksStore::MAX_RECENT_BOOKS] = {};
   uint16_t overlapRows[RecentBooksStore::MAX_RECENT_BOOKS] = {};
   uint8_t pinnedTotal = 0;
   uint8_t overlapCount = 0;
+  // Store indexes of the pins that pass the status filter, in read order.
+  uint8_t pinnedVisible[RecentBooksStore::MAX_RECENT_BOOKS] = {};
+  uint8_t pinnedVisibleCount = 0;
 
   bool lockNextConfirmRelease = false;
   bool lockNextBackRelease = false;
 
-  // Row options modal (Recent long-press menu); owned here so it outlives the
-  // touch event that opened it.
+  // Row options modal (hold menu); owned here so it outlives the touch event
+  // that opened it.
   OptionPopup optionPopup;
 };

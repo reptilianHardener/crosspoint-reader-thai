@@ -129,6 +129,7 @@ void LibraryListActivity::onEnter() {
 
 void LibraryListActivity::onExit() {
   index.close();
+  readingStatus.reset();
   // Long title lists fill the UI glyph caches; don't pin them on the next screen.
   if (auto* fontCache = renderer.getFontCacheManager()) fontCache->releaseSdFontCaches();
   Activity::onExit();
@@ -166,7 +167,14 @@ int LibraryListActivity::selectedEntry() const {
 // oldest-first, which pinned fresh reads would contradict.
 int LibraryListActivity::pinnedCount() const {
   if (activeTabIndex != RECENT_TAB || !query.empty() || !isDescending(sortOrder)) return 0;
-  return pinnedTotal;
+  return pinnedVisibleCount;
+}
+
+const RecentBook* LibraryListActivity::pinnedBook(const int entry) const {
+  if (entry < 0 || entry >= pinnedCount()) return nullptr;
+  const auto& books = RECENT_BOOKS.getBooks();
+  const size_t book = pinnedVisible[entry];
+  return book < books.size() ? &books[book] : nullptr;
 }
 
 void LibraryListActivity::resolvePinned() {
@@ -198,11 +206,25 @@ void LibraryListActivity::resolvePinned() {
 
 void LibraryListActivity::refreshOverlap() {
   overlapCount = 0;
+  pinnedVisibleCount = 0;
+  const auto& books = RECENT_BOOKS.getBooks();
   const int total = static_cast<int>(index.bookCount());
-  for (int i = 0; i < pinnedTotal; i++) {
+  for (int i = 0; i < pinnedTotal && i < static_cast<int>(books.size()); i++) {
+    if (statusFilterActive() && !matchesStatusFilter(ReadingStatusStore::keyFor(books[static_cast<size_t>(i)].path))) {
+      continue;
+    }
+    pinnedVisible[pinnedVisibleCount++] = static_cast<uint8_t>(i);
     if (pinnedAscRows[i] == 0xFFFF || pinnedAscRows[i] >= total) continue;
-    const uint16_t row =
-        isDescending(sortOrder) ? static_cast<uint16_t>(total - 1 - pinnedAscRows[i]) : pinnedAscRows[i];
+    uint16_t row = isDescending(sortOrder) ? static_cast<uint16_t>(total - 1 - pinnedAscRows[i]) : pinnedAscRows[i];
+    if (statusFilterActive()) {
+      // The list below the pins is `filtered`, so skip positions there.
+      if (!filtered) continue;
+      const uint16_t* begin = filtered.get();
+      const uint16_t* end = begin + filteredCount;
+      const uint16_t* at = std::lower_bound(begin, end, row);
+      if (at == end || *at != row) continue;
+      row = static_cast<uint16_t>(at - begin);
+    }
     overlapRows[overlapCount++] = row;
   }
   std::sort(overlapRows, overlapRows + overlapCount);
@@ -211,9 +233,9 @@ void LibraryListActivity::refreshOverlap() {
 void LibraryListActivity::openSelectedBook() {
   std::string path;
   if (selectedEntry() < pinnedCount()) {
-    const auto& books = RECENT_BOOKS.getBooks();
-    if (selectedEntry() >= static_cast<int>(books.size())) return;
-    path = books[static_cast<size_t>(selectedEntry())].path;
+    const RecentBook* book = pinnedBook(selectedEntry());
+    if (!book) return;
+    path = book->path;
   } else {
     if (!index.isOpen()) return;
     const uint16_t ordinal = index.ordinalForRow(sortOrder, static_cast<uint16_t>(rowFor(selectedEntry())));
@@ -248,38 +270,30 @@ void LibraryListActivity::activateIndex(const int index) {
   }
 }
 
-// Row long-press prompts delete wherever grouping does not own the gesture:
-// an active search is already a flat list the reader narrowed down on purpose
-// ("find it, hold it, delete it"). Unfiltered Title/Author lists keep
-// collapse-to-groups. The Recent shelf always opens the row options menu.
-bool LibraryListActivity::deleteEligible() const { return !groupsCollapsed && (!query.empty() || !groupable()); }
-
+// Row long-press opens the hold menu. Collapsed Title/Author groups have no
+// book to act on, so holding one simply expands it.
 void LibraryListActivity::onRowLongPress(const int index) {
-  if (isRecentSort(sortOrder)) {
-    showRecentBookOptions(index);
-  } else if (deleteEligible()) {
-    promptDeleteBook(index);
-  } else if (!groupsCollapsed && groupable()) {
-    collapseGroups(index);
-  } else {
+  if (groupsCollapsed && isSeriesSort(sortOrder)) {
+    showSeriesOptions(index);
+  } else if (groupsCollapsed) {
     activateIndex(index);
+  } else {
+    showBookOptions(index);
   }
 }
 
-// Recent-shelf long-press menu (button hold and touch long-press). The first
-// rows may come from RecentBooksStore; the rest are index rows sorted by
-// modification time. Only store rows can be removed from recents.
-void LibraryListActivity::showRecentBookOptions(const int entry) {
+// Book-row hold menu (button hold and touch long-press). On the Recent tab the
+// first rows may come from RecentBooksStore; only those can be removed from
+// recents. Title and Author lists reach their group view from here.
+void LibraryListActivity::showBookOptions(const int entry) {
   if (entry < 0 || entry >= listCount()) return;
 
   std::string path;
   std::string title;
-  const bool isStoreRow = entry < pinnedCount();
-  if (isStoreRow) {
-    const auto& books = RECENT_BOOKS.getBooks();
-    if (entry >= static_cast<int>(books.size())) return;
-    path = books[static_cast<size_t>(entry)].path;
-    title = books[static_cast<size_t>(entry)].title;
+  const RecentBook* pinned = pinnedBook(entry);
+  if (pinned) {
+    path = pinned->path;
+    title = pinned->title;
   } else {
     if (!index.isOpen()) return;
     const uint16_t ordinal = index.ordinalForRow(sortOrder, static_cast<uint16_t>(rowFor(entry)));
@@ -287,50 +301,244 @@ void LibraryListActivity::showRecentBookOptions(const int entry) {
     std::string author;
     if (ordinal == 0xFFFF || !index.readRecord(ordinal, record) || !index.readPath(record, path) ||
         !rowTextFor(entry, title, author)) {
-      LOG_ERR("LIB", "cannot resolve Recent row %d", entry);
+      LOG_ERR("LIB", "cannot resolve row %d", entry);
       return;
     }
   }
 
-  const char* STORE_OPTIONS[] = {tr(STR_OPEN), tr(STR_REMOVE_FROM_RECENTS), tr(STR_DELETE), tr(STR_LIBRARY_REBUILD)};
-  const char* INDEX_OPTIONS[] = {tr(STR_OPEN), tr(STR_DELETE), tr(STR_LIBRARY_REBUILD)};
+  enum class Option : uint8_t { Open, RemoveFromRecents, MarkFinished, MarkUnread, Show, Groups, Delete, Rebuild };
+  constexpr int MAX_ROW_OPTIONS = 8;
+  struct Options {
+    Option ids[MAX_ROW_OPTIONS];
+    int count = 0;
+  } options;
+  const char* labels[MAX_ROW_OPTIONS];
+  char showLabel[64];
+  snprintf(showLabel, sizeof(showLabel), tr(STR_LIBRARY_SHOW_FILTER), statusFilterLabel(statusFilter));
+  const auto add = [&options, &labels](const Option id, const char* label) {
+    labels[options.count] = label;
+    options.ids[options.count++] = id;
+  };
+  add(Option::Open, tr(STR_OPEN));
+  if (pinned) add(Option::RemoveFromRecents, tr(STR_REMOVE_FROM_RECENTS));
+  add(Option::MarkFinished, tr(STR_LIBRARY_MARK_FINISHED));
+  add(Option::MarkUnread, tr(STR_LIBRARY_MARK_UNREAD));
+  add(Option::Show, showLabel);
+  if (query.empty() && groupable()) add(Option::Groups, tr(STR_LIBRARY_GROUPS));
+  add(Option::Delete, tr(STR_DELETE));
+  add(Option::Rebuild, tr(STR_LIBRARY_REBUILD));
+
   app.clearTapFlash();
-  optionPopup.show(tr(STR_LIBRARY), title.c_str(), isStoreRow ? STORE_OPTIONS : INDEX_OPTIONS, isStoreRow ? 4 : 3, 0,
-                   [this, path, title, isStoreRow](const int choice) {
+  optionPopup.show(tr(STR_LIBRARY), title.c_str(), labels, options.count, 0,
+                   [this, path, title, options, entry](const int choice) {
                      swallowHeldReleases();
-                     switch (choice) {
-                       case 0:
+                     if (choice < 0 || choice >= options.count) return;
+                     switch (options.ids[choice]) {
+                       case Option::Open:
                          openBookByPath(path);
                          break;
-                       case 1:
-                         if (isStoreRow) {
-                           promptRemoveRecentBook(path, title);
-                         } else {
-                           promptDeleteBookByPath(path, title);
-                         }
+                       case Option::RemoveFromRecents:
+                         promptRemoveRecentBook(path, title);
                          break;
-                       case 2:
-                         if (isStoreRow)
-                           promptDeleteBookByPath(path, title);
-                         else
-                           promptRebuildIndex();
+                       case Option::MarkFinished:
+                         markBook(path, ReadingState::Finished);
                          break;
-                       case 3:
-                         if (isStoreRow) promptRebuildIndex();
+                       case Option::MarkUnread:
+                         markBook(path, ReadingState::Unread);
                          break;
-                       default:
+                       case Option::Show:
+                         filterMenuPending = true;
+                         break;
+                       case Option::Groups:
+                         collapseGroups(entry);
+                         break;
+                       case Option::Delete:
+                         promptDeleteBookByPath(path, title);
+                         break;
+                       case Option::Rebuild:
+                         promptRebuildIndex();
                          break;
                      }
                    });
   requestUpdate();
 }
 
+void LibraryListActivity::showSeriesOptions(const int group) {
+  if (group < 0 || group >= groupCount) return;
+  std::string name;
+  seriesNameForRow(rowAtPosition(groupStarts[group]), name);
+  char showLabel[64];
+  snprintf(showLabel, sizeof(showLabel), tr(STR_LIBRARY_SHOW_FILTER), statusFilterLabel(statusFilter));
+  const char* labels[] = {tr(STR_OPEN), showLabel};
+  app.clearTapFlash();
+  optionPopup.show(tr(STR_LIBRARY), name.c_str(), labels, 2, 0, [this, group](const int choice) {
+    swallowHeldReleases();
+    if (choice == 0) {
+      openSeries(group);
+    } else if (choice == 1) {
+      filterMenuPending = true;
+    }
+  });
+  requestUpdate();
+}
+
+void LibraryListActivity::showFilterMenu() {
+  const char* labels[] = {statusFilterLabel(StatusFilter::All), statusFilterLabel(StatusFilter::Unread),
+                          statusFilterLabel(StatusFilter::Reading), statusFilterLabel(StatusFilter::Finished)};
+  optionPopup.show(tr(STR_SHOW), labels, 4, static_cast<int>(statusFilter), [this](const int choice) {
+    swallowHeldReleases();
+    if (choice >= 0 && choice <= static_cast<int>(StatusFilter::Finished)) {
+      setStatusFilter(static_cast<StatusFilter>(choice));
+    }
+  });
+  requestUpdate();
+}
+
+const char* LibraryListActivity::statusFilterLabel(const StatusFilter filter) {
+  switch (filter) {
+    case StatusFilter::Unread:
+      return tr(STR_LIBRARY_FILTER_UNREAD);
+    case StatusFilter::Reading:
+      return tr(STR_LIBRARY_FILTER_READING);
+    case StatusFilter::Finished:
+      return tr(STR_LIBRARY_FILTER_FINISHED);
+    case StatusFilter::All:
+      break;
+  }
+  return tr(STR_LIBRARY_FILTER_ALL);
+}
+
+bool LibraryListActivity::matchesStatusFilter(const uint64_t pathHash) const {
+  if (!readingStatus.isLoaded()) return false;
+  const ReadingState state = readingStatus.get(pathHash);
+  switch (statusFilter) {
+    case StatusFilter::Unread:
+      return state == ReadingState::Unread;
+    case StatusFilter::Reading:
+      return state == ReadingState::Reading;
+    case StatusFilter::Finished:
+      return state == ReadingState::Finished;
+    case StatusFilter::All:
+      break;
+  }
+  return true;
+}
+
+void LibraryListActivity::setStatusFilter(const StatusFilter filter, const bool focusList) {
+  {
+    // Reads the store and the index, and replaces the filter the render task draws from.
+    RenderLock lock(*this);
+    statusFilter = filter;
+    if (!statusFilterActive()) {
+      readingStatus.reset();
+    } else if (!readingStatus.isLoaded()) {
+      loadReadingStatus();
+    }
+    refilter();
+    auto& nav = activeNav();
+    nav.selected = focusList && listCount() > 0 ? 1 : 0;
+    nav.top = 0;
+  }
+  requestUpdate(true);
+}
+
+// applyFilter() for a changed filter or store: an open series stays open while it
+// still has matching books, otherwise the series list comes back with its own nav.
+// Callers hold the render lock.
+void LibraryListActivity::refilter() {
+  const bool inSeries = seriesGroup >= 0 && query.empty() && isSeriesSort(sortOrder);
+  const std::string openName = inSeries ? library::fold(seriesTitle) : std::string();
+  applyFilter();
+  if (!inSeries) return;
+  seriesPercents.reset();
+  seriesPercentCount = 0;
+  std::string name;
+  for (int group = 0; group < groupCount; group++) {
+    if (!seriesNameForRow(rowAtPosition(groupStarts[group]), name) || library::fold(name) != openName) continue;
+    seriesGroup = group;
+    groupsCollapsed = false;
+    // Positions inside the series moved, so the cached percentages start over.
+    const int count = seriesGroupEnd(group) - groupStarts[group];
+    seriesPercents = makeUniqueNoThrow<int8_t[]>(static_cast<size_t>(count));
+    seriesPercentCount = seriesPercents ? static_cast<uint16_t>(count) : 0;
+    for (int i = 0; i < seriesPercentCount; i++) seriesPercents[i] = PERCENT_NOT_READ;
+    updateHeaderTitle();
+    return;
+  }
+  activeNav() = seriesListNav;
+}
+
+bool LibraryListActivity::loadReadingStatus() {
+  if (!readingStatus.load()) return false;
+  if (!readingStatus.seeded()) seedReadingStatus();
+  return true;
+}
+
+// Books read before the store existed have saved progress but no state. One
+// pass over the index imports them: an unopened book costs one exists() on its
+// cache, an opened EPUB also loads its book.bin (loadBookProgress). Runs once;
+// the seeded flag is saved with the result.
+void LibraryListActivity::seedReadingStatus() {
+  if (!index.isOpen()) return;
+  GUI.drawPopup(renderer, tr(STR_LIBRARY_CHECKING_HISTORY));
+  bool complete = true;
+  std::string path;
+  const uint16_t total = index.bookCount();
+  for (uint16_t ordinal = 0; ordinal < total; ordinal++) {
+    library::ClixRecord record{};
+    uint64_t key = 0;
+    if (!index.readRecord(ordinal, record) || !index.readPathHash(record, key)) continue;
+    // A recorded state, an explicit Unread too, wins over saved progress.
+    if (readingStatus.has(key) || !index.readPath(record, path)) continue;
+    bool atEnd = false;
+    if (loadBookProgress(path, &atEnd) < 0) continue;
+    if (!readingStatus.importProgress(key, atEnd)) {
+      complete = false;
+      break;
+    }
+  }
+  if (complete) readingStatus.markSeeded();
+  // Same card discipline as the delete path: no writes while the index is open.
+  index.close();
+  readingStatus.save();
+  if (!index.open(library::libraryIndexPath())) LOG_ERR("LIB", "cannot reopen library index");
+}
+
+// The file is the only thing written; the loaded table, when the filter holds
+// one, takes the same change afterwards so the two never disagree.
+void LibraryListActivity::markBook(const std::string& path, const ReadingState state) {
+  {
+    RenderLock lock(*this);
+    index.close();
+    if (ReadingStatusStore::update(path, state) && readingStatus.isLoaded() &&
+        !readingStatus.set(ReadingStatusStore::keyFor(path), state)) {
+      readingStatus.load();
+    }
+    if (!index.open(library::libraryIndexPath())) LOG_ERR("LIB", "cannot reopen library index");
+    if (statusFilterActive()) {
+      refilter();
+      clampSelection();
+    }
+  }
+  requestUpdate(true);
+}
+
+void LibraryListActivity::clampSelection() {
+  auto& nav = activeNav();
+  const int count = listCount();
+  if (count == 0) {
+    nav.selected = 0;
+  } else if (nav.selected > count) {
+    nav.selected = count;
+  }
+  nav.followOnBuild = true;
+}
+
 #if FREEINK_CAP_TOUCH
 void LibraryListActivity::swipeDelete(const int entry) {
   activeNav().selected = entry + 1;
-  if (isRecentSort(sortOrder) && entry < pinnedCount()) {
-    const auto& book = RECENT_BOOKS.getBooks()[static_cast<size_t>(entry)];
-    promptDeleteBookByPath(book.path, book.title);
+  if (const RecentBook* book = pinnedBook(entry)) {
+    promptDeleteBookByPath(book->path, book->title);
   } else {
     promptDeleteBook(entry);
   }
@@ -432,6 +640,8 @@ void LibraryListActivity::promptDeleteBookByPath(const std::string& path, const 
       if (!result.isCancelled) {
         LOG_DBG("LIB", "deleting %s", path.c_str());
         if (!removeBookFile(path)) LOG_ERR("LIB", "cannot delete %s", path.c_str());
+        // removeBookFile dropped the record from the file; keep the loaded copy in step.
+        if (!Storage.exists(path.c_str())) readingStatus.erase(ReadingStatusStore::keyFor(path));
         if (RECENT_BOOKS.removeByPath(path)) RECENT_BOOKS.saveToFile();
         GUI.drawPopup(renderer, tr(STR_LIBRARY_REBUILDING));
         rebuildIndex();
@@ -472,7 +682,7 @@ void LibraryListActivity::openSearch() {
     query = std::get<KeyboardResult>(result.data).text;
     applyFilter();
     auto& nav = activeNav();
-    if (!query.empty() && filteredCount == 0 && !degraded) {
+    if (listCount() == 0 && !degraded) {
       // Up from the tab bar reopens Search even with no results.
       nav.selected = 0;
     } else {
@@ -534,14 +744,15 @@ fui::TabIndicator LibraryListActivity::tabIndicator(const int index) const {
 
 int LibraryListActivity::bookRowCount() const {
   if (!query.empty()) return static_cast<int>(filteredCount);
+  const int listed = statusFilterActive() ? static_cast<int>(filteredCount) : static_cast<int>(index.bookCount());
   if (isSeriesSort(sortOrder)) {
-    return seriesGroup >= 0 ? std::max(0, seriesGroupEnd(seriesGroup) - groupStarts[seriesGroup])
-                            : static_cast<int>(index.seriesCount());
+    if (seriesGroup >= 0) return std::max(0, seriesGroupEnd(seriesGroup) - groupStarts[seriesGroup]);
+    return statusFilterActive() ? listed : static_cast<int>(index.seriesCount());
   }
   // Pinned books already in the index are skipped below the pins, not doubled;
   // pinned books the index missed still show, so the difference stays split.
   const int pinned = pinnedCount();
-  return static_cast<int>(index.bookCount()) + (pinned > 0 ? pinned - overlapCount : 0);
+  return listed + (pinned > 0 ? pinned - overlapCount : 0);
 }
 
 int LibraryListActivity::listCount() const { return groupsCollapsed ? static_cast<int>(groupCount) : bookRowCount(); }
@@ -555,14 +766,20 @@ int LibraryListActivity::rowFor(const int entry) const {
     if (entry < 0 || entry >= static_cast<int>(filteredCount) || !filtered) return 0;
     return filtered[entry];
   }
-  if (isSeriesSort(sortOrder) && seriesGroup >= 0) return groupStarts[seriesGroup] + entry;
+  if (isSeriesSort(sortOrder) && seriesGroup >= 0) return rowAtPosition(groupStarts[seriesGroup] + entry);
   const int pinned = pinnedCount();
-  if (pinned == 0) return entry;
-  int row = entry - pinned;
+  if (pinned == 0) return rowAtPosition(entry);
+  int position = entry - pinned;
   for (int i = 0; i < overlapCount; i++) {
-    if (overlapRows[i] <= row) row++;
+    if (overlapRows[i] <= position) position++;
   }
-  return row;
+  return rowAtPosition(position);
+}
+
+int LibraryListActivity::rowAtPosition(const int position) const {
+  if (!statusFilterActive()) return position;
+  if (!filtered || position < 0 || position >= static_cast<int>(filteredCount)) return 0;
+  return filtered[position];
 }
 
 // Series groups belong to the Series tab itself, not to the hold-to-collapse gesture.
@@ -665,13 +882,17 @@ bool LibraryListActivity::seriesNameForRow(const int row, std::string& out) {
 
 // One group per series. The builder sorted by the folded name, so books whose
 // series differ only in case or spacing are adjacent and share a group.
+// Under a status filter the groups cover only the passing books, so a series
+// with none of them is hidden; that list is never cached.
 bool LibraryListActivity::buildSeriesGroups() {
   groupCount = 0;
-  if (seriesGroupsCached) {
+  const bool filteredSeries = statusFilterActive();
+  if (seriesGroupsCached && !filteredSeries) {
     groupCount = seriesGroupTotal;
     return groupCount > 0;
   }
-  const int count = static_cast<int>(index.seriesCount());
+  seriesGroupsCached = false;
+  const int count = filteredSeries ? static_cast<int>(filteredCount) : static_cast<int>(index.seriesCount());
   seriesRowTotal = static_cast<uint16_t>(count);
   if (count <= 0) return false;
   if (groupCapacity < count) {
@@ -686,14 +907,14 @@ bool LibraryListActivity::buildSeriesGroups() {
   std::string name;
   std::string folded;
   std::string previous;
-  for (int row = 0; row < count; row++) {
-    seriesNameForRow(row, name);
+  for (int position = 0; position < count; position++) {
+    seriesNameForRow(rowAtPosition(position), name);
     folded = library::fold(name);
-    if (row == 0 || folded != previous) groupStarts[groupCount++] = static_cast<uint16_t>(row);
+    if (position == 0 || folded != previous) groupStarts[groupCount++] = static_cast<uint16_t>(position);
     previous.swap(folded);
   }
   seriesGroupTotal = groupCount;
-  seriesGroupsCached = true;
+  seriesGroupsCached = !filteredSeries;
   return groupCount > 0;
 }
 
@@ -709,7 +930,8 @@ void LibraryListActivity::openSeries(const int group) {
   seriesListNav = activeNav();
   seriesGroup = group;
   groupsCollapsed = false;
-  seriesNameForRow(groupStarts[group], seriesTitle);
+  seriesNameForRow(rowAtPosition(groupStarts[group]), seriesTitle);
+  updateHeaderTitle();
   const int count = seriesGroupEnd(group) - groupStarts[group];
   seriesPercents = makeUniqueNoThrow<int8_t[]>(static_cast<size_t>(count));
   seriesPercentCount = seriesPercents ? static_cast<uint16_t>(count) : 0;
@@ -720,7 +942,7 @@ void LibraryListActivity::openSeries(const int group) {
   requestUpdate();
 }
 
-int LibraryListActivity::mostRecentSeriesEntry(const int firstRow, const int count) {
+int LibraryListActivity::mostRecentSeriesEntry(const int firstPosition, const int count) {
   // resolvePinned() matched the recent books (newest first) to index rows, so
   // only 2-byte orders are read here: a lower rank is a more recent book.
   uint16_t ordinals[RecentBooksStore::MAX_RECENT_BOOKS];
@@ -731,7 +953,8 @@ int LibraryListActivity::mostRecentSeriesEntry(const int firstRow, const int cou
   int best = 0;
   int bestRank = pinnedTotal;
   for (int entry = 0; entry < count && bestRank > 0; entry++) {
-    const uint16_t ordinal = index.ordinalForRow(library::SortOrder::Series, static_cast<uint16_t>(firstRow + entry));
+    const uint16_t ordinal =
+        index.ordinalForRow(library::SortOrder::Series, static_cast<uint16_t>(rowAtPosition(firstPosition + entry)));
     if (ordinal == 0xFFFF) continue;
     for (int r = 0; r < bestRank; r++) {
       if (ordinals[r] == ordinal) {
@@ -759,6 +982,7 @@ void LibraryListActivity::closeSeries() {
   seriesPercentCount = 0;
   seriesGroup = -1;
   groupsCollapsed = true;
+  updateHeaderTitle();
   activeNav() = seriesListNav;
   requestUpdate();
 }
@@ -778,10 +1002,12 @@ void LibraryListActivity::formatSeriesSubtitle(const library::ClixRecord& record
   }
 }
 
-// One pass over the sort order, keeping what matches. No index, no cache: at the
-// 4096-book format cap this is 4096 comparisons of at most 96 bytes. The result
-// array is allocated once with the exact upper bound and fails back to an
-// explicit message rather than letting vector growth abort the firmware.
+// One pass over the sort order, keeping what matches the query and the status
+// filter. No index, no cache: at the 4096-book format cap this is 4096
+// comparisons of at most 96 bytes, plus one 8-byte path-hash read per row under
+// a status filter. The result array is allocated once with the exact upper bound
+// and fails back to an explicit message rather than letting vector growth abort
+// the firmware.
 void LibraryListActivity::applyFilter() {
   groupsCollapsed = false;
   groupCount = 0;
@@ -789,21 +1015,25 @@ void LibraryListActivity::applyFilter() {
   filtered.reset();
   filteredCount = 0;
   filterFailed = false;
-  // The header shows the active query in place of the screen title, so the
-  // reader can see what narrowed the list without reopening the keyboard.
-  headerSearchTitle = query.empty() ? std::string() : "“" + query + "”";
-  if (query.empty()) {
-    if (isSeriesSort(sortOrder)) showSeriesList();
+  if (filterActive()) filterRows();
+  // A search is a flat list; the status filter alone keeps the series groups.
+  if (query.empty() && isSeriesSort(sortOrder)) showSeriesList();
+  refreshOverlap();
+  updateHeaderTitle();
+}
+
+void LibraryListActivity::filterRows() {
+  if (statusFilterActive() && !readingStatus.isLoaded()) {
+    filterFailed = true;
     return;
   }
-
   const std::string needle = library::fold(query);
   const int total = static_cast<int>(index.rowCount(sortOrder));
   if (total <= 0) return;
 
   auto matches = makeUniqueNoThrow<uint16_t[]>(static_cast<size_t>(total));
   if (!matches) {
-    LOG_ERR("LIB", "cannot allocate %u-byte search result buffer", static_cast<unsigned>(total * sizeof(uint16_t)));
+    LOG_ERR("LIB", "cannot allocate %u-byte filter result buffer", static_cast<unsigned>(total * sizeof(uint16_t)));
     filterFailed = true;
     return;
   }
@@ -814,7 +1044,11 @@ void LibraryListActivity::applyFilter() {
     const uint16_t ordinal = index.ordinalForRow(sortOrder, static_cast<uint16_t>(row));
     library::ClixRecord record{};
     if (ordinal == 0xFFFF || !index.readRecord(ordinal, record)) continue;
-    if (library::matchesQuery(std::string_view(record.fold, record.foldLen), needle)) {
+    if (statusFilterActive()) {
+      uint64_t pathHash = 0;
+      if (!index.readPathHash(record, pathHash) || !matchesStatusFilter(pathHash)) continue;
+    }
+    if (query.empty() || library::matchesQuery(std::string_view(record.fold, record.foldLen), needle)) {
       matches[matchCount++] = static_cast<uint16_t>(row);
       continue;
     }
@@ -832,8 +1066,8 @@ void LibraryListActivity::applyFilter() {
 }
 
 // Staged back-out, shared by the Back button and the header's back arrow:
-// clear the search, expand collapsed groups, return focus to the tabs, then
-// leave for home.
+// clear the search, expand collapsed groups, return focus to the tabs, clear
+// the status filter, then leave for home.
 void LibraryListActivity::handleBackAction() {
   auto& nav = activeNav();
   if (!query.empty()) {
@@ -850,6 +1084,8 @@ void LibraryListActivity::handleBackAction() {
     // Keep the current list and viewport while returning focus to the tabs.
     nav.selected = 0;
     requestUpdate();
+  } else if (statusFilterActive()) {
+    setStatusFilter(StatusFilter::All, false);
   } else {
     onGoHome();
   }
@@ -877,9 +1113,9 @@ bool LibraryListActivity::rowTextFor(const int entry, std::string& title, std::s
   if (fileName) fileName->clear();
   if (recordOut) *recordOut = {};
   if (entry < pinnedCount()) {
-    const auto& books = RECENT_BOOKS.getBooks();
-    if (entry < 0 || entry >= static_cast<int>(books.size())) return false;
-    const auto& book = books[static_cast<size_t>(entry)];
+    const RecentBook* pinned = pinnedBook(entry);
+    if (!pinned) return false;
+    const auto& book = *pinned;
     title = book.title;
     author = book.author;
     if (fileName) *fileName = book.path;
@@ -903,7 +1139,13 @@ bool LibraryListActivity::rowTextFor(const int entry, std::string& title, std::s
 }
 
 bool LibraryListActivity::handleCustomInput() {
-  if (optionPopup.handleInput(mappedInput, [this] { requestUpdate(); })) return true;
+  if (optionPopup.handleInput(mappedInput, [this] { requestUpdate(); })) {
+    if (filterMenuPending) {
+      filterMenuPending = false;
+      showFilterMenu();
+    }
+    return true;
+  }
 
   if (lockNextConfirmRelease && mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     lockNextConfirmRelease = false;
@@ -928,14 +1170,8 @@ bool LibraryListActivity::handleButtons() {
   if (mappedInput.wasLongPressed(MappedInputManager::Button::Confirm, LONG_PRESS_MS)) {
     if (tabsFocused()) {
       if (!degraded) toggleSortDirection();
-    } else if (isRecentSort(sortOrder)) {
-      showRecentBookOptions(selectedEntry());
-    } else if (deleteEligible()) {
-      if (count > 0) promptDeleteBook(selectedEntry());
-    } else if (!groupsCollapsed && groupable()) {
-      collapseGroups(selectedEntry());
-    } else {
-      activateIndex(selectedEntry());
+    } else if (count > 0) {
+      onRowLongPress(selectedEntry());
     }
     return true;
   }
@@ -1035,7 +1271,7 @@ void LibraryListActivity::buildRows(UiScreen& screen) {
     std::string& author = winAuthors[static_cast<size_t>(rows)];
     fui::ListItem item;
     if (groupsCollapsed && seriesRows) {
-      seriesNameForRow(groupStarts[entry], title);
+      seriesNameForRow(rowAtPosition(groupStarts[entry]), title);
       char count[24];
       snprintf(count, sizeof(count), tr(STR_LIBRARY_SERIES_BOOKS), seriesGroupEnd(entry) - groupStarts[entry]);
       author = count;
@@ -1191,9 +1427,11 @@ void LibraryListActivity::buildScreen(UiScreen& screen) {
   if (bookRowCount() == 0) {
     const char* message = tr(STR_LIBRARY_NO_RESULTS);
     if (filterFailed) {
-      message = tr(STR_LIBRARY_SEARCH_UNAVAILABLE);
+      message = query.empty() ? tr(STR_LIBRARY_FILTER_UNAVAILABLE) : tr(STR_LIBRARY_SEARCH_UNAVAILABLE);
     } else if (query.empty()) {
-      if (isSeriesSort(sortOrder) && index.bookCount() > 0) {
+      if (statusFilterActive() && index.bookCount() > 0) {
+        message = tr(STR_LIBRARY_FILTER_EMPTY);
+      } else if (isSeriesSort(sortOrder) && index.bookCount() > 0) {
         message = index.seriesDegraded() ? tr(STR_LIBRARY_SERIES_UNAVAILABLE) : tr(STR_LIBRARY_NO_SERIES);
       } else {
         message = tr(STR_LIBRARY_EMPTY);
@@ -1229,22 +1467,33 @@ void LibraryListActivity::drawPositionReadout() const {
 }
 
 const char* LibraryListActivity::headerTitle() const {
-  if (!headerSearchTitle.empty()) return headerSearchTitle.c_str();
+  if (!headerTitleText.empty()) return headerTitleText.c_str();
   if (seriesGroup >= 0 && !seriesTitle.empty()) return seriesTitle.c_str();
   return degraded ? tr(STR_LIBRARY_TITLE_UNSORTED) : tr(STR_LIBRARY);
 }
 
+// The header shows the active query in place of the screen title, so the
+// reader can see what narrowed the list without reopening the keyboard, and
+// names the status filter after it: "Library (Reading)".
+void LibraryListActivity::updateHeaderTitle() {
+  headerTitleText.clear();
+  if (!query.empty()) headerTitleText = "“" + query + "”";
+  if (!statusFilterActive()) return;
+  const std::string base = headerTitleText.empty() ? std::string(headerTitle()) : headerTitleText;
+  char text[160];
+  snprintf(text, sizeof(text), tr(STR_LIBRARY_TITLE_FILTERED), base.c_str(), statusFilterLabel(statusFilter));
+  headerTitleText = text;
+}
+
 void LibraryListActivity::drawHoldHelp() const {
-  if (mappedInput.hasTouch() || groupsCollapsed) return;
+  const bool seriesList = groupsCollapsed && isSeriesSort(sortOrder);
+  if (mappedInput.hasTouch() || (groupsCollapsed && !seriesList)) return;
   const char* help = nullptr;
-  if (tabsFocused() && !degraded)
-    help = tr(STR_LIBRARY_HOLD_SORT);
-  else if (!tabsFocused() && isRecentSort(sortOrder) && listCount() > 0)
-    help = tr(STR_LIBRARY_HOLD_OPTIONS);  // recent rows: hold opens the row menu
-  else if (!tabsFocused() && deleteEligible() && listCount() > 0)
-    help = tr(STR_HOLD_OPEN_TO_DELETE);
-  else if (!tabsFocused() && groupable())
-    help = tr(STR_LIBRARY_HOLD_GROUPS);
+  if (tabsFocused()) {
+    if (!degraded && !groupsCollapsed) help = tr(STR_LIBRARY_HOLD_SORT);
+  } else if (listCount() > 0) {
+    help = tr(STR_LIBRARY_HOLD_OPTIONS);  // book rows and series: hold opens the menu
+  }
   if (!help) return;
 
   const auto& metrics = UITheme::getInstance().getMetrics();
@@ -1268,8 +1517,8 @@ void LibraryListActivity::drawFooter() {
   drawHoldHelp();
 
   // The Series list is collapsed groups, but Back from its tabs still goes home.
-  const bool backGoesHome =
-      tabsFocused() && (!groupsCollapsed || (isSeriesSort(sortOrder) && seriesGroup < 0)) && query.empty();
+  const bool backGoesHome = tabsFocused() && (!groupsCollapsed || (isSeriesSort(sortOrder) && seriesGroup < 0)) &&
+                            query.empty() && !statusFilterActive();
   const char* backLabel = backGoesHome ? tr(STR_HOME) : tr(STR_BACK);
   const char* confirmLabel = groupsCollapsed ? tr(STR_SELECT) : tr(STR_OPEN);
   const bool canSearch = tabsFocused() && !degraded;
