@@ -176,3 +176,88 @@ TEST_F(ThaiWordBreak, UserDictionaryRevisionTracksContents) {
   ThaiWordBreaker::setUserDictionary({"ก้านสูบ"});
   EXPECT_EQ(ThaiWordBreaker::userDictionaryRevision(), first);
 }
+
+TEST_F(ThaiWordBreak, UserWordsAreNeverSplit) {
+  // ตาก|ลม covers every letter, so as a mere scoring preference กลม lost to it.
+  EXPECT_EQ(segment("ตาก=ลม"), "ตาก=ลม");
+  ThaiWordBreaker::setUserDictionary({"กลม"});
+  EXPECT_EQ(segment("ตา=กลม"), "ตา=กลม");
+  EXPECT_EQ(segment("ตา=กลม=กิน"), "ตา=กลม=กิน");
+  // Kept whole even when that leaves letters the dictionary does not know (งสา, ว).
+  ThaiWordBreaker::setUserDictionary({"งสา"});
+  EXPECT_EQ(segment("เด็ก=หญิ=งสา=ว"), "เด็ก=หญิ=งสา=ว");
+}
+
+TEST_F(ThaiWordBreak, UserWordsMatchOnlyAtClusterBoundaries) {
+  // ะสม would start on a following vowel, i.e. inside มานะ's last cluster: not an occurrence.
+  ThaiWordBreaker::setUserDictionary({"ะสม"});
+  EXPECT_EQ(segment("เขา=ชื่อ=มานะ=สมใจ"), "เขา=ชื่อ=มานะ=สมใจ");
+}
+
+TEST_F(ThaiWordBreak, OverlappingUserWordsKeepTheLeftmostLongest) {
+  // The longest word starting at a position wins.
+  ThaiWordBreaker::setUserDictionary({"กลม", "กลมกิ"});
+  EXPECT_EQ(segment("ตา=กลมกิ=น"), "ตา=กลมกิ=น");
+  // The leftmost occurrence wins; กลม overlaps its tail and is not protected.
+  ThaiWordBreaker::setUserDictionary({"ตาก", "กลม"});
+  EXPECT_EQ(segment("ตาก=ลม"), "ตาก=ลม");
+}
+
+TEST_F(ThaiWordBreak, FallbackAndHintsSkipUserWords) {
+  // ฃ and ฅ are obsolete letters, so the fallback cuts ฃฅฃฅ at every consonant.
+  EXPECT_EQ(segment("ฃ=ฅ=ฃ=ฅ", true), "ฃ=ฅ=ฃ=ฅ");
+  ThaiWordBreaker::setUserDictionary({"ฅฃ"});
+  EXPECT_EQ(segment("ฃ=ฅฃ=ฅ", true), "ฃ=ฅฃ=ฅ");
+  // A hint (byte offset 6, between ฅ and ฃ) inside the user word is dropped.
+  const std::vector<uint16_t> hints{6};
+  EXPECT_EQ(Hyphenator::breakOffsets("ฃฅฃฅ", false, &hints).size(), 2u);
+  for (const auto& info : Hyphenator::breakOffsets("ฃฅฃฅ", false, &hints)) {
+    EXPECT_NE(info.byteOffset, 6u);
+  }
+}
+
+TEST_F(ThaiWordBreak, EmptyUserDictionaryRevisionStaysZero) {
+  ThaiWordBreaker::setUserDictionary({"ก้านสูบ"});
+  ThaiWordBreaker::setUserDictionary({});
+  EXPECT_EQ(ThaiWordBreaker::userDictionaryRevision(), 0);
+  // Words that are all dropped (shorter than two codepoints) count as no dictionary.
+  ThaiWordBreaker::setUserDictionary({"ก"});
+  EXPECT_EQ(ThaiWordBreaker::userDictionaryRevision(), 0);
+}
+
+TEST_F(ThaiWordBreak, ValidUserWordsAreThaiAndAtLeastTwoCodepoints) {
+  EXPECT_TRUE(ThaiWordBreaker::isValidUserWord("กลม"));
+  EXPECT_TRUE(ThaiWordBreaker::isValidUserWord("ก่"));
+  EXPECT_FALSE(ThaiWordBreaker::isValidUserWord(""));
+  EXPECT_FALSE(ThaiWordBreaker::isValidUserWord("ก"));
+  EXPECT_FALSE(ThaiWordBreaker::isValidUserWord("กลม "));
+  EXPECT_FALSE(ThaiWordBreaker::isValidUserWord("abc"));
+  EXPECT_FALSE(ThaiWordBreaker::isValidUserWord("iPhoneไทย"));
+}
+
+TEST_F(ThaiWordBreak, UserWordCutLimitFindsAWordCutOffByTheEnd) {
+  ThaiWordBreaker::setUserDictionary({"กลม"});
+  const std::string cutOff = "ตากล";  // กลม starts after ตา (6 bytes) and runs past the end
+  EXPECT_EQ(ThaiWordBreaker::userWordCutLimit(cutOff.data(), cutOff.size()), 6u);
+  const std::string whole = "ตากลม";
+  EXPECT_EQ(ThaiWordBreaker::userWordCutLimit(whole.data(), whole.size()), whole.size());
+  const std::string other = "ตากิ";  // ก followed by something else
+  EXPECT_EQ(ThaiWordBreaker::userWordCutLimit(other.data(), other.size()), other.size());
+  ThaiWordBreaker::setUserDictionary({});
+  EXPECT_EQ(ThaiWordBreaker::userWordCutLimit(cutOff.data(), cutOff.size()), cutOff.size());
+}
+
+TEST_F(ThaiWordBreak, UserWordsMustStartAndEndAtBreakableEdges) {
+  EXPECT_FALSE(ThaiWordBreaker::isValidUserWord("ะสม"));  // starts with a following vowel
+  EXPECT_FALSE(ThaiWordBreaker::isValidUserWord("่กลม"));  // starts with a tone mark
+  EXPECT_FALSE(ThaiWordBreaker::isValidUserWord("กเ"));   // ends with a leading vowel
+  EXPECT_TRUE(ThaiWordBreaker::isValidUserWord("เกม"));
+  std::string longWord;
+  for (int i = 0; i < 20; ++i) longWord += "ก";
+  EXPECT_TRUE(ThaiWordBreaker::isValidUserWord(longWord));
+  EXPECT_FALSE(ThaiWordBreaker::isValidUserWord(longWord + "ก"));  // 21 codepoints
+  // Hand-edited entries that could never match are dropped when the list loads.
+  ThaiWordBreaker::setUserDictionary({"ะสม", "abc"});
+  EXPECT_FALSE(ThaiWordBreaker::hasUserDictionary());
+  EXPECT_EQ(ThaiWordBreaker::userDictionaryRevision(), 0);
+}

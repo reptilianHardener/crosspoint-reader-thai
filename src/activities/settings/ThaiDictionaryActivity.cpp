@@ -18,7 +18,7 @@ namespace fui = freeink::ui;
 
 namespace {
 // Longest dictionary entry accepted from the keyboard, in bytes (about 20 Thai characters).
-constexpr size_t MAX_WORD_BYTES = 63;
+constexpr size_t MAX_WORD_BYTES = 60;
 }  // namespace
 
 ThaiDictionaryActivity::ThaiDictionaryActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
@@ -57,7 +57,7 @@ void ThaiDictionaryActivity::rebuildRows() {
 
   fui::ListItem add;
   add.label = tr(STR_ADD_WORD);
-  add.value = countLabel;
+  add.value = notice ? notice : countLabel;
   add.actionValue = ADD_WORD_INDEX;
   add.enabled = words.size() < ThaiUserDictionary::MAX_WORDS;
   rowItems.push_back(add);
@@ -76,11 +76,26 @@ void ThaiDictionaryActivity::promptForWord() {
 
   app.clearTapFlash();
   auto handler = [this](const ActivityResult& result) {
-    if (result.isCancelled) return;
-    const auto& entered = std::get<KeyboardResult>(result.data).text;
-    if (entered.empty() || std::find(words.begin(), words.end(), entered) != words.end()) return;
-
     RenderLock lock(*this);
+    // A new attempt replaces any earlier warning.
+    notice = nullptr;
+    if (result.isCancelled) {
+      rebuildRows();
+      return;
+    }
+    std::string entered = std::get<KeyboardResult>(result.data).text;
+    const size_t first = entered.find_first_not_of(' ');
+    entered =
+        first == std::string::npos ? std::string() : entered.substr(first, entered.find_last_not_of(' ') - first + 1);
+    if (entered.empty() || std::find(words.begin(), words.end(), entered) != words.end()) {
+      rebuildRows();
+      return;
+    }
+    if (!ThaiWordBreaker::isValidUserWord(entered)) {
+      notice = tr(STR_DICT_INVALID_WORD);
+      rebuildRows();
+      return;
+    }
     words.push_back(entered);
     dirty = true;
     rebuildRows();
@@ -108,6 +123,7 @@ void ThaiDictionaryActivity::activateIndex(const int index) {
     RenderLock lock(*this);
     words.erase(words.begin() + wordIndex);
     dirty = true;
+    notice = nullptr;
     rebuildRows();
     moveSelectionTo(std::min(index, listCount() - 1));
   }

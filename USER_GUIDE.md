@@ -295,6 +295,8 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
 
 - **Hyphenation**: Whether to hyphenate text in Reading Mode; options are "ON" or "OFF". Korean text wraps only at spaces when "OFF"; when "ON", a Korean word may also wrap at the end of a line between syllables or where it meets digits, Latin letters, or brackets (no hyphen is drawn).
 
+- **Thai Dictionary**: Thai words to add to the built-in word list, such as names it does not know. A word in this list is never split across lines. An entry must have 2 to 20 Thai characters and must start and end where a Thai line may break. A very short entry can also stop breaks between neighbouring words. Books are laid out again the next time they are opened after the list changes.
+
 - **Reading Orientation**: Set the screen orientation for reading EPUB files:
   
   - "Portrait" (default) - Standard portrait orientation

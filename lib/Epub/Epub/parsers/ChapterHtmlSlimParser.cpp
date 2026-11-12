@@ -24,6 +24,7 @@
 #include "Epub/converters/ImageToFramebufferDecoder.h"
 #include "Epub/htmlEntities.h"
 #include "Epub/hyphenation/Hyphenator.h"
+#include "Epub/hyphenation/ThaiWordBreaker.h"
 
 // Minimum file size (in bytes) to show indexing popup - smaller chapters don't benefit from it
 constexpr size_t MIN_SIZE_FOR_POPUP = 10 * 1024;  // 10KB
@@ -107,14 +108,17 @@ constexpr char ZERO_WIDTH_SPACE_UTF8[] = "\xE2\x80\x8B";
 constexpr int THAI_WORD_CARRY_MAX_BYTES = 60;
 
 // Byte offset of the last Thai word boundary in buf[0, len) at or after minKeep, or 0 when there
-// is none. Hyphenation breaks would draw a hyphen and do not count. A boundary right before a
-// zero-width space kept in the word (see characterData) moves past it, so the space ends the
-// first half and flushPartWordBuffer turns it into the break.
+// is none. Hyphenation breaks would draw a hyphen and do not count, nor does a boundary inside a
+// user dictionary word that the buffer end cuts off. A boundary right before a zero-width space
+// kept in the word (see characterData) moves past it, so the space ends the first half and
+// flushPartWordBuffer turns it into the break.
 int lastThaiWordBoundary(const char* buf, const int len, const int minKeep) {
   const auto breaks = Hyphenator::breakOffsets(std::string(buf, static_cast<size_t>(len)), /*includeFallback=*/false);
+  const auto cutLimit = static_cast<int>(ThaiWordBreaker::userWordCutLimit(buf, static_cast<size_t>(len)));
   for (auto it = breaks.rbegin(); it != breaks.rend(); ++it) {
     if (it->requiresInsertedHyphen) continue;
     int boundary = static_cast<int>(it->byteOffset);
+    if (boundary > cutLimit) continue;
     if (boundary < minKeep) break;
     if (boundary + 3 <= len && memcmp(buf + boundary, ZERO_WIDTH_SPACE_UTF8, 3) == 0) boundary += 3;
     if (boundary < len) return boundary;

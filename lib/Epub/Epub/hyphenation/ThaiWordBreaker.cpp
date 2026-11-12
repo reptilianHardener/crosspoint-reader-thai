@@ -16,6 +16,9 @@ uint16_t ThaiWordBreaker::userDictRevision_ = 0;
 namespace {
 
 constexpr size_t MAX_USER_DICT_WORDS = 200;
+constexpr size_t MAX_USER_WORD_CODEPOINTS = 20;
+// Bump when the effect of user words on line breaking changes. 2: user words are never split.
+constexpr uint32_t USER_DICT_LAYOUT_VERSION = 2;
 
 struct MatchEdge {
   size_t endIndex;
@@ -94,6 +97,14 @@ size_t nextBoundaryIndex(const std::vector<bool>& boundaries, const size_t from)
   return boundaries.size() - 1;
 }
 
+bool userWordMatchesAt(const std::vector<CodepointInfo>& cps, const size_t start, const std::vector<uint16_t>& word) {
+  if (start + word.size() > cps.size()) return false;
+  for (size_t i = 0; i < word.size(); ++i) {
+    if (cps[start + i].value != word[i]) return false;
+  }
+  return true;
+}
+
 // Check user dictionary words starting at position `start` in the codepoint array.
 // User dictionary words are stored as uint16_t codepoint sequences for compact matching.
 void collectUserDictMatchEnds(const std::vector<CodepointInfo>& cps, const size_t start,
@@ -106,17 +117,40 @@ void collectUserDictMatchEnds(const std::vector<CodepointInfo>& cps, const size_
     if (end > cps.size()) continue;
     if (!boundaries[end]) continue;
 
-    bool match = true;
-    for (size_t i = 0; i < dictWord.size(); ++i) {
-      if (static_cast<uint16_t>(cps[start + i].value) != dictWord[i]) {
-        match = false;
-        break;
-      }
-    }
-
-    if (match) {
+    if (userWordMatchesAt(cps, start, dictWord)) {
       outMatches.push_back({end});
     }
+  }
+}
+
+// User words are never split: clear the boundaries strictly inside every occurrence, so no
+// segmentation, hint or fallback break can land there. An occurrence needs allowed boundaries
+// at both edges, as in collectUserDictMatchEnds. Overlapping occurrences: scanning from the
+// left, the longest word at the first position wins and the scan resumes after it, so a word
+// overlapping its tail is not protected.
+void protectUserWords(const std::vector<CodepointInfo>& cps, const std::vector<std::vector<uint16_t>>& userDict,
+                      std::vector<bool>& boundaries) {
+  if (userDict.empty()) return;
+
+  size_t start = 0;
+  while (start + 1 < cps.size()) {
+    size_t longestEnd = 0;
+    if (boundaries[start]) {
+      for (const auto& dictWord : userDict) {
+        const size_t end = start + dictWord.size();
+        if (end > longestEnd && end <= cps.size() && boundaries[end] && userWordMatchesAt(cps, start, dictWord)) {
+          longestEnd = end;
+        }
+      }
+    }
+    if (longestEnd == 0) {
+      ++start;
+      continue;
+    }
+    for (size_t idx = start + 1; idx < longestEnd; ++idx) {
+      boundaries[idx] = false;
+    }
+    start = longestEnd;
   }
 }
 
@@ -218,7 +252,8 @@ std::vector<size_t> ThaiWordBreaker::breakIndexes(const std::vector<CodepointInf
     return {};
   }
 
-  const auto boundaries = buildBoundaryFlags(cps);
+  auto boundaries = buildBoundaryFlags(cps);
+  protectUserWords(cps, ThaiWordBreaker::getUserDictWords(), boundaries);
   std::vector<Decision> decisions(cps.size() + 1);
   decisions[cps.size()].valid = true;
   decisions[cps.size()].score = {0, 0, 0, 0};
@@ -369,15 +404,16 @@ void ThaiWordBreaker::setUserDictionary(const std::vector<std::string>& words) {
       cps.push_back(static_cast<uint16_t>(cp));
     }
 
-    if (cps.size() >= 2) {
+    if (isValidUserWord(word)) {
       userDictWords_.push_back(std::move(cps));
     }
   }
 
   // FNV-1a over the stored codepoints, with a separator per word so that moving a
   // boundary between two words changes the hash. Folded to 16 bits; 0 is reserved for
-  // "no dictionary".
-  uint32_t hash = 2166136261u;
+  // "no dictionary". The layout version goes in first, so caches laid out with user words
+  // under older rules are rebuilt while readers without user words keep theirs.
+  uint32_t hash = (2166136261u ^ USER_DICT_LAYOUT_VERSION) * 16777619u;
   for (const auto& dictWord : userDictWords_) {
     for (const uint16_t value : dictWord) {
       hash = (hash ^ value) * 16777619u;
@@ -386,6 +422,47 @@ void ThaiWordBreaker::setUserDictionary(const std::vector<std::string>& words) {
   }
   const auto folded = static_cast<uint16_t>((hash >> 16) ^ (hash & 0xFFFFu));
   userDictRevision_ = userDictWords_.empty() ? 0 : (folded == 0 ? 1 : folded);
+}
+
+bool ThaiWordBreaker::isValidUserWord(const std::string& word) {
+  const auto* ptr = reinterpret_cast<const unsigned char*>(word.c_str());
+  size_t count = 0;
+  uint32_t first = 0;
+  uint32_t last = 0;
+  uint32_t cp;
+  while ((cp = utf8NextCodepoint(&ptr))) {
+    if (!isThaiCharacter(cp)) return false;
+    if (count++ == 0) first = cp;
+    last = cp;
+  }
+  // A word must start and end where a line may break (see isValidThaiBoundary), or it could never
+  // match. At most MAX_USER_WORD_CODEPOINTS, so the parser's 60-byte carry can hold one whole.
+  return count >= 2 && count <= MAX_USER_WORD_CODEPOINTS && !isThaiCombining(first) && !isThaiFollowingVowel(first) &&
+         !isThaiLeadingVowel(last);
+}
+
+size_t ThaiWordBreaker::userWordCutLimit(const char* text, const size_t len) {
+  if (userDictWords_.empty()) return len;
+  const auto* const begin = reinterpret_cast<const unsigned char*>(text);
+  const auto* const end = begin + len;
+  for (const auto* start = begin; start < end && *start != 0;) {
+    for (const auto& dictWord : userDictWords_) {
+      const auto* p = start;
+      size_t matched = 0;
+      bool mismatch = false;
+      while (matched < dictWord.size() && p < end) {
+        if (utf8NextCodepoint(&p) != dictWord[matched]) {
+          mismatch = true;
+          break;
+        }
+        ++matched;
+      }
+      // The text ran out part-way through the word, with every codepoint so far matching.
+      if (!mismatch && matched < dictWord.size()) return static_cast<size_t>(start - begin);
+    }
+    utf8NextCodepoint(&start);
+  }
+  return len;
 }
 
 bool ThaiWordBreaker::hasUserDictionary() { return !userDictWords_.empty(); }

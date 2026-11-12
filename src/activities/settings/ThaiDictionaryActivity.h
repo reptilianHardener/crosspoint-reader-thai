@@ -35,5 +35,7 @@ class ThaiDictionaryActivity final : public UiListActivity {
   // whenever either changes.
   std::vector<freeink::ui::ListItem> rowItems;
   char countLabel[24] = "";
+  // Shown on the Add Word row instead of the count after an entry is rejected.
+  const char* notice = nullptr;
   bool dirty = false;
 };
