@@ -15,7 +15,8 @@ uint32_t readLe32(const uint8_t* p) {
 }
 }  // namespace
 
-int loadBookProgress(const std::string& path) {
+int loadBookProgress(const std::string& path, bool* atEnd) {
+  if (atEnd) *atEnd = false;
   uint8_t data[10]{};
   if (FsHelpers::hasReflowableBookExtension(path)) {
     // Metadata objects exceed the stack budget. The constructor only derives the cache
@@ -35,7 +36,10 @@ int loadBookProgress(const std::string& path) {
     const int page = data[2] | (data[3] << 8);
     const int total = size >= 6 ? data[4] | (data[5] << 8) : 0;
     if (epub->getSpineItemsCount() <= 0 || epub->getBookSize() == 0) return -1;
-    if (spine == epub->getSpineItemsCount()) return 100;
+    if (spine == epub->getSpineItemsCount()) {
+      if (atEnd) *atEnd = true;
+      return 100;
+    }
     if (spine > epub->getSpineItemsCount()) return -1;
     const float fraction = total > 0 && page != UINT16_MAX ? std::clamp(float(page) / total, 0.0f, 1.0f) : 0;
     return std::clamp(static_cast<int>(epub->calculateProgress(spine, fraction) * 100 + 0.5f), 0, 100);
@@ -52,7 +56,10 @@ int loadBookProgress(const std::string& path) {
     if (!Storage.openFileForRead("PROG", progressPath, file) || file.read(data, 4) != 4) return -1;
     const uint32_t page = readLe32(data);
     if (xtc->getPageCount() == 0) return -1;
-    if (page >= xtc->getPageCount()) return 100;
+    if (page >= xtc->getPageCount()) {
+      if (atEnd) *atEnd = true;
+      return 100;
+    }
     return xtc->calculateProgress(page);
   }
   return -1;

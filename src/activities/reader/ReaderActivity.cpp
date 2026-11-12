@@ -15,6 +15,7 @@
 #include "CrossPointState.h"
 #include "EpubReaderActivity.h"
 #include "ReaderUtils.h"
+#include "ReadingStatusStore.h"
 #include "RecentBooksStore.h"
 #include "SdCardFontSystem.h"
 #include "XtcReaderActivity.h"
@@ -91,6 +92,7 @@ void ReaderActivity::onEnter() {
 void ReaderActivity::rememberBookOnceRendered() {
   if (bookRemembered || !pageRendered.load(std::memory_order_acquire)) return;
   bookRemembered = true;
+  openedAtEnd = isAtEndOfBook();
   APP_STATE.openEpubPath = bookPath;
   APP_STATE.saveToFile();
   RECENT_BOOKS.addBook(bookPath, getBookTitle(), getBookAuthor(), getBookThumbBmpPath());
@@ -110,6 +112,9 @@ void ReaderActivity::onExit() {
     if (percent > 0) {
       RECENT_BOOKS.updateProgress(bookPath, static_cast<uint8_t>(percent));
     }
+    // Before the reader's destructor moves a finished book to /Read/, which
+    // carries the state to the new path.
+    ReadingStatusStore::recordReaderExit(bookPath, isAtEndOfBook(), openedAtEnd);
   }
 
   // Keep rebuildable font buffers from pinning the heap between reading sessions.
