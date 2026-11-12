@@ -41,9 +41,7 @@ struct Segment {
   bool isKnownWord = false;
 };
 
-bool isTerminalNode(const uint16_t nodeIndex) {
-  return (thai_word_dawg::kNodeTerminalBits[nodeIndex / 8] >> (nodeIndex % 8)) & 0x01u;
-}
+bool isTerminalNode(const uint32_t nodeOffset) { return (thai_word_dawg::kNodes[nodeOffset] & 0x80u) != 0; }
 
 bool isBetterScore(const Score& candidate, const Score& current, const size_t candidateLength,
                    const size_t currentLength) {
@@ -129,7 +127,7 @@ void collectDictionaryMatchEnds(const std::vector<CodepointInfo>& cps, const siz
   }
 
   // Check DAWG dictionary
-  uint16_t nodeIndex = thai_word_dawg::kRootNode;
+  uint32_t nodeOffset = thai_word_dawg::kRootOffset;
   size_t pos = start;
 
   while (pos < cps.size()) {
@@ -141,19 +139,22 @@ void collectDictionaryMatchEnds(const std::vector<CodepointInfo>& cps, const siz
     const uint8_t symbol = static_cast<uint8_t>(cp - 0x0E00u);
     bool advanced = false;
 
-    const uint32_t firstEdge = thai_word_dawg::kNodeFirstEdge[nodeIndex];
-    const uint8_t edgeCount = thai_word_dawg::kNodeEdgeCount[nodeIndex];
+    // Edge layout in kNodes: label length, label, child offset (3 bytes, little-endian).
+    const uint8_t* edge = thai_word_dawg::kNodes + nodeOffset + 1;
+    const uint8_t edgeCount = thai_word_dawg::kNodes[nodeOffset] & 0x7Fu;
 
-    for (uint32_t edgeIdx = firstEdge; edgeIdx < firstEdge + edgeCount; ++edgeIdx) {
-      const auto& edge = thai_word_dawg::kEdges[edgeIdx];
-      const uint8_t* label = thai_word_dawg::kLabelData + edge.labelOffset;
+    for (uint8_t edgeIdx = 0; edgeIdx < edgeCount; ++edgeIdx) {
+      const uint8_t labelLength = edge[0];
+      const uint8_t* label = edge + 1;
+      const uint8_t* child = label + labelLength;
+      edge = child + 3;
       if (label[0] != symbol) {
         continue;
       }
 
       size_t scan = pos;
       bool matched = true;
-      for (uint8_t labelIdx = 0; labelIdx < edge.labelLength; ++labelIdx) {
+      for (uint8_t labelIdx = 0; labelIdx < labelLength; ++labelIdx) {
         if (scan >= cps.size() || !isThaiCharacter(cps[scan].value) ||
             static_cast<uint8_t>(cps[scan].value - 0x0E00u) != label[labelIdx]) {
           matched = false;
@@ -166,13 +167,13 @@ void collectDictionaryMatchEnds(const std::vector<CodepointInfo>& cps, const siz
         continue;
       }
 
-      nodeIndex = edge.childIndex;
+      nodeOffset = child[0] | (static_cast<uint32_t>(child[1]) << 8) | (static_cast<uint32_t>(child[2]) << 16);
       pos = scan;
       advanced = true;
 
       // The word list also holds letter names; a single letter is not a word here, or an
       // unknown run such as หญิ would be cut into ห and ญิ.
-      if (isTerminalNode(nodeIndex) && boundaries[pos] && pos - start >= 2) {
+      if (isTerminalNode(nodeOffset) && boundaries[pos] && pos - start >= 2) {
         outMatches.push_back({pos});
       }
       break;
