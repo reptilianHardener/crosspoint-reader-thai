@@ -49,13 +49,15 @@ void ReaderActivity::applyInitialOrientation() { ReaderUtils::applyOrientation(r
 
 void ReaderActivity::disableFastInitialRefresh() { pagesUntilFullRefresh = 0; }
 
-void ReaderActivity::notePageTurn(const bool forward, const bool succeeded) {
+void ReaderActivity::notePageTurn(const bool forward, const bool succeeded, const bool readerPaced) {
   RenderLock lock(*this);
-  readerSession.noteTurn(forward, succeeded);
+  readerSession.noteTurn(forward, succeeded, readerPaced, millis());
 }
 
 void ReaderActivity::onEnter() {
   Activity::onEnter();
+  // Before any early exit: onExit() writes the speed back.
+  readingSpeed.restore(APP_STATE.readingMsPerPage, APP_STATE.readingSpeedSamples);
 
   // Heap ledger for field crash reports: free vs largest block distinguishes a
   // leak (free falls) from fragmentation (free stable, largest collapses).
@@ -144,6 +146,10 @@ void ReaderActivity::onExit() {
 void ReaderActivity::prepareForSleep() { flushReaderSession(); }
 
 void ReaderActivity::flushReaderSession() {
+  // In memory only: reader exit and deep sleep both save APP_STATE right after this.
+  APP_STATE.readingMsPerPage = readingSpeed.msPerPage();
+  APP_STATE.readingSpeedSamples = readingSpeed.samples();
+
   if (!readerSession.isEmitWorthy() || !pluginevents::anySubscriber(pluginevents::Event::ReaderSession)) {
     readerSession.reset();
     return;
@@ -275,12 +281,12 @@ void ReaderActivity::render(RenderLock&&) {
     renderer.displayBuffer();
     onEndOfBookRendered();
     markPageRendered();
-    readerSession.onRenderComplete(millis(), trustedtime::trustedNow(), getProgressBasisPoints());
+    readingSpeed.addPage(readerSession.onRenderComplete(millis(), trustedtime::trustedNow(), getProgressBasisPoints()));
     return;
   }
 
   renderBook();
-  readerSession.onRenderComplete(millis(), trustedtime::trustedNow(), getProgressBasisPoints());
+  readingSpeed.addPage(readerSession.onRenderComplete(millis(), trustedtime::trustedNow(), getProgressBasisPoints()));
 }
 
 bool ReaderActivity::handleForcedRefresh() {

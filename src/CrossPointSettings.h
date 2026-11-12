@@ -63,6 +63,13 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     XTC_STATUS_BAR_MODE_COUNT
   };
 
+  enum STATUS_BAR_TIME_LEFT {
+    TIME_LEFT_OFF = 0,
+    TIME_LEFT_CHAPTER = 1,
+    TIME_LEFT_BOOK = 2,
+    STATUS_BAR_TIME_LEFT_COUNT
+  };
+
   enum STATUS_BAR_CLOCK_MODE {
     STATUS_BAR_CLOCK_HIDE = 0,
     STATUS_BAR_CLOCK_RIGHT = 1,
@@ -299,6 +306,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // Status bar settings
   uint8_t statusBarChapterPageCount = 1;
   uint8_t statusBarBookProgressPercentage = 1;
+  uint8_t statusBarTimeLeft = TIME_LEFT_OFF;
   uint8_t statusBarProgressBar = HIDE_PROGRESS;
   uint8_t statusBarProgressBarThickness = PROGRESS_BAR_NORMAL;
   uint8_t statusBarTitle = CHAPTER_TITLE;
@@ -502,7 +510,8 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   struct StatusBarSpec {
     bool showChapterPageCount = false;
     bool showBookProgressPercent = false;
-    uint8_t titleMode = HIDE_TITLE;  // STATUS_BAR_TITLE
+    uint8_t timeLeftMode = TIME_LEFT_OFF;  // STATUS_BAR_TIME_LEFT
+    uint8_t titleMode = HIDE_TITLE;        // STATUS_BAR_TITLE
     bool showBattery = false;
     bool showBatteryPercent = false;
     uint8_t clockMode = STATUS_BAR_CLOCK_HIDE;  // STATUS_BAR_CLOCK_MODE
@@ -514,10 +523,11 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     bool showsProgressBar() const { return progressBarMode != HIDE_PROGRESS; }
     bool showsTitle() const { return titleMode != HIDE_TITLE; }
     bool showsClock() const { return clockMode != STATUS_BAR_CLOCK_HIDE; }
+    bool showsTimeLeft() const { return timeLeftMode != TIME_LEFT_OFF; }
     // Visibility of the text lane. Clock hardware presence is the caller's
     // concern: pass halClock.isAvailable(), or true for layout reservation.
     bool textLaneVisible(bool clockAvailable) const {
-      return showChapterPageCount || showBookProgressPercent || showsTitle() || showBattery ||
+      return showChapterPageCount || showBookProgressPercent || showsTimeLeft() || showsTitle() || showBattery ||
              (showsClock() && clockAvailable);
     }
   };

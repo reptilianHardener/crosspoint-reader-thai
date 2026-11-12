@@ -989,7 +989,7 @@ void EpubReaderActivity::loop() {
 
     if ((millis() - lastPageTurnTime) >= pageTurnDuration) {
       const bool succeeded = pageTurn(true);
-      notePageTurn(true, succeeded);
+      notePageTurn(true, succeeded, false);
       requestUpdate();
       return;
     }
@@ -2713,7 +2713,22 @@ void EpubReaderActivity::renderStatusBar() const {
   }
 
   GUI.drawStatusBar(renderer, bookProgress, currentPage, pageCount, title, 0, textYOffset, true, currentPageBookmarked,
-                    section ? section->isBuilding() : false);
+                    section ? section->isBuilding() : false, timeLeftMinutes(sb.timeLeftMode, currentPage, pageCount));
+}
+
+int EpubReaderActivity::timeLeftMinutes(const uint8_t mode, const int currentPage, const float pageCount) const {
+  if (mode == CrossPointSettings::TIME_LEFT_OFF || !section || !epub) return -1;
+  // The current page counts as unread.
+  const float chapterPagesLeft = std::max(0.0f, pageCount - static_cast<float>(currentPage) + 1.0f);
+  if (mode != CrossPointSettings::TIME_LEFT_BOOK) return readingSpeed.minutesFor(chapterPagesLeft);
+
+  // The same cached spine sizes calculateProgress() just read: no extra SD access.
+  const size_t chapterStart = currentSpineIndex > 0 ? epub->getCumulativeSpineItemSize(currentSpineIndex - 1) : 0;
+  const size_t chapterEnd = epub->getCumulativeSpineItemSize(currentSpineIndex);
+  const size_t bookSize = epub->getBookSize();
+  if (chapterEnd < chapterStart || bookSize < chapterEnd) return -1;
+  return readingSpeed.minutesFor(
+      estimateBookPagesLeft(chapterPagesLeft, pageCount, chapterEnd - chapterStart, bookSize - chapterEnd));
 }
 
 // ---------------------------------------------------------------------------

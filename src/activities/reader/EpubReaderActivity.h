@@ -248,6 +248,8 @@ class EpubReaderActivity final : public ReaderActivity {
   // pageLeft is the page origin from pageOriginX() (the right edge on a vertical page).
   void drawClippingHighlights(const Page& page, int fontId, int pageTop, int pageLeft) const;
   void renderStatusBar() const;
+  // Status-bar time left for mode (STATUS_BAR_TIME_LEFT); -1 hides it.
+  int timeLeftMinutes(uint8_t mode, int currentPage, float pageCount) const;
   void applyOrientation(uint8_t orientation);
   void applyInitialOrientation() override;
   // The orientation the current layout was built for. The control center's

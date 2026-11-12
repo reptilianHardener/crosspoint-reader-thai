@@ -366,6 +366,7 @@ CrossPointSettings::StatusBarSpec CrossPointSettings::statusBarSpec() const {
   StatusBarSpec spec;
   spec.showChapterPageCount = statusBarChapterPageCount != 0;
   spec.showBookProgressPercent = statusBarBookProgressPercentage != 0;
+  spec.timeLeftMode = statusBarTimeLeft;
   spec.titleMode = statusBarTitle;
   spec.showBattery = statusBarBattery != 0;
   spec.showBatteryPercent = hideBatteryPercentage == HIDE_NEVER;

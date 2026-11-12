@@ -252,6 +252,7 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
   - "Full w/ Book Bar" - Show status bar with book progress (as bar)
   - "Book Bar Only" - Show book progress (as bar)
   - "Full w/ Chapter Bar" - Show status bar with chapter progress (as bar)
+  - **Time Left** (in "Customise Status Bar"; "Off" by default, "Chapter" or "Book"): An estimate of the reading time left in the chapter or the book. It is learned from the pages you turn yourself; automatic and remote page turns do not count. It appears after about 5 pages and is remembered across sleep. "Book" is an estimate from the book's size and is hidden on very short or mostly-picture chapters.
 
 - **Hide Battery %**: Configure where to suppress the battery percentage display in the status bar; the battery icon will still be shown:
   

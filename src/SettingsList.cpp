@@ -29,6 +29,13 @@ void forEachBaseSetting(SettingVisitor visit, void* context) {
     values[CrossPointSettings::STATUS_BAR_CLOCK_LEFT] = StrId::STR_DIR_LEFT;
     return values;
   }();
+  static constexpr auto STATUS_BAR_TIME_LEFT_VALUES = [] {
+    std::array<StrId, CrossPointSettings::STATUS_BAR_TIME_LEFT_COUNT> values{};
+    values[CrossPointSettings::TIME_LEFT_OFF] = StrId::STR_STATE_OFF;
+    values[CrossPointSettings::TIME_LEFT_CHAPTER] = StrId::STR_CHAPTER;
+    values[CrossPointSettings::TIME_LEFT_BOOK] = StrId::STR_BOOK;
+    return values;
+  }();
 
   const auto emit = [visit, context](auto&& info) { visit(context, info); };
   // --- Display ---
@@ -341,6 +348,8 @@ void forEachBaseSetting(SettingVisitor visit, void* context) {
                            "statusBarChapterPageCount", StrId::STR_CUSTOMISE_STATUS_BAR));
   emit(SettingInfo::Toggle(StrId::STR_BOOK_PROGRESS_PERCENTAGE, &CrossPointSettings::statusBarBookProgressPercentage,
                            "statusBarBookProgressPercentage", StrId::STR_CUSTOMISE_STATUS_BAR));
+  emit(SettingInfo::StaticEnum(StrId::STR_TIME_LEFT, &CrossPointSettings::statusBarTimeLeft,
+                               STATUS_BAR_TIME_LEFT_VALUES, "statusBarTimeLeft", StrId::STR_CUSTOMISE_STATUS_BAR));
   emit(SettingInfo::Enum(StrId::STR_PROGRESS_BAR, &CrossPointSettings::statusBarProgressBar,
                          {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE}, "statusBarProgressBar",
                          StrId::STR_CUSTOMISE_STATUS_BAR));

@@ -11,7 +11,7 @@ void anchor(ReaderSession& session, uint32_t ms, int64_t epoch, int progress) {
 }
 
 void turnAndRender(ReaderSession& session, bool forward, bool succeeded, uint32_t ms, int64_t epoch, int progress) {
-  session.noteTurn(forward, succeeded);
+  session.noteTurn(forward, succeeded, true, ms);
   session.onRenderComplete(ms, epoch, progress);
 }
 
@@ -44,7 +44,7 @@ TEST(ReaderSession, ExcludesBackwardSkipAndFailedTurns) {
   anchor(session, 1000, 100, 1000);
   turnAndRender(session, false, true, 11000, 110, 900);
   turnAndRender(session, true, false, 21000, 120, 1100);
-  session.noteTurn(false, false);  // owner uses this signal for skips
+  session.noteTurn(false, false, true, 31000);  // owner uses this signal for skips
   session.onRenderComplete(31000, 130, 2000);
 
   EXPECT_EQ(session.durationSeconds(), 0u);
@@ -100,7 +100,7 @@ TEST(ReaderSession, RequiresTenSecondsAndTrustedStart) {
 TEST(ReaderSession, ResetClearsSummaryAnchorAndPendingTurn) {
   ReaderSession session;
   anchor(session, 1000, 100, 1000);
-  session.noteTurn(true, true);
+  session.noteTurn(true, true, true, 5000);
   session.reset();
   session.onRenderComplete(12000, 111, 2000);
 
@@ -117,6 +117,50 @@ TEST(ReaderSession, MonotonicElapsedHandlesMillisWrap) {
   turnAndRender(session, true, true, 4000u, 105, 1100);
 
   EXPECT_EQ(session.durationSeconds(), 5u);
+}
+
+TEST(ReaderSession, ReportsDwellOnlyForReaderPacedForwardTurns) {
+  ReaderSession session;
+  EXPECT_EQ(session.onRenderComplete(1000, 0, 1000), 0u);  // first render: no anchor yet
+
+  session.noteTurn(true, true, true, 31000);
+  EXPECT_EQ(session.onRenderComplete(31500, 0, 1100), 30000u);  // no trusted time needed
+
+  session.noteTurn(true, true, false, 61500);  // automatic turn
+  EXPECT_EQ(session.onRenderComplete(62000, 0, 1200), 0u);
+
+  session.noteTurn(false, true, true, 92000);
+  EXPECT_EQ(session.onRenderComplete(92500, 0, 1100), 0u);
+
+  EXPECT_EQ(session.onRenderComplete(95000, 0, 1100), 0u);  // repaint without a turn
+}
+
+TEST(ReaderSession, DwellRunsFromPageShownToTurn) {
+  ReaderSession session;
+  session.onRenderComplete(1000, 0, 1000);
+
+  // An overlay repaint and a failed turn leave the page shown at 1000.
+  session.onRenderComplete(5000, 0, 1000);
+  session.noteTurn(true, false, true, 8000);
+  session.onRenderComplete(8100, 0, 1000);
+
+  // A slow next-page render (chapter build) is not counted.
+  session.noteTurn(true, true, true, 21000);
+  EXPECT_EQ(session.onRenderComplete(29000, 0, 1100), 20000u);
+
+  // The next sample starts when the turned page was shown, not at the turn.
+  session.noteTurn(true, true, true, 39000);
+  EXPECT_EQ(session.onRenderComplete(39500, 0, 1200), 10000u);
+
+  // Two turns before one render: the first turn ends the sample.
+  session.noteTurn(true, true, true, 45500);
+  session.noteTurn(true, true, true, 46000);
+  EXPECT_EQ(session.onRenderComplete(46500, 0, 1300), 6000u);
+
+  // A jump or remote turn changes the position without noteTurn: the next sample starts at its render.
+  EXPECT_EQ(session.onRenderComplete(100000, 0, 2500), 0u);
+  session.noteTurn(true, true, true, 130000);
+  EXPECT_EQ(session.onRenderComplete(130200, 0, 2600), 30000u);
 }
 
 }  // namespace
