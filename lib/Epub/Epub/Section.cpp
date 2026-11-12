@@ -81,6 +81,7 @@ namespace {
 // v71: Focus split offsets follow the visual run order for RTL words.
 // v72: Make ruby rendering closer to how Chromium renders ruby by default.
 // v73: TrueType vector fonts load and advance .notdef for missing glyphs.
+// v74: TrueType advances defer rounding until pixel placement.
 // v172: Upstream v71 plus this fork's changes, which used v68-v70 with other meanings: bold-text,
 //       Thai-dictionary, vertical-text and glyph-extent header fields; no line break before Thai
 //       Mai Yamok or Paiyannoi; adjacent ruby groups share spare room. Those fork caches rebuild.
@@ -90,7 +91,8 @@ namespace {
 //       below falls as this rises: it meets an upstream full version when the two sum to 282.
 // v174: Hidden breaks (U+200B, U+00AD) inside a Thai word defer to the dictionary; single
 //       letters are not dictionary words; an overlong Thai run is cut between words.
-constexpr uint8_t SECTION_FILE_VERSION = 174;
+// v175: Upstream v74 (TrueType advances defer rounding until pixel placement) plus the fork's changes.
+constexpr uint8_t SECTION_FILE_VERSION = 175;
 // Written into the version field while a build is in progress; patched to
 // SECTION_FILE_VERSION only when the build is finalized. An abandoned /
 // crash-interrupted .bin therefore carries version 0, which loadSectionFile rejects
