@@ -404,6 +404,11 @@ float CrossPointSettings::getReaderLineCompression() const {
   return LINE_SPACING_MULTIPLIERS[lineSpacing < LINE_COMPRESSION_COUNT ? lineSpacing : LINE_SPACING_120];
 }
 
+float CrossPointSettings::getScriptLineSpacingMultiplier() const {
+  return SCRIPT_LINE_SPACING_MULTIPLIERS[scriptLineSpacing < SCRIPT_LINE_SPACING_COUNT ? scriptLineSpacing
+                                                                                       : SCRIPT_SPACING_0];
+}
+
 unsigned long CrossPointSettings::getSleepTimeoutMs() const {
   if (sleepTimeoutMinutes >= SLEEP_TIMEOUT_NEVER_MINUTES) return 0UL;
   const uint8_t minutes =

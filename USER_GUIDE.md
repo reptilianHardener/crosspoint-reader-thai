@@ -287,6 +287,8 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
 
 - **Reader Line Spacing**: Space added between lines, as a percentage of font size: 0%, +10%, +20% (default), +30%, +45%, +60%, or +75%. In books whose language is Thai or Japanese, the default keeps the script's usual line pitch (room for Thai tone marks; 1.45 times a kanji's width in Japanese), and the other values scale from there. The preview in Text Settings shows a Thai or Japanese sample when it is opened from a book in that language; other books, and Text Settings opened from the Settings menu, use the interface language's sample (English if the interface is Thai or Japanese).
 
+- **Thai/JP Line Spacing**: Extra line spacing for books whose language is Thai or Japanese, on top of Reader Line Spacing: -15%, -10%, -5%, 0% (default), +5%, +10%, +15%, +20%, or +30%. It has no effect on other books. Text Settings lists it when opened from a Thai or Japanese book, or from the Settings menu when the interface is Thai or Japanese; the reader's Text panel lists it in Thai and Japanese books.
+
 - **Reader Screen Margin**: Controls the screen margins in Reading Mode between 5 and 40 pixels in 5-pixel increments.
 
 - **Reader Paragraph Alignment**: Set the alignment of paragraphs; options are "Justified" (default), "Left", "Center", or "Right".

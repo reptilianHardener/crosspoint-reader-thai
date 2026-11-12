@@ -539,8 +539,7 @@ void EpubReaderActivity::startClipSelection(const int initialX, const int initia
     requestUpdate();
     return;
   }
-  const uint32_t layoutSignature =
-      readerRenderSpecSignature(SETTINGS.readerRenderSpec(buildViewportWidth, buildViewportHeight));
+  const uint32_t layoutSignature = clippingLayoutSignature();
 
   int marginTop, marginRight, marginBottom, marginLeft;
   renderer.getOrientedViewableTRBL(&marginTop, &marginRight, &marginBottom, &marginLeft);
@@ -1563,6 +1562,17 @@ bool EpubReaderActivity::wantsVerticalLayout() const {
   return SETTINGS.verticalJapanese && epub && ReaderUtils::isJapaneseBookLanguage(epub->getLanguage());
 }
 
+// Clippings without source offsets match by this layout signature. Thai/JP Line Spacing joins it only
+// when it is not 0%, so clippings saved before the setting existed keep matching.
+uint32_t EpubReaderActivity::clippingLayoutSignature() const {
+  uint32_t signature = readerRenderSpecSignature(SETTINGS.readerRenderSpec(buildViewportWidth, buildViewportHeight));
+  if (SETTINGS.scriptLineSpacing != CrossPointSettings::SCRIPT_SPACING_0 && bookLineScript() != LineScript::Other) {
+    signature = (signature ^ SETTINGS.scriptLineSpacing) * 16777619U;
+    if (signature == 0) signature = 1;  // 0 means "no signature"
+  }
+  return signature;
+}
+
 LineScript EpubReaderActivity::bookLineScript() const {
   const std::string_view language = epub ? std::string_view(epub->getLanguage()) : std::string_view();
   if (ReaderUtils::isThaiBookLanguage(language)) return LineScript::Thai;
@@ -2537,8 +2547,7 @@ int EpubReaderActivity::clippingAtPoint(const Page& page, const int x, const int
   renderer.getOrientedViewableTRBL(&top, &right, &bottom, &left);
   const int pageX = pageOriginX(left + SETTINGS.screenMargin, right + SETTINGS.screenMargin);
   const int fontId = SETTINGS.getReaderFontId();
-  const uint32_t signature =
-      readerRenderSpecSignature(SETTINGS.readerRenderSpec(buildViewportWidth, buildViewportHeight));
+  const uint32_t signature = clippingLayoutSignature();
   uint16_t wordIndex = 0;
   for (const auto& element : page.elements) {
     if (element->getTag() != TAG_PageLine) continue;
@@ -2582,8 +2591,7 @@ void EpubReaderActivity::drawClippingHighlights(const Page& page, const int font
   const auto started = millis();
   size_t highlightedWords = 0;
   const uint16_t currentPage = static_cast<uint16_t>(section->currentPage);
-  const uint32_t layoutSignature =
-      readerRenderSpecSignature(SETTINGS.readerRenderSpec(buildViewportWidth, buildViewportHeight));
+  const uint32_t layoutSignature = clippingLayoutSignature();
   const auto isHighlighted = [&](const uint16_t wordIndex, const TextBlock::SourceRange range) {
     // ponytail: scan at most 256 C3 / 1024 S3 clippings per word; index by chapter if this becomes slow.
     for (size_t index = 0; index < CLIPPINGS.clippingCount(); ++index) {
@@ -2712,11 +2720,12 @@ void EpubReaderActivity::renderStatusBar() const {
 // ---------------------------------------------------------------------------
 
 namespace {
-constexpr StrId kTextRowNames[] = {StrId::STR_FONT, StrId::STR_FONT_SIZE, StrId::STR_LINE_SPACING,
+// Indexed by EpubReaderActivity::TextRow.
+constexpr StrId kTextRowNames[] = {StrId::STR_FONT,           StrId::STR_FONT_SIZE,
+                                   StrId::STR_LINE_SPACING,   StrId::STR_SCRIPT_LINE_SPACING,
                                    StrId::STR_PARA_ALIGNMENT, StrId::STR_FOCUS_READING};
 constexpr StrId kAlignIds[] = {StrId::STR_JUSTIFY, StrId::STR_ALIGN_LEFT, StrId::STR_CENTER, StrId::STR_ALIGN_RIGHT,
                                StrId::STR_BOOK_S_STYLE};
-constexpr int kTextRowCount = static_cast<int>(std::size(kTextRowNames));
 static_assert(std::size(kAlignIds) == CrossPointSettings::PARAGRAPH_ALIGNMENT_COUNT, "alignment labels");
 }  // namespace
 
@@ -2735,21 +2744,35 @@ std::string EpubReaderActivity::currentChapterTitle() const {
   return tr(STR_UNNAMED);
 }
 
-std::string EpubReaderActivity::textRowName(int row) const {
-  return row >= 0 && row < kTextRowCount ? I18N.get(kTextRowNames[row]) : "";
+int EpubReaderActivity::textRowCount() const {
+  return static_cast<int>(TextRow::Count) - (bookLineScript() == LineScript::Other ? 1 : 0);
 }
 
-std::string EpubReaderActivity::textRowValue(int row) const {
+// Maps a Text panel index to its row, skipping Thai/JP Line Spacing in other books.
+EpubReaderActivity::TextRow EpubReaderActivity::textRowAt(int index) const {
+  static_assert(std::size(kTextRowNames) == static_cast<size_t>(TextRow::Count));
+  if (index >= static_cast<int>(TextRow::ScriptLineSpacing) && bookLineScript() == LineScript::Other) ++index;
+  return index >= 0 && index < static_cast<int>(TextRow::Count) ? static_cast<TextRow>(index) : TextRow::Count;
+}
+
+std::string EpubReaderActivity::textRowName(const TextRow row) const {
+  return row < TextRow::Count ? I18N.get(kTextRowNames[static_cast<int>(row)]) : "";
+}
+
+std::string EpubReaderActivity::textRowValue(const TextRow row) const {
   static constexpr StrId kFamily[] = {StrId::STR_NOTO_SANS};
   switch (row) {
-    case 0:
+    case TextRow::Font:
       if (SETTINGS.sdFontFamilyName[0] != '\0') return SETTINGS.sdFontFamilyName;
       return I18N.get(kFamily[SETTINGS.fontFamily % CrossPointSettings::FONT_FAMILY_COUNT]);
-    case 1:
+    case TextRow::FontSize:
       return std::to_string(SETTINGS.fontPointSize) + " pt";
-    case 2:
+    case TextRow::LineSpacing:
       return I18N.get(LINE_SPACING_IDS[SETTINGS.lineSpacing % CrossPointSettings::LINE_COMPRESSION_COUNT]);
-    case 3:
+    case TextRow::ScriptLineSpacing:
+      return I18N.get(
+          SCRIPT_LINE_SPACING_IDS[SETTINGS.scriptLineSpacing % CrossPointSettings::SCRIPT_LINE_SPACING_COUNT]);
+    case TextRow::Alignment:
       return I18N.get(kAlignIds[SETTINGS.paragraphAlignment % CrossPointSettings::PARAGRAPH_ALIGNMENT_COUNT]);
     default:
       return "";
@@ -2766,9 +2789,9 @@ void EpubReaderActivity::applyTextSettingLive() {
 
 // Settings-style option pickers for the Text panel's enum rows. Every
 // selection applies immediately to the page under the sheet.
-void EpubReaderActivity::showTextRowPopup(const int row) {
+void EpubReaderActivity::showTextRowPopup(const TextRow row) {
   switch (row) {
-    case 1: {
+    case TextRow::FontSize: {
       // The point sizes the active family actually ships.
       const auto sizes = readerFontPointSizes(&sdFontSystem.registry(), SETTINGS.sdFontFamilyName);
       if (sizes.empty()) return;
@@ -2787,14 +2810,22 @@ void EpubReaderActivity::showTextRowPopup(const int row) {
       });
       break;
     }
-    case 2:
+    case TextRow::LineSpacing:
       overlayPopup.show(StrId::STR_LINE_SPACING, LINE_SPACING_IDS, static_cast<int>(std::size(LINE_SPACING_IDS)),
                         SETTINGS.lineSpacing % CrossPointSettings::LINE_COMPRESSION_COUNT, [this](int idx) {
                           SETTINGS.lineSpacing = static_cast<uint8_t>(idx);
                           applyTextSettingLive();
                         });
       break;
-    case 3:
+    case TextRow::ScriptLineSpacing:
+      overlayPopup.show(StrId::STR_SCRIPT_LINE_SPACING, SCRIPT_LINE_SPACING_IDS,
+                        static_cast<int>(std::size(SCRIPT_LINE_SPACING_IDS)),
+                        SETTINGS.scriptLineSpacing % CrossPointSettings::SCRIPT_LINE_SPACING_COUNT, [this](int idx) {
+                          SETTINGS.scriptLineSpacing = static_cast<uint8_t>(idx);
+                          applyTextSettingLive();
+                        });
+      break;
+    case TextRow::Alignment:
       overlayPopup.show(StrId::STR_PARA_ALIGNMENT, kAlignIds, static_cast<int>(std::size(kAlignIds)),
                         SETTINGS.paragraphAlignment % CrossPointSettings::PARAGRAPH_ALIGNMENT_COUNT, [this](int idx) {
                           SETTINGS.paragraphAlignment = static_cast<uint8_t>(idx);
@@ -2974,11 +3005,14 @@ void EpubReaderActivity::renderOverlay() {
     };
   } else if (overlay == Overlay::Text) {
     model.panelTitle = tr(STR_TOOL_TEXT);
-    model.itemCount = kTextRowCount;
-    model.rowText = [this](int i) { return textRowName(i); };
-    model.rowValue = [this](int i) { return textRowValue(i); };
-    model.rowCheckbox = [](void*, int i, freeink::ui::ListItem& item) {
-      if (i == 4) GUI.setCheckboxRow(item, SETTINGS.focusReadingEnabled);
+    model.itemCount = textRowCount();
+    model.rowText = [this](int i) { return textRowName(textRowAt(i)); };
+    model.rowValue = [this](int i) { return textRowValue(textRowAt(i)); };
+    model.rowCheckboxContext = this;
+    model.rowCheckbox = [](void* ctx, int i, freeink::ui::ListItem& item) {
+      if (static_cast<const EpubReaderActivity*>(ctx)->textRowAt(i) == TextRow::FocusReading) {
+        GUI.setCheckboxRow(item, SETTINGS.focusReadingEnabled);
+      }
     };
   } else {
     model.panelTitle = tr(STR_TOOL_MORE);
@@ -3109,7 +3143,7 @@ void EpubReaderActivity::handleOverlayInput() {
 
   // --- Panels (Contents / Text / More) ---
   const int count = overlay == Overlay::Contents ? epub->getTocItemsCount()
-                    : overlay == Overlay::Text   ? kTextRowCount
+                    : overlay == Overlay::Text   ? textRowCount()
                                                  : static_cast<int>(moreItems.size());
   const int pageRows = std::max(1, toolbarUi->visibleRows());
 
@@ -3118,7 +3152,8 @@ void EpubReaderActivity::handleOverlayInput() {
   const auto activateRow = [this, count, &fastRedraw] {
     if (panelIndex < 0 || panelIndex >= count) return;
     if (overlay == Overlay::Text) {
-      if (panelIndex == 0) {
+      const TextRow row = textRowAt(panelIndex);
+      if (row == TextRow::Font) {
         // Full font picker (built-in + SD fonts, live preview) -- the same
         // screen Settings uses; a popup cannot scroll a long font list.
         overlay = Overlay::None;
@@ -3138,13 +3173,13 @@ void EpubReaderActivity::handleOverlayInput() {
               if (toolbarUi) toolbarUi->begin();  // the picker drew its own FUI screen
               requestUpdate();                    // re-render page + Text panel
             });
-      } else if (panelIndex == 4) {
+      } else if (row == TextRow::FocusReading) {
         // Focus Reading is a genuine on/off: a tap toggles and applies live.
         SETTINGS.focusReadingEnabled = SETTINGS.focusReadingEnabled ? 0 : 1;
         applyTextSettingLive();
       } else {
         // Enum rows open the Settings-style option picker.
-        showTextRowPopup(panelIndex);
+        showTextRowPopup(row);
       }
     } else if (overlay == Overlay::Contents) {
       const auto item = epub->getTocItem(panelIndex);

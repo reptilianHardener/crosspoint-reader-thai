@@ -15,6 +15,8 @@ constexpr float JAPANESE_LINE_PITCH_EM = 1.45f;
 
 void applyScriptLineSpacing(ReaderRenderSpec& spec, const GfxRenderer& renderer, const LineScript script) {
   if (script == LineScript::Other) return;
+  // The Thai/JP Line Spacing setting. It moves lines apart, not glyph extents, so glyphExtentScale ignores it.
+  spec.lineCompression *= SETTINGS.getScriptLineSpacingMultiplier();
   const auto fontIt = renderer.getFontMap().find(spec.fontId);
   if (fontIt == renderer.getFontMap().end()) return;
   const float fontLineHeight = static_cast<float>(renderer.getLineHeight(spec.fontId));

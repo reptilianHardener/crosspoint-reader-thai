@@ -141,6 +141,19 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     LINE_SPACING_175 = 6,
     LINE_COMPRESSION_COUNT
   };
+  // Extra line spacing for Thai and Japanese books, on top of lineSpacing.
+  enum SCRIPT_LINE_SPACING {
+    SCRIPT_SPACING_MINUS_15 = 0,
+    SCRIPT_SPACING_MINUS_10 = 1,
+    SCRIPT_SPACING_MINUS_5 = 2,
+    SCRIPT_SPACING_0 = 3,
+    SCRIPT_SPACING_PLUS_5 = 4,
+    SCRIPT_SPACING_PLUS_10 = 5,
+    SCRIPT_SPACING_PLUS_15 = 6,
+    SCRIPT_SPACING_PLUS_20 = 7,
+    SCRIPT_SPACING_PLUS_30 = 8,
+    SCRIPT_LINE_SPACING_COUNT
+  };
   enum PARAGRAPH_ALIGNMENT {
     JUSTIFIED = 0,
     LEFT_ALIGN = 1,
@@ -348,6 +361,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // available size (and persists the snap) whenever the family changes.
   uint8_t fontPointSize = DEFAULT_FONT_POINT_SIZE;
   uint8_t lineSpacing = LINE_SPACING_120;
+  uint8_t scriptLineSpacing = SCRIPT_SPACING_0;
   uint8_t paragraphAlignment = JUSTIFIED;
   // Auto-sleep timeout setting (default 10 minutes). Legacy sleepTimeout enum values are migration-only.
   uint8_t sleepTimeoutMinutes = 10;
@@ -523,6 +537,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   static uint8_t sleepTimeoutEnumToMinutes(uint8_t legacyValue);
 
   float getReaderLineCompression() const;
+  float getScriptLineSpacingMultiplier() const;
   unsigned long getSleepTimeoutMs() const;
   int getRefreshFrequency() const;
 };

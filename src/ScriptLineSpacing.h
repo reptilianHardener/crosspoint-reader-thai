@@ -12,5 +12,6 @@ enum class LineScript : uint8_t { Other, Thai, Japanese };
 // measure it from their script's own line pitch instead, so the default percentage keeps
 // that pitch: Thai takes the font's line height, which leaves room for stacked tone marks;
 // Japanese takes 1.45 times the width of a kanji (Noto Sans JP's proportion), or the font's
-// line height if that is tighter. Scales spec.lineCompression and sets spec.glyphExtentScale.
+// line height if that is tighter. The Thai/JP Line Spacing setting then scales that pitch.
+// Scales spec.lineCompression and sets spec.glyphExtentScale.
 void applyScriptLineSpacing(ReaderRenderSpec& spec, const GfxRenderer& renderer, LineScript script);
