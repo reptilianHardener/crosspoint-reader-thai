@@ -7,8 +7,10 @@
 #include <I18n.h>
 #include <Logging.h>
 #include <Memory.h>
+#include <Utf8.h>
 
 #include <algorithm>
+#include <cctype>
 #include <climits>
 #include <cstdlib>
 
@@ -20,6 +22,7 @@
 #include "clippings/SelectionGeometry.h"
 #include "components/UIScale.h"
 #include "components/UITheme.h"
+#include "util/Dictionary.h"
 #include "util/DictionaryRegistry.h"
 #include "util/WordSelectionInput.h"
 
@@ -30,8 +33,39 @@ namespace {
 constexpr int TOUCH_DRAG_MOVEMENT_PX = 4;
 constexpr unsigned long TOUCH_PAGE_ADVANCE_HOLD_MS = 1000;
 constexpr int TOUCH_PAGE_END_DWELL_SLOP_PX = 8;
+// Holding Confirm on a Japanese character starts a range instead of looking the word up.
+constexpr unsigned long RANGE_HOLD_MS = 600;
 constexpr ClippingResult::Action SELECTION_ACTIONS[] = {ClippingResult::Action::Lookup, ClippingResult::Action::Clip,
                                                         ClippingResult::Action::Bookmark};
+
+// Kana and kanji: Japanese words are written without spaces, so a lookup takes the longest word.
+bool isJapaneseLetter(const uint32_t cp) {
+  return (cp >= 0x3041 && cp <= 0x3096) || (cp >= 0x30A1 && cp <= 0x30FA) || cp == 0x30FC || cp == 0x3005 ||
+         (cp >= 0x3400 && cp <= 0x4DBF) || (cp >= 0x4E00 && cp <= 0x9FFF) || (cp >= 0xF900 && cp <= 0xFAFF) ||
+         (cp >= 0x20000 && cp <= 0x2A6DF);
+}
+
+// Latin letters and digits, half or full width: a word that starts with one is not looked up from its middle.
+bool isLatinOrDigit(const uint32_t cp) {
+  return (cp < 0x80 && std::isalnum(static_cast<int>(cp))) || (cp >= 0xC0 && cp <= 0x24F) ||
+         (cp >= 0xFF10 && cp <= 0xFF19) || (cp >= 0xFF21 && cp <= 0xFF3A) || (cp >= 0xFF41 && cp <= 0xFF5A);
+}
+
+// The first Japanese letter in text, skipping opening brackets and the like; nullptr when there is none or a
+// Latin letter or digit comes first (Tシャツ, 2019年).
+const char* firstJapaneseLetter(const char* text) {
+  if (!text) return nullptr;
+  const auto* p = reinterpret_cast<const unsigned char*>(text);
+  while (*p != '\0') {
+    const auto* start = p;
+    const uint32_t cp = utf8NextCodepoint(&p);
+    if (isJapaneseLetter(cp)) return reinterpret_cast<const char*>(start);
+    if (isLatinOrDigit(cp)) return nullptr;
+  }
+  return nullptr;
+}
+
+int handleSize() { return std::max(24, UITheme::getInstance().getMetrics().verticalSpacing * 2); }
 
 const char* cleanWordStart(const char* text) {
   if (!text) return "";
@@ -48,7 +82,7 @@ const char* cleanWordStart(const char* text) {
 ClipSelectionActivity::ClipSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                              std::vector<std::unique_ptr<Page>> pages, const int marginLeft,
                                              const int marginTop, const int initialX, const int initialY,
-                                             const Mode mode, const bool vertical)
+                                             const Mode mode, const bool vertical, const bool japanese)
     : Activity("ClipSelection", renderer, mappedInput),
       pages(std::move(pages)),
       marginLeft(marginLeft),
@@ -56,7 +90,8 @@ ClipSelectionActivity::ClipSelectionActivity(GfxRenderer& renderer, MappedInputM
       initialX(initialX),
       initialY(initialY),
       mode(mode),
-      vertical(vertical) {}
+      vertical(vertical),
+      japanese(japanese) {}
 
 ClipSelectionActivity::ClipSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                              std::span<const std::unique_ptr<Page>> borrowedPages, const int marginLeft,
@@ -298,7 +333,7 @@ int ClipSelectionActivity::dragWordAt(const int x, int y) const {
     const WordBox& word = words[i];
     if (word.pageOffset != currentPageOffset) continue;
     const Rect candidate{word.x, word.y, word.width, word.height};
-    if (best < 0 || selectionGeometry::nearerWord(candidate, nearest, x, y)) {
+    if (best < 0 || selectionGeometry::nearerWord(candidate, nearest, x, y, vertical)) {
       nearest = candidate;
       best = i;
     }
@@ -344,7 +379,10 @@ int ClipSelectionActivity::nextPageStartIndexForTouchDrag() const {
 bool ClipSelectionActivity::isWithinCurrentPageEndDwellSlop(const int x, const int y) const {
   if (selected < 0 || selected >= static_cast<int>(wordCount)) return false;
   const Rect safe = UITheme::getInstance().getScreenSafeArea(renderer, true, false);
-  if (selectionGeometry::atBottomEdge(safe, lineHeight, x, y)) return true;
+  if (vertical ? selectionGeometry::atLeftEdge(safe, lineHeight, x, y)
+               : selectionGeometry::atBottomEdge(safe, lineHeight, x, y)) {
+    return true;
+  }
   if (selected + 1 < static_cast<int>(wordCount) && words[selected + 1].pageOffset == currentPageOffset) return false;
   const WordBox& word = words[selected];
   const int wordY = word.y + textOffset();
@@ -426,8 +464,10 @@ bool ClipSelectionActivity::buildSelectedText(const int first, const int last, s
 void ClipSelectionActivity::confirmSelection(const ClippingResult::Action action) {
   if (rangeStart < 0) {
     rangeStart = selected;
-    requestUpdate();
-    return;
+    if (action != ClippingResult::Action::Lookup || !looksUpLongestWord(selected)) {
+      requestUpdate();
+      return;
+    }
   }
 
   const int first = std::min(rangeStart, selected);
@@ -438,7 +478,7 @@ void ClipSelectionActivity::confirmSelection(const ClippingResult::Action action
   // reserve() aborts on OOM; leave room for the sort order and error popup too.
   const size_t requiredHeap = CLIPPING_TEXT_MAX + 1 + (last - first + 1) * sizeof(uint16_t) + 1024;
   const bool lowMemory = heap.largestBlockBytes < CLIPPING_TEXT_MAX + 1 || heap.freeBytes < requiredHeap;
-  if (lowMemory || !buildSelectedText(first, last, result.text)) {
+  if (lowMemory || !buildResultText(first, last, result)) {
     static constexpr StrId OPTIONS[] = {StrId::STR_BACK};
     actionPopup.show(lowMemory ? StrId::STR_MEMORY_ERROR : StrId::STR_CLIPPING_TOO_LONG, OPTIONS, 1, 0, [](int) {});
     requestUpdate();
@@ -477,6 +517,10 @@ bool ClipSelectionActivity::handleHomeGesture() {
 }
 
 void ClipSelectionActivity::loopButtons() {
+  if (rangeStart < 0 && looksUpLongestWord(selected) &&
+      mappedInput.wasLongPressed(MappedInputManager::Button::Confirm, RANGE_HOLD_MS)) {
+    rangeHoldPending = true;
+  }
   const uint8_t buttons = selectionInput.pollButtons(mappedInput, millis());
   if (buttons) {
     if (pendingButtonCount < pendingButtons.size()) {
@@ -494,6 +538,14 @@ void ClipSelectionActivity::loopButtons() {
   }
   std::move(pendingButtons.begin() + processed, pendingButtons.begin() + pendingButtonCount, pendingButtons.begin());
   pendingButtonCount -= processed;
+  if (rangeHoldPending && pendingButtonCount == 0) {
+    rangeHoldPending = false;
+    if (rangeStart < 0) {
+      rangeStart = selected;
+      exactRange = true;
+      requestUpdate();
+    }
+  }
 }
 
 void ClipSelectionActivity::loop() {
@@ -508,6 +560,13 @@ void ClipSelectionActivity::loop() {
 
   RenderLock lock;
   if (actionPopup.handleInput(mappedInput, [this] { requestUpdate(); })) return;
+  if (rangeStart < 0 && looksUpLongestWord(selected) &&
+      mappedInput.wasLongPressed(MappedInputManager::Button::Confirm, RANGE_HOLD_MS)) {
+    rangeStart = selected;
+    exactRange = true;
+    requestUpdate();
+    return;
+  }
 
   int touchX = 0;
   int touchY = 0;
@@ -533,6 +592,9 @@ void ClipSelectionActivity::loop() {
       const int hit = wordAt(touchX, touchY);
       if (hit < 0) {
         cancel();
+      } else if (looksUpLongestWord(hit)) {
+        selected = hit;
+        confirmSelection(ClippingResult::Action::Lookup);
       } else {
         selected = rangeStart = hit;
         requestUpdate();
@@ -570,9 +632,16 @@ void ClipSelectionActivity::loop() {
       }
       return;
     }
+    // A press on a Japanese character without dragging looks its word up straight away.
+    const bool tappedLookup = !touchDragHasMoved && rangeStart == selected && looksUpLongestWord(selected);
+    exactRange = exactRange || touchDragHasMoved;
     touchDragSelecting = false;
     touchDragHasMoved = false;
     touchDragPageEndIndex = -1;
+    if (tappedLookup) {
+      confirmSelection(ClippingResult::Action::Lookup);
+      return;
+    }
     requestUpdate();
     return;
   } else if (mappedInput.wasScreenTouchPressed(touchX, touchY)) {
@@ -589,6 +658,7 @@ void ClipSelectionActivity::loop() {
           continue;
         selected = index;
         rangeStart = endpoint == 0 ? last : first;
+        exactRange = true;
         dragOffsetX = words[index].x + words[index].width / 2 - touchX;
         dragOffsetY = words[index].y + textOffset() + words[index].height / 2 - touchY;
         touchDragSelecting = true;
@@ -603,6 +673,7 @@ void ClipSelectionActivity::loop() {
     const int hit = wordAt(touchX, touchY);
     if (hit >= 0) {
       selected = rangeStart = hit;
+      exactRange = false;
       dragOffsetX = 0;
       dragOffsetY = 0;
       touchDragSelecting = true;
@@ -621,12 +692,15 @@ void ClipSelectionActivity::loop() {
     return;
   }
 
+  // Vertical pages turn the other way, as in the reader: a right swipe is the next page.
   const auto swipe = mappedInput.wasSwipe();
-  if (swipe == MappedInputManager::SwipeDir::Left || swipe == MappedInputManager::SwipeDir::Up) {
+  const auto nextSwipe = vertical ? MappedInputManager::SwipeDir::Right : MappedInputManager::SwipeDir::Left;
+  const auto previousSwipe = vertical ? MappedInputManager::SwipeDir::Left : MappedInputManager::SwipeDir::Right;
+  if (swipe == nextSwipe || swipe == MappedInputManager::SwipeDir::Up) {
     moveToPage(static_cast<int>(currentPageOffset) + 1);
     return;
   }
-  if (swipe == MappedInputManager::SwipeDir::Right || swipe == MappedInputManager::SwipeDir::Down) {
+  if (swipe == previousSwipe || swipe == MappedInputManager::SwipeDir::Down) {
     moveToPage(static_cast<int>(currentPageOffset) - 1);
     return;
   }
@@ -643,6 +717,7 @@ bool ClipSelectionActivity::handleButtons(const uint8_t buttons) {
   if (buttons & Input::INPUT_BACK) {
     if (rangeStart >= 0 && mode != Mode::DefinitionLookup) {
       rangeStart = -1;
+      exactRange = false;
       requestUpdate();
     } else {
       cancel();
@@ -656,14 +731,15 @@ bool ClipSelectionActivity::handleButtons(const uint8_t buttons) {
   }
 
   if (vertical) {
-    // Up/Down step along the column, Left/Right move between columns (the next one is to the left).
-    if (buttons & Input::INPUT_UP) {
+    // Left/Right step along the column (Left is forward, as for page turns; they repeat when held),
+    // Down/Up move to the next column (to the left) or the previous one.
+    if (buttons & Input::INPUT_LEFT) {
+      selectIndex(selected + 1);
+    } else if (buttons & Input::INPUT_RIGHT) {
       selectIndex(selected - 1);
     } else if (buttons & Input::INPUT_DOWN) {
-      selectIndex(selected + 1);
-    } else if (buttons & Input::INPUT_LEFT) {
       moveVertical(1);
-    } else if (buttons & Input::INPUT_RIGHT) {
+    } else if (buttons & Input::INPUT_UP) {
       moveVertical(-1);
     }
     return false;
@@ -681,10 +757,61 @@ bool ClipSelectionActivity::handleButtons(const uint8_t buttons) {
   return false;
 }
 
+MappedInputManager::Labels ClipSelectionActivity::buttonLabels() const {
+  const bool selecting = rangeStart < 0 && !looksUpLongestWord(selected);
+  // On a vertical page the front buttons move the cursor down and up the column.
+  return mappedInput.mapLabels(tr(STR_BACK), selecting ? tr(STR_SELECT) : (isLookup() ? tr(STR_LOOKUP) : tr(STR_DONE)),
+                               vertical ? tr(STR_DIR_DOWN) : tr(STR_DIR_LEFT),
+                               vertical ? tr(STR_DIR_UP) : tr(STR_DIR_RIGHT));
+}
+
+bool ClipSelectionActivity::takesLongestWord(const int index) const {
+  return japanese && mode != Mode::DefinitionLookup && !exactRange && index >= 0 &&
+         index < static_cast<int>(wordCount) && firstJapaneseLetter(words[index].text) != nullptr;
+}
+
+bool ClipSelectionActivity::looksUpLongestWord(const int index) const {
+  return mode == Mode::Lookup && takesLongestWord(index);
+}
+
+bool ClipSelectionActivity::buildResultText(const int first, const int last, ClippingResult& result) const {
+  result.longestMatch = result.action == ClippingResult::Action::Lookup && first == last && takesLongestWord(first) &&
+                        buildLongestMatchText(first, result.text);
+  return result.longestMatch || buildSelectedText(first, last, result.text);
+}
+
+bool ClipSelectionActivity::buildLongestMatchText(const int first, std::string& text) const {
+  // The cursor's character and the ones after it in the same run of Japanese letters; the dictionary
+  // decides how many of them make the word.
+  text.clear();
+  const char* start = firstJapaneseLetter(words[first].text);
+  if (!start) return false;
+  size_t letters = 0;
+  for (int i = first; i < static_cast<int>(wordCount) && letters < Dictionary::kMaxPrefixChars; ++i) {
+    const WordBox& word = words[i];
+    if (i > first) {
+      // Furigana and source line breaks leave gaps in the offsets; a gap is fine within the paragraph, and the
+      // letter check below stops at punctuation or Latin text.
+      const WordBox& previous = words[i - 1];
+      const bool follows =
+          word.startOffset != UINT32_MAX && previous.endOffset != UINT32_MAX && word.startOffset >= previous.endOffset;
+      if (word.paragraphStart || !follows) break;
+    }
+    const auto* p = reinterpret_cast<const unsigned char*>(i == first ? start : word.text);
+    while (*p != '\0' && letters < Dictionary::kMaxPrefixChars) {
+      const auto* charStart = p;
+      if (!isJapaneseLetter(utf8NextCodepoint(&p))) return letters > 0;
+      text.append(reinterpret_cast<const char*>(charStart), static_cast<size_t>(p - charStart));
+      ++letters;
+    }
+  }
+  return letters > 0;
+}
+
 Rect ClipSelectionActivity::handleRect(const int index, const bool start) const {
   const WordBox& word = words[index];
   const Rect safe = UITheme::getInstance().getScreenSafeArea(renderer, true, false);
-  const int size = std::max(24, UITheme::getInstance().getMetrics().verticalSpacing * 2);
+  const int size = handleSize();
   if (vertical) {
     // Left of the column, above its first word or below its last.
     const int y = start ? word.y + textOffset() - size : word.y + textOffset() + word.height;
@@ -705,6 +832,16 @@ int ClipSelectionActivity::selectionTop() const {
     if (words[i].pageOffset == currentPageOffset) top = std::min(top, static_cast<int>(words[i].y));
   }
   return top;
+}
+
+int ClipSelectionActivity::selectionBottom() const {
+  const int first = std::min(rangeStart, selected);
+  const int last = std::max(rangeStart, selected);
+  int bottom = 0;
+  for (int i = first; i <= last; ++i) {
+    if (words[i].pageOffset == currentPageOffset) bottom = std::max(bottom, words[i].y + words[i].height);
+  }
+  return bottom;
 }
 
 int ClipSelectionActivity::actionAt(const int x, const int y) const {
@@ -735,8 +872,15 @@ Rect ClipSelectionActivity::actionRect() const {
   int first = std::min(rangeStart, selected);
   const int last = std::max(rangeStart, selected);
   while (first < last && words[first].pageOffset < currentPageOffset) ++first;
-  return selectionGeometry::actions(safe, selectionTop(), height + padding * 2, metrics.verticalSpacing, width,
-                                    words[first].x - padding);
+  Rect bar = selectionGeometry::actions(safe, selectionTop(), height + padding * 2, metrics.verticalSpacing, width,
+                                        words[first].x - padding);
+  const int selectedBottom = selectionBottom();
+  if (vertical && selectedBottom > 0) {
+    // Columns start at the top margin, so there is rarely room above: go below the selection and its end handle.
+    const int below = std::max(safe.y, selectedBottom + handleSize() + metrics.verticalSpacing);
+    if (below + bar.height <= safe.y + safe.height) bar.y = below;
+  }
+  return bar;
 }
 
 int ClipSelectionActivity::textOffset() const {
@@ -837,9 +981,7 @@ bool ClipSelectionActivity::renderIncremental() {
     drawSelection();
     renderer.setClipRect(clip[0], clip[1], clip[2], clip[3]);
   }
-  const auto labels = mappedInput.mapLabels(
-      tr(STR_BACK), rangeStart < 0 ? tr(STR_SELECT) : (isLookup() ? tr(STR_LOOKUP) : tr(STR_DONE)), tr(STR_DIR_LEFT),
-      tr(STR_DIR_RIGHT));
+  const auto labels = buttonLabels();
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   renderer.displayBuffer(HalDisplay::FAST_REFRESH);
   lastRenderedSelected = selected;
@@ -897,9 +1039,7 @@ void ClipSelectionActivity::render(RenderLock&&) {
   if (wordCount != 0) drawSelection();
   renderer.setClipRect(clip[0], clip[1], clip[2], clip[3]);
 
-  const auto labels = mappedInput.mapLabels(
-      tr(STR_BACK), rangeStart < 0 ? tr(STR_SELECT) : (isLookup() ? tr(STR_LOOKUP) : tr(STR_DONE)), tr(STR_DIR_LEFT),
-      tr(STR_DIR_RIGHT));
+  const auto labels = buttonLabels();
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   renderer.displayBuffer();
 

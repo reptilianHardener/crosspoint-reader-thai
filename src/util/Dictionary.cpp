@@ -7,6 +7,7 @@
 #include <Utf8.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdio>
 #include <cstring>
@@ -15,6 +16,7 @@
 #include "../../lib/Epub/Epub/CjkBreaks.h"
 #include "DictZip.h"
 #include "DictionaryRegistry.h"
+#include "JapaneseDeinflect.h"
 #include "StringUtils.h"
 #include "TxtToHtml.h"
 
@@ -938,7 +940,106 @@ bool Dictionary::lookup(const char* word, std::string& definitionOut, std::strin
         }
       }
     }
+
+    // Japanese verb and adjective forms (食べた → 食べる); a no-op for other text.
+    if (group.empty() && !group.lowMemory()) {
+      japaneseDeinflect::forEachCandidate(cleaned, [&](const char* candidate) {
+        bool candidateReadError = false;
+        locateAll(session, candidate, group, &candidateReadError);
+        searchFailed = searchFailed || candidateReadError;
+        return !group.empty() || group.lowMemory();
+      });
+      if (!group.empty() && !group.lowMemory()) matchedHeadwordOut = group.front().headword.get();
+    }
   }
+  return readGroup(groupFromSynonyms, searchFailed, definitionOut, outResult);
+}
+
+bool Dictionary::lookupLongestPrefix(const char* text, std::string& definitionOut, std::string& matchedHeadwordOut,
+                                     std::string& matchedTextOut, LookupResult* outResult) {
+  const auto setResult = [outResult](LookupResult r) {
+    if (outResult) *outResult = r;
+  };
+  setResult(LookupResult::NotFound);
+  // cleanWord's copy plus the matched text; the candidates live on the stack.
+  const size_t textBytes = text ? strlen(text) + 1 : 1;
+  const auto heap = HalMemory::getDefaultHeap();
+  if (heap.freeBytes < 2 * textBytes + DEFINITION_HEAP_HEADROOM_BYTES || heap.largestBlockBytes < textBytes) {
+    LOG_ERR("DICT", "Low heap for prefix lookup");
+    setResult(LookupResult::LowMemory);
+    return false;
+  }
+  const std::string cleaned = cleanWord(text);
+  if (cleaned.empty() || !isOpen()) return false;
+  if (!entryList) {
+    LOG_ERR("DICT", "No entry list for the open dictionary");
+    setResult(LookupResult::ReadError);
+    return false;
+  }
+
+  // Byte length of each prefix of 1..kMaxPrefixChars characters.
+  std::array<size_t, kMaxPrefixChars> prefixBytes{};
+  size_t prefixCount = 0;
+  const auto* begin = reinterpret_cast<const unsigned char*>(cleaned.c_str());
+  for (const auto* p = begin; *p != '\0' && prefixCount < kMaxPrefixChars;) {
+    utf8NextCodepoint(&p);
+    prefixBytes[prefixCount++] = static_cast<size_t>(p - begin);
+  }
+
+  DictEntryList& group = *entryList;
+  group.clear();
+  bool groupFromSynonyms = false;
+  bool searchFailed = false;
+  {
+    LookupSession session;
+    if (!openSession(session)) {
+      setResult(LookupResult::ReadError);
+      return false;
+    }
+    // True once the word is found (or memory ran out), so the search stops. The text as written is also
+    // tried against .syn; guessed dictionary forms are headwords, so they skip it (halves the SD reads).
+    const auto probe = [&](const char* word, const bool withSynonyms) {
+      bool readError = false;
+      locateAll(session, word, group, &readError);
+      searchFailed = searchFailed || readError;
+      if (withSynonyms && group.empty() && !group.lowMemory() && hasSyn) {
+        locateSynonyms(session, word, group, &readError);
+        searchFailed = searchFailed || readError;
+        if (!group.empty() && !group.lowMemory()) {
+          groupFromSynonyms = true;
+          matchedHeadwordOut = word;
+        }
+      }
+      return !group.empty() || group.lowMemory();
+    };
+
+    // Longest first: 食べた must find 食べる before 食 alone matches.
+    char prefix[japaneseDeinflect::kMaxCandidateBytes];
+    for (size_t n = prefixCount; n > 0; --n) {
+      const size_t bytes = prefixBytes[n - 1];
+      if (bytes >= sizeof(prefix)) continue;
+      memcpy(prefix, cleaned.data(), bytes);
+      prefix[bytes] = '\0';
+      if (!probe(prefix, true) &&
+          !japaneseDeinflect::forEachCandidate(std::string_view(prefix, bytes),
+                                               [&](const char* candidate) { return probe(candidate, false); })) {
+        continue;
+      }
+      if (group.lowMemory()) break;
+      matchedTextOut.assign(prefix, bytes);
+      if (!groupFromSynonyms) matchedHeadwordOut = group.front().headword.get();
+      break;
+    }
+  }
+  return readGroup(groupFromSynonyms, searchFailed, definitionOut, outResult);
+}
+
+bool Dictionary::readGroup(const bool groupFromSynonyms, const bool searchFailed, std::string& definitionOut,
+                           LookupResult* outResult) {
+  const auto setResult = [outResult](LookupResult r) {
+    if (outResult) *outResult = r;
+  };
+  DictEntryList& group = *entryList;
   if (group.lowMemory()) {
     setResult(LookupResult::LowMemory);
     return false;

@@ -322,6 +322,10 @@ struct ClipSelectionActivity {
   int textXOffset() const { return testOffsetX; }
   Rect handleRect(int, bool) const { return {}; }
   Rect actionRect() const { return {}; }
+  Input::Labels buttonLabels() const {
+    return mappedInput.mapLabels(STR_BACK, rangeStart < 0 ? STR_SELECT : (isLookup() ? STR_LOOKUP : STR_DONE),
+                                 STR_DIR_LEFT, STR_DIR_RIGHT);
+  }
 };
 """ + build_text + extract_words + gap_draw + incremental_draw + selection_draw + r"""
 struct EpubReaderActivity {

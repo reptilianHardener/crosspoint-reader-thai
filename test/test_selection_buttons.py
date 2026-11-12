@@ -38,11 +38,19 @@ struct MappedInputManager {
   bool wasPressed(Button b) const { return pressed & (1 << static_cast<int>(b)); }
   bool wasReleased(Button b) const { return released & (1 << static_cast<int>(b)); }
   bool isPressed(Button b) const { return held & (1 << static_cast<int>(b)); }
+  bool longPress = false;
+  bool wasLongPressed(Button b, unsigned long) const { return longPress && b == Button::Confirm; }
 };
+constexpr unsigned long RANGE_HOLD_MS = 600;
 """ + helpers + r"""
 struct ClipSelectionActivity {
   MappedInputManager mappedInput;
   int selected = 5, confirmed = -1;
+  int rangeStart = 0;
+  bool exactRange = false, rangeHoldPending = false, japanese = false;
+  int updates = 0;
+  bool looksUpLongestWord(int) const { return japanese; }
+  void requestUpdate() { ++updates; }
   bool handleButtons(uint8_t buttons) {
     if (buttons & Input::INPUT_CONFIRM) { confirmed = selected; return true; }
     selected += bool(buttons & Input::INPUT_RIGHT) - bool(buttons & Input::INPUT_LEFT);
@@ -57,6 +65,21 @@ int main() {
     activity.mappedInput = {pressed, released, held};
     activity.loopButtons();
   };
+  {
+    // Holding Confirm on a Japanese character anchors a range once the refresh releases the lock.
+    ClipSelectionActivity hold;
+    hold.rangeStart = -1;
+    hold.japanese = true;
+    hold.mappedInput.longPress = true;
+    RenderLock::busy = true;
+    hold.loopButtons();
+    assert(hold.rangeStart == -1 && hold.rangeHoldPending);
+    hold.mappedInput.longPress = false;
+    RenderLock::busy = false;
+    hold.loopButtons();
+    assert(hold.rangeStart == hold.selected && hold.exactRange && !hold.rangeHoldPending && hold.updates == 1);
+    RenderLock::busy = true;
+  }
   // Two quick taps and Confirm arrive while refresh owns the lock.
   poll(0, Input::INPUT_RIGHT, Input::INPUT_RIGHT);
   poll(40, 0, 0);
@@ -114,8 +137,11 @@ popup_harness = r"""
 #include <functional>
 #include <vector>
 struct RenderLock { ~RenderLock() {} };
+struct MappedInputManager { enum class Button { Confirm }; };
+constexpr unsigned long RANGE_HOLD_MS = 600;
 struct Input { bool touch = false, back = false, confirm = false, outsideTap = false;
   bool hasTouch() const { return touch; }
+  bool wasLongPressed(MappedInputManager::Button, unsigned long) const { return false; }
 };
 struct Popup {
   static constexpr int MAX_OPTIONS = 16;
@@ -133,6 +159,9 @@ struct Popup {
 };
 struct ClipSelectionActivity {
   size_t wordCount = 0;  // extractWords() could not allocate its array.
+  int rangeStart = 0, selected = 0;
+  bool exactRange = false;
+  bool looksUpLongestWord(int) const { return false; }
   Popup actionPopup;
   Input mappedInput;
   int cancellations = 0;

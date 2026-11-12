@@ -53,6 +53,8 @@ struct ClippingResult {
   uint32_t endOffset = UINT32_MAX;
   // True when the cursor (not the anchor) was on the first word, i.e. the selection was extended leftwards.
   bool cursorAtStart = false;
+  // Lookup of one Japanese character: text continues past it and the dictionary takes the longest word it finds.
+  bool longestMatch = false;
 };
 
 struct ProgressChangeResult {

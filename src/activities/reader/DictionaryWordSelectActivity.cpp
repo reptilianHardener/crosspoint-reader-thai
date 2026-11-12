@@ -57,7 +57,11 @@ void DictionaryWordSelectActivity::performLookup() {
   std::string definition;
   std::string headword;
   Dictionary::LookupResult result = Dictionary::LookupResult::NotFound;
-  const bool found = ok && dict.lookup(lookupText.c_str(), definition, headword, &result);
+  std::string matchedText;
+  const bool found =
+      ok && (longestMatch ? dict.lookupLongestPrefix(lookupText.c_str(), definition, headword, matchedText, &result)
+                          : dict.lookup(lookupText.c_str(), definition, headword, &result));
+  if (found && longestMatch) lookupText = std::move(matchedText);
 
   if (found) {
     {

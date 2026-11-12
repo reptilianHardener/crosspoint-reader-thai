@@ -19,12 +19,13 @@ class DictionaryWordSelectActivity final : public Activity {
   explicit DictionaryWordSelectActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                         std::unique_ptr<Page> page, int marginLeft, int marginTop,
                                         std::string lookupText = {}, VocabularyContext vocabulary = {},
-                                        bool vertical = false)
+                                        bool vertical = false, bool longestMatch = false)
       : Activity("DictionaryWordSelect", renderer, mappedInput),
         page(std::move(page)),
         marginLeft(marginLeft),
         marginTop(marginTop),
         vertical(vertical),
+        longestMatch(longestMatch),
         lookupText(std::move(lookupText)),
         vocabulary(std::move(vocabulary)) {}
 
@@ -41,6 +42,8 @@ class DictionaryWordSelectActivity final : public Activity {
   const int marginLeft;  // page origin: the right edge on a vertical page
   const int marginTop;
   const bool vertical;
+  // lookupText starts with the word; see Dictionary::lookupLongestPrefix.
+  const bool longestMatch;
   int fontId = 0;
 
   std::string lookupText;

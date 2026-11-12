@@ -23,11 +23,21 @@ inline bool atBottomEdge(const Rect safe, const int lineHeight, const int x, con
   return x >= safe.x && x < safe.x + safe.width && y >= safe.y + safe.height - lineHeight;
 }
 
-inline bool nearerWord(const Rect candidate, const Rect current, const int x, const int y) {
-  const auto distance = [x, y](const Rect word) {
-    return std::pair{std::abs(word.y + word.height / 2 - y), std::max({word.x - x, 0, x - (word.x + word.width)})};
+// The line (a column on a vertical page) closest to the point wins first, then the word along it.
+inline bool nearerWord(const Rect candidate, const Rect current, const int x, const int y,
+                       const bool vertical = false) {
+  const auto distance = [x, y, vertical](const Rect word) {
+    const int acrossLine = vertical ? std::abs(word.x + word.width / 2 - x) : std::abs(word.y + word.height / 2 - y);
+    const int alongLine = vertical ? std::max({word.y - y, 0, y - (word.y + word.height)})
+                                   : std::max({word.x - x, 0, x - (word.x + word.width)});
+    return std::pair{acrossLine, alongLine};
   };
   return distance(candidate) < distance(current);
+}
+
+// A vertical page ends at its left edge.
+inline bool atLeftEdge(const Rect safe, const int lineHeight, const int x, const int y) {
+  return y >= safe.y && y < safe.y + safe.height && x < safe.x + lineHeight;
 }
 
 inline Rect actions(const Rect safe, const int textTop, const int height, const int gap, const int preferredWidth = 0,
