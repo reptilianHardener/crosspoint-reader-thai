@@ -459,6 +459,19 @@ families:
       regular: {url: "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf"}
       bold:    {url: "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Bold.otf"}
 
+  # Noto Sans CJK JP covers the kanji block without gaps (107 intervals per
+  # style), so it needs no bridge_gaps; the subset families above rely on
+  # bridge_gaps to stay under the 4096 intervals SdCardFont accepts.
+
+  - name: NotoSansCJKJP
+    description: "Japanese sans-serif with full kanji coverage (Kanji, Kana, Latin)"
+    scripts: [cjk]
+    intervals: cjk,latin-ext,punctuation,reading,symbols
+    sizes: [8, 10, 12, 14, 16, 18]
+    styles:
+      regular: {url: "https://raw.githubusercontent.com/notofonts/noto-cjk/165c01b46ea533872e002e0785ff17e44f6d97d8/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf"}
+      bold:    {url: "https://raw.githubusercontent.com/notofonts/noto-cjk/165c01b46ea533872e002e0785ff17e44f6d97d8/Sans/OTF/Japanese/NotoSansCJKjp-Bold.otf"}
+
   # ── Thai ───────────────────────────────────────────────────────────────
   # The firmware has no built-in Thai glyphs: a Thai book (and Thai text in the
   # UI) needs one of these families on the SD card. Every family carries Latin
