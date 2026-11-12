@@ -28,9 +28,10 @@ class ClipSelectionActivity final : public Activity {
   };
 
   // vertical: the pages are tategaki; marginLeft is then the page's right edge (see Page::render).
+  // japanese: the book is Japanese, so a lookup on one kana or kanji takes the longest word from there.
   ClipSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                         std::vector<std::unique_ptr<Page>> pages, int marginLeft, int marginTop, int initialX = -1,
-                        int initialY = -1, Mode mode = Mode::Clip, bool vertical = false);
+                        int initialY = -1, Mode mode = Mode::Clip, bool vertical = false, bool japanese = false);
 
   // The definition viewer retains these pages until this child exits.
   ClipSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
@@ -91,6 +92,15 @@ class ClipSelectionActivity final : public Activity {
   Rect handleRect(int index, bool start) const;
   Rect actionRect() const;
   int selectionTop() const;
+  int selectionBottom() const;
+  MappedInputManager::Labels buttonLabels() const;
+  // True when a lookup of just this word takes the longest dictionary word starting there (Japanese).
+  bool takesLongestWord(int index) const;
+  // True when Confirm or a tap on this word looks it up at once (Look Up mode only).
+  bool looksUpLongestWord(int index) const;
+  bool buildLongestMatchText(int first, std::string& text) const;
+  // The text to export or look up, and whether it is a longest-word lookup.
+  bool buildResultText(int first, int last, ClippingResult& result) const;
   int textOffset() const;
   int textXOffset() const;
   void cancel();
@@ -108,6 +118,7 @@ class ClipSelectionActivity final : public Activity {
   const int initialY;
   const Mode mode;
   const bool vertical = false;
+  const bool japanese = false;
   bool lookupAvailable = false;
   OptionPopup actionPopup;
   // ponytail: retain 16 button frames during refresh; increase only if overflow is observed.
@@ -120,6 +131,9 @@ class ClipSelectionActivity final : public Activity {
   size_t wordCount = 0;
   int selected = 0;
   int rangeStart = -1;
+  // The user chose the range (held Confirm, dragged, or moved a handle): look it up as it is.
+  bool exactRange = false;
+  bool rangeHoldPending = false;
   uint8_t currentPageOffset = 0;
   uint16_t rowCount = 0;
   bool touchDragSelecting = false;

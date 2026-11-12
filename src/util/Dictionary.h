@@ -133,6 +133,15 @@ class Dictionary {
   bool lookup(const char* word, std::string& definitionOut, std::string& matchedHeadwordOut,
               LookupResult* outResult = nullptr);
 
+  // For text without spaces between words (Japanese): look up the longest prefix of text, at most
+  // kMaxPrefixChars characters, that is a headword or synonym as written or after a verb or adjective
+  // ending is turned back into its dictionary form. matchedTextOut is that prefix as it appears in
+  // the (cleaned) text. Otherwise like lookup().
+  bool lookupLongestPrefix(const char* text, std::string& definitionOut, std::string& matchedHeadwordOut,
+                           std::string& matchedTextOut, LookupResult* outResult = nullptr);
+
+  static constexpr size_t kMaxPrefixChars = 6;
+
   // Reload the exact entry, including synonym targets with duplicate headwords.
   // With exceedsLimit, enforce the combined-output cap and report a size rejection separately from IO failure.
   bool readDefinition(const DictLocation& location, std::string& out, LookupResult* outResult = nullptr,
@@ -234,6 +243,9 @@ class Dictionary {
   static bool sidecarIsStale(const std::string& sourcePath, const std::string& sidecarPath, uint32_t magic);
 
   static void stemVariants(const std::string& word, std::vector<std::string>& out);
+
+  // Reads the definitions of the entries the last search put in entryList.
+  bool readGroup(bool groupFromSynonyms, bool searchFailed, std::string& definitionOut, LookupResult* outResult);
 
   // Read a null-terminated word from an open file into buf (max bufSize-1
   // chars). Returns the number of characters read (excluding null), or -1 on

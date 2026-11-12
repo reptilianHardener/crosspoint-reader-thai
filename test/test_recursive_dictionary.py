@@ -525,15 +525,20 @@ int main() {
 
 dictionary_source = (ROOT / "src/util/Dictionary.cpp").read_text()
 lookup_methods = "\n".join(block(dictionary_source, name) for name in (
-    "std::string Dictionary::cleanWord", "void Dictionary::stemVariants", "bool Dictionary::lookup"
+    "std::string Dictionary::cleanWord", "void Dictionary::stemVariants", "bool Dictionary::lookup(",
+    "bool Dictionary::lookupLongestPrefix", "bool Dictionary::readGroup", "bool DictEntryList::appendUnique"
 ))
+deinflect = (ROOT / "src/util/JapaneseDeinflect.h").read_text().replace("#pragma once", "")
 lookup_harness = r'''
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <new>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -556,7 +561,11 @@ struct TxtToHtml {
   static size_t escapedHtmlSize(std::string_view text) { return text.size(); }
   static void appendEscapedHtml(std::string& out, std::string_view text) { out.append(text); }
 };
-''' + location + '\n' + marker + '\n' + entry + '\n' + entry_list + r'''
+template <typename T>
+std::unique_ptr<T> makeUniqueNoThrow(size_t count) {
+  return std::unique_ptr<T>(new (std::nothrow) std::remove_extent_t<T>[count]);
+}
+''' + deinflect + location + '\n' + marker + '\n' + entry + '\n' + entry_list + r'''
 class Dictionary {
  public:
   enum class LookupResult { Found, NotFound, LowMemory, Decompress, ReadError };
@@ -569,10 +578,17 @@ class Dictionary {
   std::unique_ptr<DictEntryList> entryList = std::make_unique<DictEntryList>();
   bool isOpen() const { return true; }
   bool openSession(LookupSession&) { return true; }
-  void locateAll(LookupSession&, const char* word, DictEntryList&, bool* readError) {
+  std::set<std::string> known;
+  void locateAll(LookupSession&, const char* word, DictEntryList& out, bool* readError) {
     ++searches;
     searchedWord = word;
     if (readError) *readError = false;
+    if (known.count(word)) {
+      DictLocation location;
+      location.found = true;
+      location.offset = static_cast<uint32_t>(searches);
+      out.appendUnique(word, location);
+    }
   }
   bool locateSynonyms(LookupSession&, const char*, DictEntryList&, bool*) {
     ++searches;
@@ -582,6 +598,9 @@ class Dictionary {
   static std::string cleanWord(const char*);
   static void stemVariants(const std::string&, std::vector<std::string>&);
   bool lookup(const char*, std::string&, std::string&, LookupResult*);
+  static constexpr size_t kMaxPrefixChars = 6;
+  bool lookupLongestPrefix(const char*, std::string&, std::string&, std::string&, LookupResult*);
+  bool readGroup(bool, bool, std::string&, LookupResult*);
 };
 ''' + lookup_methods + r'''
 int main() {
@@ -612,6 +631,28 @@ int main() {
     utf8AppendCodepoint(cp, pointed);
     pointed += "ב";
     assert(Dictionary::cleanWord(pointed.c_str()) == "אב");
+  }
+  {
+    // Longest prefix first, then de-inflected: 食べたので finds 食べる through 食べた.
+    Dictionary japanese;
+    japanese.known = {"食", "食べる", "日本", "日本語"};
+    std::string matched, japaneseHeadword, japaneseDefinition;
+    auto result = Dictionary::LookupResult::Found;
+    japanese.lookupLongestPrefix("食べたので", japaneseDefinition, japaneseHeadword, matched, &result);
+    assert(matched == "食べた" && japaneseHeadword == "食べる");
+    matched.clear();
+    japanese.lookupLongestPrefix("「日本語の本", japaneseDefinition, japaneseHeadword, matched, &result);
+    assert(matched == "日本語" && japaneseHeadword == "日本語");
+    // Only the first kMaxPrefixChars characters are tried, longest first.
+    japanese.searches = 0;
+    matched = "unchanged";
+    japanese.lookupLongestPrefix("ぬぬぬぬぬぬぬぬぬぬ", japaneseDefinition, japaneseHeadword, matched, &result);
+    assert(matched == "unchanged" && result == Dictionary::LookupResult::NotFound);
+    assert(japanese.searchedWord == "ぬ" && japanese.searches < 40);
+    // An exact lookup (a range the reader chose) also tries the dictionary form.
+    std::string exactHeadword;
+    japanese.lookup("食べた", japaneseDefinition, exactHeadword, &result);
+    assert(exactHeadword == "食べる");
   }
   auto hebrewResult = Dictionary::LookupResult::Found;
   assert(!dictionary.lookup("שָׁלוֹם", definition, headword, &hebrewResult));

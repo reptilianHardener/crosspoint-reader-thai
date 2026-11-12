@@ -555,7 +555,8 @@ void EpubReaderActivity::startClipSelection(const int initialX, const int initia
   std::string author = epub->getAuthor();
 
   auto activity = makeUniqueNoThrow<ClipSelectionActivity>(renderer, mappedInput, std::move(pages), pageX, marginTop,
-                                                           initialX, initialY, mode, verticalLayout);
+                                                           initialX, initialY, mode, verticalLayout,
+                                                           ReaderUtils::isJapaneseBookLanguage(epub->getLanguage()));
   if (activity && restoreSelection.valid) activity->setInitialSelection(restoreSelection);
   if (!activity) {
     LOG_ERR("CLIP", "Failed to allocate clipping selection activity");
@@ -619,7 +620,7 @@ void EpubReaderActivity::startClipSelection(const int initialX, const int initia
       auto lookup = makeUniqueNoThrow<DictionaryWordSelectActivity>(
           renderer, mappedInput, std::move(page),
           pageOriginX(left + SETTINGS.screenMargin, right + SETTINGS.screenMargin), top + SETTINGS.screenMargin,
-          clipping.text, std::move(vocabulary), verticalLayout);
+          clipping.text, std::move(vocabulary), verticalLayout, clipping.longestMatch);
       if (!lookup) {
         LOG_ERR("CLIP", "OOM: dictionary lookup activity");
         requestUpdate();
