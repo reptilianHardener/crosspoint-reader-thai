@@ -25,54 +25,59 @@ constexpr int GALLERY_DOT = 6;
 constexpr int GALLERY_DOT_GAP = 10;
 // Backdrop: an 8 px white mat with a 1 px black edge around the cover.
 constexpr int BACKDROP_MAT = 9;
-constexpr int CARD_PADDING = 14;
-constexpr int CARD_RADIUS = 12;
-// Info Band: a 4 px black rule between the cover and the band.
-constexpr int BAND_RULE = 4;
-constexpr int BAND_PADDING = 24;
-constexpr int BAND_SEGMENTS = 20;
-constexpr int BAND_SEGMENT_GAP = 3;
-constexpr int BAND_BAR_HEIGHT = 10;
+// Off the Edge: the cover runs off the top and right edges, right of a full-height spine rule.
+constexpr int EDGE_OVERHANG = 48;
+constexpr int EDGE_COVER_GAP = 12;  // spine rule to cover
+constexpr int EDGE_TEXT_GAP = 20;   // text columns to spine rule
+constexpr int EDGE_PERCENT_INDENT = 24;
+constexpr int EDGE_PERCENT_GAP = 36;
+// Obi Band: a black band over the cover, like the paper band on a Japanese book.
+constexpr int OBI_FOOTER = 96;  // white strip under the cover
+constexpr int OBI_RIGHT = 68;   // band to the right screen edge
+constexpr int OBI_PADDING = 20;
+constexpr int OBI_TOP = 48;
+constexpr int OBI_OVERHANG = 32;  // band below the cover
+constexpr int OBI_DIVIDER = 24;
+constexpr int OBI_DIVIDER_GAP = 20;
+constexpr int OBI_BAR_WIDTH = 150;
+// Spine: a narrow middle slice of the cover between two lines.
+constexpr int SPINE_WIDTH = 140;
+constexpr int SPINE_RIGHT = 44;
+constexpr int SPINE_TEXT_GAP = 24;
+constexpr int SPINE_PROGRESS_INSET = 29;  // progress line to the right screen edge
+// Off the Edge and Spine: a thin rule with a thick top part that shows progress.
+constexpr int RULE_WIDTH = 3;
+constexpr int PROGRESS_RULE_WIDTH = 11;
 constexpr int PROGRESS_BAR_HEIGHT = 6;
 constexpr int COLUMN_GAP = 12;
 // Vertical gaps between text lines, used both to measure a layout and to draw it.
 constexpr int GAP_UNDER_COVER = 28;
 constexpr int GAP_SMALL = 2;
-constexpr int GAP_LINE = 4;
 constexpr int GAP_BEFORE_PROGRESS = 14;
-constexpr int GAP_BEFORE_FOOTER = 6;
+constexpr int GAP_BEFORE_FOOTER = 12;
 constexpr int GALLERY_SIDE = 40;
 constexpr int GALLERY_FOOTER_GAP = 16;
-constexpr int BACKDROP_CARD_GAP = 32;
-constexpr int VERTICAL_COVER_GAP = 20;
-constexpr int VERTICAL_BAR_GAP = 24;
 constexpr int PERCENT_GAP = 16;
+// The big percent: UI_12 bold glyphs scaled up 1.75x. The UI font is not compressed, so drawing it
+// needs no decompression buffer on the sleep path.
+constexpr int BIG_PERCENT_SCALE = 448;
 
 void fitCover(const Bitmap& cover, CoverSleepRect& rect) {
   bitmapDrawnSize(cover, rect.maxWidth, rect.maxHeight, rect.cropX, rect.cropY, rect.width, rect.height);
 }
 
+// Crops the cover to the shape of its area so it fills the area.
+void cropToArea(const Bitmap& cover, CoverSleepRect& rect) {
+  const float coverRatio = static_cast<float>(cover.getWidth()) / static_cast<float>(cover.getHeight());
+  const float areaRatio = static_cast<float>(rect.maxWidth) / static_cast<float>(rect.maxHeight);
+  if (coverRatio > areaRatio) {
+    rect.cropX = 1.0f - areaRatio / coverRatio;
+  } else {
+    rect.cropY = 1.0f - coverRatio / areaRatio;
+  }
+}
+
 std::string percentText(const int percent) { return std::to_string(percent) + "%"; }
-
-// "chapter · 42%", either part when the other is missing.
-std::string chapterAndPercent(const CoverSleepInfo& info) {
-  std::string text = info.chapter;
-  if (info.percent >= 0) {
-    if (!text.empty()) text += " \xC2\xB7 ";
-    text += percentText(info.percent);
-  }
-  return text;
-}
-
-// Info Band: the line under the title.
-std::string authorAndChapter(const CoverSleepInfo& info) {
-  std::string text = info.author;
-  if (!info.chapter.empty()) {
-    if (!text.empty()) text += " \xC2\xB7 ";
-    text += info.chapter;
-  }
-  return text;
-}
 
 std::vector<std::string> galleryTitleLines(const GfxRenderer& renderer, const CoverSleepInfo& info) {
   if (info.title.empty()) return {};
@@ -85,62 +90,71 @@ int galleryCaptionHeight(const GfxRenderer& renderer, const CoverSleepInfo& info
   int height = GAP_UNDER_COVER +
                static_cast<int>(galleryTitleLines(renderer, info).size()) * renderer.getLineHeight(UI_12_FONT_ID);
   if (!info.author.empty()) height += GAP_SMALL + renderer.getLineHeight(UI_10_FONT_ID);
-  if (!info.chapter.empty()) height += GAP_LINE + renderer.getLineHeight(SMALL_FONT_ID);
   if (info.percent >= 0) height += GAP_BEFORE_PROGRESS + GALLERY_DOT;
   return height;
 }
 
-int backdropCardHeight(const GfxRenderer& renderer, const CoverSleepInfo& info) {
-  int height = CARD_PADDING * 2 + renderer.getLineHeight(UI_12_FONT_ID);
-  if (!chapterAndPercent(info).empty()) height += GAP_SMALL + renderer.getLineHeight(SMALL_FONT_ID);
-  return height;
+int edgeRuleX(const GfxRenderer& renderer) { return renderer.getScreenWidth() / 3; }
+
+// Top of the Obi Band footer row (the progress bar, percent and "Sleeping").
+int obiFooterY(const GfxRenderer& renderer) {
+  return renderer.getScreenHeight() - BOTTOM_MARGIN - renderer.getLineHeight(UI_10_FONT_ID);
 }
 
-int bandHeight(const GfxRenderer& renderer, const CoverSleepInfo& info) {
-  // The footer ("Sleeping") sits on the bottom padding.
-  int height = BAND_PADDING * 2 + renderer.getLineHeight(UI_12_FONT_ID) + GAP_BEFORE_FOOTER +
-               renderer.getLineHeight(SMALL_FONT_ID);
-  if (!authorAndChapter(info).empty()) height += GAP_LINE + renderer.getLineHeight(UI_10_FONT_ID);
-  if (info.percent >= 0) height += GAP_BEFORE_PROGRESS + BAND_BAR_HEIGHT;
-  return height;
+int bigPercentHeight(const GfxRenderer& renderer) {
+  return renderer.getLineHeight(UI_12_FONT_ID) * BIG_PERCENT_SCALE / 256;
 }
 
-// Vertical: the text columns from the right edge, title first (up to two columns).
-struct VerticalColumn {
-  int fontId;
-  EpdFontFamily::Style style;
-  int x;  // right edge; the column occupies (x - lineHeight, x]
-  int y;
-  std::string text;
-};
+void drawBigPercent(const GfxRenderer& renderer, int x, const int top, const int percent) {
+  const int baseline = top + renderer.getFontAscenderSize(UI_12_FONT_ID) * BIG_PERCENT_SCALE / 256;
+  for (const char c : percentText(percent)) {
+    x += renderer.drawScaledCodepoint(UI_12_FONT_ID, static_cast<unsigned char>(c), EpdFontFamily::BOLD, x, baseline,
+                                      BIG_PERCENT_SCALE);
+  }
+}
 
-std::vector<VerticalColumn> verticalColumns(const GfxRenderer& renderer, const CoverSleepInfo& info) {
-  std::vector<VerticalColumn> columns;
-  const int bottom = renderer.getScreenHeight() - BOTTOM_MARGIN;
-  int x = renderer.getScreenWidth() - SIDE_MARGIN;
+// Top of the big percent in the Spine style, above "Sleeping".
+int spinePercentY(const GfxRenderer& renderer) {
+  return renderer.getScreenHeight() - BOTTOM_MARGIN - renderer.getLineHeight(SMALL_FONT_ID) - GAP_BEFORE_FOOTER -
+         bigPercentHeight(renderer);
+}
+
+// Title (up to two columns) and author as vertical text, from right to left. A column occupies
+// (right - lineHeight, right]; columns that do not fit right of left are dropped.
+void drawTextColumns(const GfxRenderer& renderer, const CoverSleepInfo& info, int right, const int left, const int top,
+                     const int bottom) {
   const auto add = [&](const int fontId, const EpdFontFamily::Style style, const int y, const std::string& text) {
-    if (text.empty() || y >= bottom) return;
-    columns.push_back({fontId, style, x, y, renderer.truncatedText(fontId, text.c_str(), bottom - y, style)});
-    x -= renderer.getLineHeight(fontId) + COLUMN_GAP;
+    const int lineHeight = renderer.getLineHeight(fontId);
+    if (text.empty() || y >= bottom || right - lineHeight < left) return;
+    renderer.drawTextVertical(fontId, right, y, renderer.truncatedText(fontId, text.c_str(), bottom - y, style).c_str(),
+                              true, style);
+    right -= lineHeight + COLUMN_GAP;
   };
   const int titleLine = renderer.getLineHeight(UI_12_FONT_ID);
   if (!info.title.empty()) {
     for (const auto& line :
-         renderer.wrappedText(UI_12_FONT_ID, info.title.c_str(), bottom - TOP_MARGIN, 2, EpdFontFamily::BOLD)) {
-      add(UI_12_FONT_ID, EpdFontFamily::BOLD, TOP_MARGIN, line);
+         renderer.wrappedText(UI_12_FONT_ID, info.title.c_str(), bottom - top, 2, EpdFontFamily::BOLD)) {
+      add(UI_12_FONT_ID, EpdFontFamily::BOLD, top, line);
     }
   }
-  // Author and chapter start lower, like a book's spine label.
-  add(UI_10_FONT_ID, EpdFontFamily::REGULAR, TOP_MARGIN + titleLine * 2, info.author);
-  add(SMALL_FONT_ID, EpdFontFamily::REGULAR, TOP_MARGIN + titleLine * 4, info.chapter);
-  return columns;
+  // The author starts lower, like a label on a book's spine.
+  add(UI_10_FONT_ID, EpdFontFamily::REGULAR, top + titleLine * 2, info.author);
 }
 
-// The rule left of the Vertical text columns.
-int verticalRuleX(const GfxRenderer& renderer, const std::vector<VerticalColumn>& columns) {
-  if (columns.empty()) return renderer.getScreenWidth() - SIDE_MARGIN;
-  const auto& last = columns.back();
-  return last.x - renderer.getLineHeight(last.fontId) - COLUMN_GAP;
+// A full-height rule at x whose top part, as long as the share read, is thick.
+void drawProgressRule(const GfxRenderer& renderer, const int x, const int lineWidth, const int percent) {
+  const int screenHeight = renderer.getScreenHeight();
+  renderer.fillRect(x - lineWidth / 2, 0, lineWidth, screenHeight);
+  if (percent > 0) {
+    renderer.fillRect(x - PROGRESS_RULE_WIDTH / 2, 0, PROGRESS_RULE_WIDTH, screenHeight * percent / 100);
+  }
+}
+
+void drawSleepingRight(const GfxRenderer& renderer) {
+  const char* sleeping = tr(STR_SLEEPING);
+  renderer.drawText(SMALL_FONT_ID,
+                    renderer.getScreenWidth() - SIDE_MARGIN - renderer.getTextWidth(SMALL_FONT_ID, sleeping),
+                    renderer.getScreenHeight() - BOTTOM_MARGIN - renderer.getLineHeight(SMALL_FONT_ID), sleeping);
 }
 
 uint8_t bayer4x4(const int x, const int y) {
@@ -149,7 +163,7 @@ uint8_t bayer4x4(const int x, const int y) {
 }
 
 // The cover enlarged to fill the screen and faded to a light dot pattern: at most a quarter of the
-// pixels are black, so the framed cover and the text stay readable on top.
+// pixels are black, so the framed cover stands out.
 bool drawFadedBackdrop(const GfxRenderer& renderer, const Bitmap& cover) {
   const int width = cover.getWidth();
   const int height = cover.getHeight();
@@ -196,59 +210,6 @@ bool drawFadedBackdrop(const GfxRenderer& renderer, const Bitmap& cover) {
   return true;
 }
 
-void drawBand(const GfxRenderer& renderer, const CoverSleepRect& rect, const CoverSleepInfo& info) {
-  const int screenWidth = renderer.getScreenWidth();
-  const int screenHeight = renderer.getScreenHeight();
-  // Rounding can make the drawn cover 1 px taller than its area; the rule starts below it, since gray
-  // planes redraw only the cover.
-  const int bandTop = std::max(rect.maxHeight, rect.y + rect.height);
-  // The cover area is black where a narrow cover leaves room at its sides.
-  renderer.fillRect(0, 0, screenWidth, bandTop);
-  renderer.fillRect(rect.x, rect.y, rect.width, rect.height, false);
-  renderer.fillRect(0, bandTop, screenWidth, BAND_RULE);
-
-  const int left = SIDE_MARGIN;
-  const int right = screenWidth - SIDE_MARGIN;
-  int y = bandTop + BAND_RULE + BAND_PADDING;
-  int titleRight = right;
-  if (info.percent >= 0) {
-    const std::string percent = percentText(info.percent);
-    const int percentWidth = renderer.getTextWidth(UI_12_FONT_ID, percent.c_str(), EpdFontFamily::BOLD);
-    renderer.drawText(UI_12_FONT_ID, right - percentWidth, y, percent.c_str(), true, EpdFontFamily::BOLD);
-    titleRight = right - percentWidth - PERCENT_GAP;
-  }
-  const std::string title =
-      renderer.truncatedText(UI_12_FONT_ID, info.title.c_str(), titleRight - left, EpdFontFamily::BOLD);
-  renderer.drawText(UI_12_FONT_ID, left, y, title.c_str(), true, EpdFontFamily::BOLD);
-  y += renderer.getLineHeight(UI_12_FONT_ID);
-
-  const std::string subtitle = authorAndChapter(info);
-  if (!subtitle.empty()) {
-    y += GAP_LINE;
-    renderer.drawText(UI_10_FONT_ID, left, y,
-                      renderer.truncatedText(UI_10_FONT_ID, subtitle.c_str(), right - left).c_str());
-    y += renderer.getLineHeight(UI_10_FONT_ID);
-  }
-
-  if (info.percent >= 0) {
-    y += GAP_BEFORE_PROGRESS;
-    const int segmentWidth = (right - left - BAND_SEGMENT_GAP * (BAND_SEGMENTS - 1)) / BAND_SEGMENTS;
-    const int filled = (info.percent * BAND_SEGMENTS + 50) / 100;
-    for (int i = 0; i < BAND_SEGMENTS; i++) {
-      const int x = left + i * (segmentWidth + BAND_SEGMENT_GAP);
-      if (i < filled) {
-        renderer.fillRect(x, y, segmentWidth, BAND_BAR_HEIGHT);
-      } else {
-        renderer.fillRectDither(x, y, segmentWidth, BAND_BAR_HEIGHT, Color::LightGray);
-      }
-    }
-  }
-
-  const char* sleeping = tr(STR_SLEEPING);
-  const int sleepingY = screenHeight - BAND_PADDING - renderer.getLineHeight(SMALL_FONT_ID);
-  renderer.drawText(SMALL_FONT_ID, right - renderer.getTextWidth(SMALL_FONT_ID, sleeping), sleepingY, sleeping);
-}
-
 void drawGallery(const GfxRenderer& renderer, const CoverSleepRect& rect, const CoverSleepInfo& info) {
   const int screenWidth = renderer.getScreenWidth();
   const int screenHeight = renderer.getScreenHeight();
@@ -269,12 +230,6 @@ void drawGallery(const GfxRenderer& renderer, const CoverSleepRect& rect, const 
                               renderer.truncatedText(UI_10_FONT_ID, info.author.c_str(), textWidth).c_str(), false);
     y += renderer.getLineHeight(UI_10_FONT_ID);
   }
-  if (!info.chapter.empty()) {
-    y += GAP_LINE;
-    renderer.drawCenteredText(SMALL_FONT_ID, y,
-                              renderer.truncatedText(SMALL_FONT_ID, info.chapter.c_str(), textWidth).c_str(), false);
-    y += renderer.getLineHeight(SMALL_FONT_ID);
-  }
   if (info.percent >= 0) {
     y += GAP_BEFORE_PROGRESS;
     const int filled = (info.percent * GALLERY_DOTS + 50) / 100;
@@ -292,62 +247,96 @@ void drawGallery(const GfxRenderer& renderer, const CoverSleepRect& rect, const 
                             tr(STR_SLEEPING), false);
 }
 
-bool drawBackdrop(const GfxRenderer& renderer, const Bitmap& cover, const CoverSleepRect& rect,
-                  const CoverSleepInfo& info) {
+bool drawBackdrop(const GfxRenderer& renderer, const Bitmap& cover, const CoverSleepRect& rect) {
   if (!drawFadedBackdrop(renderer, cover)) return false;
-  const int screenWidth = renderer.getScreenWidth();
-  const int screenHeight = renderer.getScreenHeight();
   renderer.fillRect(rect.x - BACKDROP_MAT, rect.y - BACKDROP_MAT, rect.width + BACKDROP_MAT * 2,
                     rect.height + BACKDROP_MAT * 2, false);
   renderer.drawRect(rect.x - BACKDROP_MAT, rect.y - BACKDROP_MAT, rect.width + BACKDROP_MAT * 2,
                     rect.height + BACKDROP_MAT * 2, true);
-
-  const int cardWidth = screenWidth - SIDE_MARGIN * 2;
-  const int cardHeight = backdropCardHeight(renderer, info);
-  const int cardY = screenHeight - BOTTOM_MARGIN - cardHeight;
-  renderer.fillRoundedRect(SIDE_MARGIN, cardY, cardWidth, cardHeight, CARD_RADIUS, Color::White);
-  renderer.drawRoundedRect(SIDE_MARGIN, cardY, cardWidth, cardHeight, 1, CARD_RADIUS, true);
-  const int textWidth = cardWidth - CARD_PADDING * 2;
-  int y = cardY + CARD_PADDING;
-  renderer.drawCenteredText(
-      UI_12_FONT_ID, y,
-      renderer.truncatedText(UI_12_FONT_ID, info.title.c_str(), textWidth, EpdFontFamily::BOLD).c_str(), true,
-      EpdFontFamily::BOLD);
-  y += renderer.getLineHeight(UI_12_FONT_ID) + GAP_SMALL;
-  const std::string detail = chapterAndPercent(info);
-  if (!detail.empty()) {
-    renderer.drawCenteredText(SMALL_FONT_ID, y,
-                              renderer.truncatedText(SMALL_FONT_ID, detail.c_str(), textWidth).c_str());
-  }
   return true;
 }
 
-void drawVertical(const GfxRenderer& renderer, const CoverSleepRect& rect, const CoverSleepInfo& info) {
+void drawEdge(const GfxRenderer& renderer, const CoverSleepRect& rect, const CoverSleepInfo& info) {
   const int screenHeight = renderer.getScreenHeight();
-  const auto columns = verticalColumns(renderer, info);
-  for (const auto& column : columns) {
-    renderer.drawTextVertical(column.fontId, column.x, column.y, column.text.c_str(), true, column.style);
-  }
-  const int ruleX = verticalRuleX(renderer, columns);
-  renderer.drawLine(ruleX, TOP_MARGIN, ruleX, screenHeight - BOTTOM_MARGIN);
-
-  renderer.drawRect(rect.x - 2, rect.y - 2, rect.width + 4, rect.height + 4, 2, true);
-  renderer.fillRect(rect.x, rect.y, rect.width, rect.height, false);
-
-  int y = rect.y + rect.height + 2 + VERTICAL_BAR_GAP;
+  const int ruleX = edgeRuleX(renderer);
+  drawProgressRule(renderer, ruleX, RULE_WIDTH, std::max(0, info.percent));
+  drawTextColumns(renderer, info, ruleX - EDGE_TEXT_GAP, SIDE_MARGIN, TOP_MARGIN, screenHeight - BOTTOM_MARGIN);
   if (info.percent >= 0) {
-    renderer.drawRect(rect.x, y, rect.width, PROGRESS_BAR_HEIGHT, true);
-    const int filled = rect.width * info.percent / 100;
-    renderer.fillRect(info.rightToLeft ? rect.x + rect.width - filled : rect.x, y, filled, PROGRESS_BAR_HEIGHT);
-    y += PROGRESS_BAR_HEIGHT + 8;
-    const std::string percent = percentText(info.percent);
-    const int percentWidth = renderer.getTextWidth(SMALL_FONT_ID, percent.c_str());
-    renderer.drawText(SMALL_FONT_ID, info.rightToLeft ? rect.x + rect.width - percentWidth : rect.x, y,
-                      percent.c_str());
+    const int y = rect.y + rect.height + EDGE_PERCENT_GAP;
+    const int sleepingY = screenHeight - BOTTOM_MARGIN - renderer.getLineHeight(SMALL_FONT_ID);
+    if (y + bigPercentHeight(renderer) <= sleepingY)
+      drawBigPercent(renderer, rect.x + EDGE_PERCENT_INDENT, y, info.percent);
   }
-  const char* sleeping = tr(STR_SLEEPING);
-  renderer.drawText(SMALL_FONT_ID, rect.x + rect.width - renderer.getTextWidth(SMALL_FONT_ID, sleeping),
-                    screenHeight - BOTTOM_MARGIN - renderer.getLineHeight(SMALL_FONT_ID), sleeping);
+  drawSleepingRight(renderer);
+}
+
+void drawObi(const GfxRenderer& renderer, const CoverSleepRect& rect, const CoverSleepInfo& info) {
+  const int screenWidth = renderer.getScreenWidth();
+  // Rounding can make the drawn cover 1 px taller than its area.
+  const int coverBottom = std::max(rect.maxHeight, rect.y + rect.height);
+  const int bandLeft = rect.hiddenLeft;
+  const int bandWidth = rect.hiddenRight - rect.hiddenLeft;
+  const int bandBottom = coverBottom + OBI_OVERHANG;
+  renderer.fillRect(bandLeft, 0, bandWidth, bandBottom);
+
+  // One white column: title, a short divider, author.
+  const int titleLine = renderer.getLineHeight(UI_12_FONT_ID);
+  const int authorLine = renderer.getLineHeight(UI_10_FONT_ID);
+  const int length = bandBottom - OBI_TOP - OBI_PADDING;
+  int authorLength = 0;
+  if (!info.author.empty()) {
+    authorLength = std::min(renderer.getTextWidth(UI_10_FONT_ID, info.author.c_str()), length / 3);
+  }
+  const int dividerSpace = authorLength > 0 ? OBI_DIVIDER_GAP * 2 + GAP_SMALL : 0;
+  int y = OBI_TOP;
+  if (!info.title.empty()) {
+    const std::string title = renderer.truncatedText(UI_12_FONT_ID, info.title.c_str(),
+                                                     length - authorLength - dividerSpace, EpdFontFamily::BOLD);
+    renderer.drawTextVertical(UI_12_FONT_ID, bandLeft + (bandWidth + titleLine) / 2, y, title.c_str(), false,
+                              EpdFontFamily::BOLD);
+    y += renderer.getTextWidth(UI_12_FONT_ID, title.c_str(), EpdFontFamily::BOLD);
+  }
+  if (authorLength > 0) {
+    y += OBI_DIVIDER_GAP;
+    renderer.fillRect(bandLeft + (bandWidth - OBI_DIVIDER) / 2, y, OBI_DIVIDER, GAP_SMALL, false);
+    y += GAP_SMALL + OBI_DIVIDER_GAP;
+    renderer.drawTextVertical(UI_10_FONT_ID, bandLeft + (bandWidth + authorLine) / 2, y,
+                              renderer.truncatedText(UI_10_FONT_ID, info.author.c_str(), authorLength).c_str(), false);
+  }
+
+  // Footer: "Sleeping" on the left; progress bar and percent on the right.
+  const int footerY = obiFooterY(renderer);
+  renderer.drawText(SMALL_FONT_ID, SIDE_MARGIN,
+                    footerY + (renderer.getLineHeight(UI_10_FONT_ID) - renderer.getLineHeight(SMALL_FONT_ID)) / 2,
+                    tr(STR_SLEEPING));
+  if (info.percent >= 0) {
+    const std::string percent = percentText(info.percent);
+    const int percentWidth = renderer.getTextWidth(UI_10_FONT_ID, percent.c_str(), EpdFontFamily::BOLD);
+    const int percentX = screenWidth - SIDE_MARGIN - percentWidth;
+    renderer.drawText(UI_10_FONT_ID, percentX, footerY, percent.c_str(), true, EpdFontFamily::BOLD);
+    const int barX = percentX - PERCENT_GAP - OBI_BAR_WIDTH;
+    const int barY = footerY + (authorLine - PROGRESS_BAR_HEIGHT) / 2;
+    renderer.drawRect(barX, barY, OBI_BAR_WIDTH, PROGRESS_BAR_HEIGHT, true);
+    const int filled = OBI_BAR_WIDTH * info.percent / 100;
+    renderer.fillRect(info.rightToLeft ? barX + OBI_BAR_WIDTH - filled : barX, barY, filled, PROGRESS_BAR_HEIGHT);
+  }
+}
+
+void drawSpine(const GfxRenderer& renderer, const CoverSleepRect& rect, const CoverSleepInfo& info) {
+  const int screenWidth = renderer.getScreenWidth();
+  const int screenHeight = renderer.getScreenHeight();
+  renderer.fillRect(rect.x - RULE_WIDTH, 0, RULE_WIDTH, screenHeight);
+  renderer.fillRect(rect.x + rect.width, 0, RULE_WIDTH, screenHeight);
+  drawProgressRule(renderer, screenWidth - SPINE_PROGRESS_INSET, 1, std::max(0, info.percent));
+
+  const int percentY = spinePercentY(renderer);
+  drawTextColumns(renderer, info, rect.x - RULE_WIDTH - SPINE_TEXT_GAP, SIDE_MARGIN, TOP_MARGIN,
+                  percentY - PERCENT_GAP);
+  if (info.percent >= 0) {
+    drawBigPercent(renderer, SIDE_MARGIN, percentY, info.percent);
+  }
+  renderer.drawText(SMALL_FONT_ID, SIDE_MARGIN, screenHeight - BOTTOM_MARGIN - renderer.getLineHeight(SMALL_FONT_ID),
+                    tr(STR_SLEEPING));
 }
 }  // namespace
 
@@ -374,20 +363,13 @@ CoverSleepRect coverSleepLayout(const uint8_t style, const GfxRenderer& renderer
   const int screenHeight = renderer.getScreenHeight();
   CoverSleepRect rect;
   switch (style) {
-    case CrossPointSettings::COVER_STYLE_BAND: {
-      // Crop the cover to the area's shape so it fills the area's width.
-      rect.maxWidth = screenWidth;
-      rect.maxHeight = std::max(1, screenHeight - BAND_RULE - bandHeight(renderer, info));
-      const float coverRatio = static_cast<float>(cover.getWidth()) / static_cast<float>(cover.getHeight());
-      const float areaRatio = static_cast<float>(rect.maxWidth) / static_cast<float>(rect.maxHeight);
-      if (coverRatio > areaRatio) {
-        rect.cropX = 1.0f - areaRatio / coverRatio;
-      } else {
-        rect.cropY = 1.0f - coverRatio / areaRatio;
-      }
+    case CrossPointSettings::COVER_STYLE_EDGE: {
+      // Large enough to run off the top and right edges; drawBitmap skips pixels off screen.
+      rect.x = edgeRuleX(renderer) + EDGE_COVER_GAP;
+      rect.maxWidth = screenWidth - rect.x + EDGE_OVERHANG;
+      rect.maxHeight = screenHeight * 3 / 4;
       fitCover(cover, rect);
-      rect.x = (screenWidth - rect.width) / 2;
-      rect.y = (rect.maxHeight - rect.height) / 2;
+      rect.y = -EDGE_OVERHANG;
       break;
     }
     case CrossPointSettings::COVER_STYLE_GALLERY: {
@@ -402,23 +384,36 @@ CoverSleepRect coverSleepLayout(const uint8_t style, const GfxRenderer& renderer
       break;
     }
     case CrossPointSettings::COVER_STYLE_BACKDROP: {
-      const int cardTop = screenHeight - BOTTOM_MARGIN - backdropCardHeight(renderer, info);
-      const int areaHeight = cardTop - BACKDROP_CARD_GAP - TOP_MARGIN;
+      // The framed cover alone, centered on the faded copy.
       rect.maxWidth = screenWidth * 5 / 8;
-      rect.maxHeight = std::max(1, areaHeight - BACKDROP_MAT * 2);
+      rect.maxHeight = screenHeight - TOP_MARGIN - BOTTOM_MARGIN - BACKDROP_MAT * 2;
       fitCover(cover, rect);
       rect.x = (screenWidth - rect.width) / 2;
-      rect.y = TOP_MARGIN + (areaHeight - rect.height) / 2;
+      rect.y = (screenHeight - rect.height) / 2;
       break;
     }
-    case CrossPointSettings::COVER_STYLE_VERTICAL:
-    default: {
-      const int coverRight = verticalRuleX(renderer, verticalColumns(renderer, info)) - VERTICAL_COVER_GAP;
-      rect.maxWidth = std::max(1, coverRight - SIDE_MARGIN - 2);
-      rect.maxHeight = screenHeight * 7 / 12;
+    case CrossPointSettings::COVER_STYLE_OBI: {
+      rect.maxWidth = screenWidth;
+      rect.maxHeight = screenHeight - OBI_FOOTER;
+      cropToArea(cover, rect);
       fitCover(cover, rect);
-      rect.x = coverRight - 2 - rect.width;
-      rect.y = TOP_MARGIN + 2;
+      rect.x = (screenWidth - rect.width) / 2;
+      rect.y = (rect.maxHeight - rect.height) / 2;
+      rect.hiddenRight = screenWidth - OBI_RIGHT;
+      rect.hiddenLeft = rect.hiddenRight - renderer.getLineHeight(UI_12_FONT_ID) - OBI_PADDING * 2;
+      break;
+    }
+    case CrossPointSettings::COVER_STYLE_SPINE:
+    default: {
+      // Keep the middle SPINE_WIDTH columns of the cover.
+      if (cover.getWidth() > SPINE_WIDTH) {
+        rect.cropX = 1.0f - static_cast<float>(SPINE_WIDTH) / static_cast<float>(cover.getWidth());
+      }
+      rect.maxWidth = SPINE_WIDTH;
+      rect.maxHeight = screenHeight;
+      fitCover(cover, rect);
+      rect.x = screenWidth - SPINE_RIGHT - rect.width;
+      rect.y = (screenHeight - rect.height) / 2;
       break;
     }
   }
@@ -428,17 +423,20 @@ CoverSleepRect coverSleepLayout(const uint8_t style, const GfxRenderer& renderer
 bool drawCoverSleepDecor(const uint8_t style, const GfxRenderer& renderer, const Bitmap& cover,
                          const CoverSleepRect& rect, const CoverSleepInfo& info) {
   switch (style) {
-    case CrossPointSettings::COVER_STYLE_BAND:
-      drawBand(renderer, rect, info);
+    case CrossPointSettings::COVER_STYLE_EDGE:
+      drawEdge(renderer, rect, info);
       return true;
     case CrossPointSettings::COVER_STYLE_GALLERY:
       drawGallery(renderer, rect, info);
       return true;
     case CrossPointSettings::COVER_STYLE_BACKDROP:
-      return drawBackdrop(renderer, cover, rect, info);
-    case CrossPointSettings::COVER_STYLE_VERTICAL:
+      return drawBackdrop(renderer, cover, rect);
+    case CrossPointSettings::COVER_STYLE_OBI:
+      drawObi(renderer, rect, info);
+      return true;
+    case CrossPointSettings::COVER_STYLE_SPINE:
     default:
-      drawVertical(renderer, rect, info);
+      drawSpine(renderer, rect, info);
       return true;
   }
 }

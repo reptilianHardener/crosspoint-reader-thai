@@ -15,7 +15,7 @@ uint32_t readLe32(const uint8_t* p) {
 }
 }  // namespace
 
-int loadEpubProgress(const Epub& epub, bool* atEnd, int* spineIndex) {
+int loadEpubProgress(const Epub& epub, bool* atEnd) {
   if (atEnd) *atEnd = false;
   uint8_t data[10]{};
   const std::string progressPath = epub.getCachePath() + "/progress.bin";
@@ -28,7 +28,6 @@ int loadEpubProgress(const Epub& epub, bool* atEnd, int* spineIndex) {
   const int total = size >= 6 ? data[4] | (data[5] << 8) : 0;
   if (epub.getSpineItemsCount() <= 0 || epub.getBookSize() == 0) return -1;
   if (spine > epub.getSpineItemsCount()) return -1;
-  if (spineIndex) *spineIndex = spine;
   if (spine == epub.getSpineItemsCount()) {
     if (atEnd) *atEnd = true;
     return 100;
@@ -37,7 +36,7 @@ int loadEpubProgress(const Epub& epub, bool* atEnd, int* spineIndex) {
   return std::clamp(static_cast<int>(epub.calculateProgress(spine, fraction) * 100 + 0.5f), 0, 100);
 }
 
-int loadXtcProgress(const Xtc& xtc, bool* atEnd, uint32_t* page) {
+int loadXtcProgress(const Xtc& xtc, bool* atEnd) {
   if (atEnd) *atEnd = false;
   uint8_t data[4]{};
   const std::string progressPath = xtc.getCachePath() + "/progress.bin";
@@ -48,7 +47,6 @@ int loadXtcProgress(const Xtc& xtc, bool* atEnd, uint32_t* page) {
   }
   const uint32_t current = readLe32(data);
   if (xtc.getPageCount() == 0) return -1;
-  if (page) *page = current;
   if (current >= xtc.getPageCount()) {
     if (atEnd) *atEnd = true;
     return 100;

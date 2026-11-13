@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <string>
 
 class Epub;
@@ -12,7 +11,6 @@ class Xtc;
 // rule the reader uses for a finished book.
 int loadBookProgress(const std::string& path, bool* atEnd = nullptr);
 
-// The same for a book that is already loaded. spineIndex / page, when given, receive the
-// saved position (only set when the result is not -1).
-int loadEpubProgress(const Epub& epub, bool* atEnd = nullptr, int* spineIndex = nullptr);
-int loadXtcProgress(const Xtc& xtc, bool* atEnd = nullptr, uint32_t* page = nullptr);
+// The same for a book that is already loaded.
+int loadEpubProgress(const Epub& epub, bool* atEnd = nullptr);
+int loadXtcProgress(const Xtc& xtc, bool* atEnd = nullptr);

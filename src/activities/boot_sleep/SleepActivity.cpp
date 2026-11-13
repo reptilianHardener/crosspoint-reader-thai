@@ -1035,10 +1035,24 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const bool pre
 void SleepActivity::renderStyledCoverSleepScreen(const Bitmap& cover, const uint8_t style,
                                                  const CoverSleepInfo& info) const {
   const CoverSleepRect rect = coverSleepLayout(style, renderer, cover, info);
-  const auto drawCover = [&](const GfxRenderer::RenderMode mode) {
+  const auto drawPiece = [&](const GfxRenderer::RenderMode mode) {
     if (cover.rewindToData() != BmpReaderError::Ok) return false;
     renderer.setRenderMode(mode);
     return renderer.drawBitmap(cover, rect.x, rect.y, rect.maxWidth, rect.maxHeight, rect.cropX, rect.cropY);
+  };
+  // A band over the cover (Obi Band): draw the cover twice, clipped to each side of it, so the
+  // gray passes leave the band alone.
+  const auto drawCover = [&](const GfxRenderer::RenderMode mode) {
+    if (rect.hiddenRight <= rect.hiddenLeft) return drawPiece(mode);
+    const auto clip = renderer.getClipRect();
+    const int width = renderer.getScreenWidth();
+    const int height = renderer.getScreenHeight();
+    renderer.setClipRect(0, 0, rect.hiddenLeft, height);
+    bool ok = drawPiece(mode);
+    renderer.setClipRect(rect.hiddenRight, 0, width - rect.hiddenRight, height);
+    ok = ok && drawPiece(mode);
+    renderer.setClipRect(clip[0], clip[1], clip[2], clip[3]);
+    return ok;
   };
 
   renderer.clearScreen();
@@ -1237,16 +1251,7 @@ void SleepActivity::renderCoverSleepScreen() const {
     if (styled) {
       info.title = lastXtc.getTitle();
       info.author = lastXtc.getAuthor();
-      uint32_t page = 0;
-      info.percent = loadXtcProgress(lastXtc, nullptr, &page);
-      if (info.percent >= 0 && lastXtc.hasChapters()) {
-        for (const auto& chapter : lastXtc.getChapters()) {
-          if (page >= chapter.startPage && page <= chapter.endPage) {
-            info.chapter = chapter.name;
-            break;
-          }
-        }
-      }
+      info.percent = loadXtcProgress(lastXtc);
     }
   } else if (FsHelpers::hasReflowableBookExtension(APP_STATE.openEpubPath)) {
     // Handle EPUB, TXT, or Markdown file
@@ -1267,12 +1272,7 @@ void SleepActivity::renderCoverSleepScreen() const {
       info.title = lastEpub.getTitle();
       info.author = lastEpub.getAuthor();
       info.rightToLeft = ReaderUtils::isJapaneseBookLanguage(lastEpub.getLanguage());
-      int spine = 0;
-      info.percent = loadEpubProgress(lastEpub, nullptr, &spine);
-      if (info.percent >= 0 && spine < lastEpub.getSpineItemsCount()) {
-        const int tocIndex = lastEpub.getTocIndexForSpineIndex(spine);
-        if (tocIndex != -1) info.chapter = lastEpub.getTocItem(tocIndex).title;
-      }
+      info.percent = loadEpubProgress(lastEpub);
     }
   } else {
     return (this->*renderNoCoverSleepScreen)();
