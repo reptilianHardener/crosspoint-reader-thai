@@ -15,9 +15,49 @@ uint32_t readLe32(const uint8_t* p) {
 }
 }  // namespace
 
-int loadBookProgress(const std::string& path, bool* atEnd) {
+int loadEpubProgress(const Epub& epub, bool* atEnd, int* spineIndex) {
   if (atEnd) *atEnd = false;
   uint8_t data[10]{};
+  const std::string progressPath = epub.getCachePath() + "/progress.bin";
+  HalFile file;
+  if (!Storage.exists(progressPath.c_str()) || !Storage.openFileForRead("PROG", progressPath, file)) return -1;
+  const int size = file.read(data, sizeof(data));
+  if (size != 4 && size != 6 && size != 10) return -1;
+  const int spine = data[0] | (data[1] << 8);
+  const int page = data[2] | (data[3] << 8);
+  const int total = size >= 6 ? data[4] | (data[5] << 8) : 0;
+  if (epub.getSpineItemsCount() <= 0 || epub.getBookSize() == 0) return -1;
+  if (spine > epub.getSpineItemsCount()) return -1;
+  if (spineIndex) *spineIndex = spine;
+  if (spine == epub.getSpineItemsCount()) {
+    if (atEnd) *atEnd = true;
+    return 100;
+  }
+  const float fraction = total > 0 && page != UINT16_MAX ? std::clamp(float(page) / total, 0.0f, 1.0f) : 0;
+  return std::clamp(static_cast<int>(epub.calculateProgress(spine, fraction) * 100 + 0.5f), 0, 100);
+}
+
+int loadXtcProgress(const Xtc& xtc, bool* atEnd, uint32_t* page) {
+  if (atEnd) *atEnd = false;
+  uint8_t data[4]{};
+  const std::string progressPath = xtc.getCachePath() + "/progress.bin";
+  HalFile file;
+  if (!Storage.exists(progressPath.c_str()) || !Storage.openFileForRead("PROG", progressPath, file) ||
+      file.read(data, 4) != 4) {
+    return -1;
+  }
+  const uint32_t current = readLe32(data);
+  if (xtc.getPageCount() == 0) return -1;
+  if (page) *page = current;
+  if (current >= xtc.getPageCount()) {
+    if (atEnd) *atEnd = true;
+    return 100;
+  }
+  return xtc.calculateProgress(current);
+}
+
+int loadBookProgress(const std::string& path, bool* atEnd) {
+  if (atEnd) *atEnd = false;
   if (FsHelpers::hasReflowableBookExtension(path)) {
     // Metadata objects exceed the stack budget. The constructor only derives the cache
     // path, so a book never opened is answered without loading it.
@@ -28,21 +68,7 @@ int loadBookProgress(const std::string& path, bool* atEnd) {
     }
     const std::string progressPath = epub->getCachePath() + "/progress.bin";
     if (!Storage.exists(progressPath.c_str()) || !epub->load(false, true)) return -1;
-    HalFile file;
-    if (!Storage.openFileForRead("PROG", progressPath, file)) return -1;
-    const int size = file.read(data, sizeof(data));
-    if (size != 4 && size != 6 && size != 10) return -1;
-    const int spine = data[0] | (data[1] << 8);
-    const int page = data[2] | (data[3] << 8);
-    const int total = size >= 6 ? data[4] | (data[5] << 8) : 0;
-    if (epub->getSpineItemsCount() <= 0 || epub->getBookSize() == 0) return -1;
-    if (spine == epub->getSpineItemsCount()) {
-      if (atEnd) *atEnd = true;
-      return 100;
-    }
-    if (spine > epub->getSpineItemsCount()) return -1;
-    const float fraction = total > 0 && page != UINT16_MAX ? std::clamp(float(page) / total, 0.0f, 1.0f) : 0;
-    return std::clamp(static_cast<int>(epub->calculateProgress(spine, fraction) * 100 + 0.5f), 0, 100);
+    return loadEpubProgress(*epub, atEnd);
   }
   if (FsHelpers::hasXtcExtension(path)) {
     auto xtc = makeUniqueNoThrow<Xtc>(path, "/.crosspoint");
@@ -52,15 +78,7 @@ int loadBookProgress(const std::string& path, bool* atEnd) {
     }
     const std::string progressPath = xtc->getCachePath() + "/progress.bin";
     if (!Storage.exists(progressPath.c_str()) || !xtc->load()) return -1;
-    HalFile file;
-    if (!Storage.openFileForRead("PROG", progressPath, file) || file.read(data, 4) != 4) return -1;
-    const uint32_t page = readLe32(data);
-    if (xtc->getPageCount() == 0) return -1;
-    if (page >= xtc->getPageCount()) {
-      if (atEnd) *atEnd = true;
-      return 100;
-    }
-    return xtc->calculateProgress(page);
+    return loadXtcProgress(*xtc, atEnd);
   }
   return -1;
 }
