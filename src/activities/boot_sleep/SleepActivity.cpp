@@ -23,6 +23,7 @@
 #include <limits>
 #include <string>
 
+#include "CoverSleepStyles.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "activities/reader/ReaderUtils.h"
@@ -30,6 +31,7 @@
 #include "fontIds.h"
 #include "images/Logo120.h"
 #include "images/MoonIcon.h"
+#include "util/BookProgress.h"
 
 namespace {
 // Metalio: B/W sleep images use the full 0xF7 waveform instead of HALF (two
@@ -192,20 +194,10 @@ struct BitmapRect {
 };
 
 BitmapRect bitmapScreenRect(const Bitmap& bitmap, const BitmapPlacement& placement, const GfxRenderer& renderer) {
-  const int cropPixX = std::floor(bitmap.getWidth() * placement.cropX / 2.0f);
-  const int cropPixY = std::floor(bitmap.getHeight() * placement.cropY / 2.0f);
-  const int sourceWidth = bitmap.getWidth() - cropPixX * 2;
-  const int sourceHeight = bitmap.getHeight() - cropPixY * 2;
-  const float croppedWidth = (1.0f - placement.cropX) * static_cast<float>(bitmap.getWidth());
-  const float croppedHeight = (1.0f - placement.cropY) * static_cast<float>(bitmap.getHeight());
-  float scale = 1.0f;
-  if (croppedWidth > 0.0f && croppedHeight > 0.0f) {
-    scale = std::min({1.0f, static_cast<float>(renderer.getScreenWidth()) / croppedWidth,
-                      static_cast<float>(renderer.getScreenHeight()) / croppedHeight});
-  }
-  const bool isScaled = scale < 1.0f;
-  const int width = isScaled ? static_cast<int>(std::floor((sourceWidth - 1) * scale)) + 1 : sourceWidth;
-  const int height = isScaled ? static_cast<int>(std::floor((sourceHeight - 1) * scale)) + 1 : sourceHeight;
+  int width = 0;
+  int height = 0;
+  bitmapDrawnSize(bitmap, renderer.getScreenWidth(), renderer.getScreenHeight(), placement.cropX, placement.cropY,
+                  width, height);
   BitmapRect rect;
   rect.left = std::clamp(placement.x, 0, renderer.getScreenWidth());
   rect.top = std::clamp(placement.y, 0, renderer.getScreenHeight());
@@ -1038,6 +1030,65 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const bool pre
   }
 }
 
+// Styled cover: the B/W frame holds the whole layout, and the gray planes redraw only the cover. Absolute
+// planes keep the B/W layout around it (its black and white are the bits of gray levels 0 and 3).
+void SleepActivity::renderStyledCoverSleepScreen(const Bitmap& cover, const uint8_t style,
+                                                 const CoverSleepInfo& info) const {
+  const CoverSleepRect rect = coverSleepLayout(style, renderer, cover, info);
+  const auto drawCover = [&](const GfxRenderer::RenderMode mode) {
+    if (cover.rewindToData() != BmpReaderError::Ok) return false;
+    renderer.setRenderMode(mode);
+    return renderer.drawBitmap(cover, rect.x, rect.y, rect.maxWidth, rect.maxHeight, rect.cropX, rect.cropY);
+  };
+
+  renderer.clearScreen();
+  if (!drawCoverSleepDecor(style, renderer, cover, rect, info) || !drawCover(GfxRenderer::BW)) {
+    LOG_ERR("SLP", "Failed to draw the styled sleep cover; showing the cover alone");
+    if (cover.rewindToData() == BmpReaderError::Ok) return renderBitmapSleepScreen(cover);
+    renderer.clearScreen();
+    renderer.displayBuffer(kSleepClean);
+    return;
+  }
+
+  const bool hasGreyscale = cover.hasGreyscale() &&
+                            SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
+  if (SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE) {
+    renderer.invertScreen();
+  }
+  const bool absolute = hasGreyscale && renderer.grayscaleCapabilities(sleepGrayscaleMode(renderer)).supported();
+  const BwFrameKeeper bwFrame(renderer, hasGreyscale && !absolute);
+  if (!hasGreyscale || !bwFrame.ready()) {
+    renderer.displayBuffer(kSleepClean);
+    return;
+  }
+  if (absolute) {
+    cleanBeforeAbsoluteGray(renderer);
+    if (!renderer.displayGrayscaleBase(sleepGrayscaleMode(renderer))) return;
+  } else {
+    // HALF base, as for the full-screen cover (see renderBitmapSleepScreen).
+    renderer.displayGrayscaleBase(HalDisplay::HALF_REFRESH);
+  }
+
+  bool ready = true;
+  for (const auto plane : {GfxRenderer::GRAYSCALE_LSB, GfxRenderer::GRAYSCALE_MSB}) {
+    // Switching to BW here would cancel an absolute pass (GfxRenderer::setRenderMode).
+    if (!absolute) renderer.clearScreen(0x00);
+    if (!drawCover(plane)) {
+      ready = false;
+      break;
+    }
+    if (plane == GfxRenderer::GRAYSCALE_LSB)
+      renderer.copyGrayscaleLsbBuffers();
+    else
+      renderer.copyGrayscaleMsbBuffers();
+  }
+  if (ready)
+    renderer.displayGrayBuffer();
+  else
+    LOG_ERR("SLP", "Incomplete grayscale cover; keeping the current display");
+  renderer.setRenderMode(GfxRenderer::BW);
+}
+
 bool SleepActivity::renderSleepOverlayFile(HalFile& file, const char* pathForLog) const {
   const auto alphaResult = tryRenderTransparentOverlayBmp(file, renderer, pathForLog, overlayGrayCover);
   if (alphaResult == AlphaOverlayResult::Rendered) return true;
@@ -1161,7 +1212,12 @@ void SleepActivity::renderCoverSleepScreen() const {
 
   const bool originalThresholds = useOriginalCoverThresholds(renderer);
   std::string coverBmpPath;
-  bool cropped = SETTINGS.sleepScreenCoverMode == CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP;
+  // The styles place the fitted cover themselves; an overlay needs the cover alone.
+  const uint8_t style =
+      withOverlay ? static_cast<uint8_t>(CrossPointSettings::COVER_STYLE_FULL) : SETTINGS.sleepScreenCoverStyle;
+  const bool styled = style != CrossPointSettings::COVER_STYLE_FULL;
+  CoverSleepInfo info;
+  bool cropped = !styled && SETTINGS.sleepScreenCoverMode == CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP;
 
   // Check if the current book is XTC, TXT, or EPUB
   if (FsHelpers::hasXtcExtension(APP_STATE.openEpubPath)) {
@@ -1178,6 +1234,20 @@ void SleepActivity::renderCoverSleepScreen() const {
     }
 
     coverBmpPath = lastXtc.getCoverBmpPath();
+    if (styled) {
+      info.title = lastXtc.getTitle();
+      info.author = lastXtc.getAuthor();
+      uint32_t page = 0;
+      info.percent = loadXtcProgress(lastXtc, nullptr, &page);
+      if (info.percent >= 0 && lastXtc.hasChapters()) {
+        for (const auto& chapter : lastXtc.getChapters()) {
+          if (page >= chapter.startPage && page <= chapter.endPage) {
+            info.chapter = chapter.name;
+            break;
+          }
+        }
+      }
+    }
   } else if (FsHelpers::hasReflowableBookExtension(APP_STATE.openEpubPath)) {
     // Handle EPUB, TXT, or Markdown file
     Epub lastEpub(APP_STATE.openEpubPath, "/.crosspoint");
@@ -1193,6 +1263,17 @@ void SleepActivity::renderCoverSleepScreen() const {
     }
 
     coverBmpPath = lastEpub.getCoverBmpPath(cropped, originalThresholds);
+    if (styled) {
+      info.title = lastEpub.getTitle();
+      info.author = lastEpub.getAuthor();
+      info.rightToLeft = ReaderUtils::isJapaneseBookLanguage(lastEpub.getLanguage());
+      int spine = 0;
+      info.percent = loadEpubProgress(lastEpub, nullptr, &spine);
+      if (info.percent >= 0 && spine < lastEpub.getSpineItemsCount()) {
+        const int tocIndex = lastEpub.getTocIndexForSpineIndex(spine);
+        if (tocIndex != -1) info.chapter = lastEpub.getTocItem(tocIndex).title;
+      }
+    }
   } else {
     return (this->*renderNoCoverSleepScreen)();
   }
@@ -1202,6 +1283,7 @@ void SleepActivity::renderCoverSleepScreen() const {
     Bitmap bitmap(file);
     if (bitmap.parseHeaders() == BmpReaderError::Ok) {
       LOG_DBG("SLP", "Rendering sleep cover: %s", coverBmpPath.c_str());
+      if (styled) return renderStyledCoverSleepScreen(bitmap, style, info);
       if (withOverlay) overlayCover = &bitmap;
       renderBitmapSleepScreen(bitmap);
       overlayCover = nullptr;

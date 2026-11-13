@@ -232,6 +232,15 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
   - "Quick resume" - The text of the last page read will be displayed on the sleep screen and a moon icon is shown on the edge of the screen. Waking up the device will return to the same page of the opened book. This is useful for quickly resuming reading without waiting for the device to fully wake up and load the book.
   - "Transparent" - A transparent overlay image drawn over the current screen; see [Sleep Screen](#37-sleep-screen) below for more information
   - "Cover + Transparent" - The transparent overlay image drawn over the cover of the last opened book, falls back to "Transparent" behavior if there is no book cover
+- **Sleep Screen Cover Style**: How the book cover is laid out with "Cover" and "Cover + Custom":
+  - "Full Screen" (default) - The cover alone, as set by Sleep Screen Cover Mode and Background
+  - "Info Band" - The cover across the top, with the title, author, chapter and a progress bar in a band below
+  - "Gallery" - The cover in a white frame on black, with the title, author, chapter and progress dots below
+  - "Backdrop" - The cover in a white frame over a faded, enlarged copy of itself, with the title, chapter and percentage in a card below
+  - "Vertical" - The cover beside the title, author and chapter written in vertical columns. Japanese kana and kanji stand upright; other text runs along the column like a book spine, and the progress bar fills from the right in Japanese EPUB books.
+
+  The styles always use the whole cover (Cover Mode and Background apply only to "Full Screen"); Info Band trims the cover's edges to fill the screen width. Sleep Screen Cover Filter applies to all styles; "Inverted" inverts the whole layout. "Cover + Transparent" always shows the full-screen cover.
+
 - **Sleep Screen Cover Mode**: How to display the book cover or custom sleep image:
   
   - "Fit" (default) - Scale the image to fit centered on the screen, padding with borders as necessary (see Sleep Screen Cover Background)
@@ -612,7 +621,9 @@ The **Sleep Screen** setting controls what is displayed when the device goes to 
 
 #### Cover settings
 
-When using **Custom**, **Cover**, **Cover + Custom** or **Cover + Transparent**, three additional settings apply:
+When using **Cover** or **Cover + Custom**, **Sleep Screen Cover Style** picks the layout: **Full Screen**, **Info Band**, **Gallery**, **Backdrop** or **Vertical** (see [3.6.1 Display](#361-display) for details).
+
+When using **Custom**, **Cover**, **Cover + Custom** or **Cover + Transparent**, three additional settings apply. With **Cover** and **Cover + Custom**, Cover Mode and Background apply only to the **Full Screen** style:
 
 - **Sleep Screen Cover Mode**: **Fit** (scale to fit, with borders) or **Crop** (scale and crop to fill the screen).
 - **Sleep Screen Cover Background**: **Light**, **Dark**, or **Auto** (matches the image's edges) borders around an image that does not fill the screen.
