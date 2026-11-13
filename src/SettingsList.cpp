@@ -43,7 +43,8 @@ void forEachBaseSetting(SettingVisitor visit, void* context) {
                                "sleepScreen", StrId::STR_CAT_DISPLAY));
   emit(SettingInfo::Enum(StrId::STR_SLEEP_COVER_STYLE, &CrossPointSettings::sleepScreenCoverStyle,
                          {StrId::STR_COVER_STYLE_FULL, StrId::STR_COVER_STYLE_EDGE, StrId::STR_COVER_STYLE_GALLERY,
-                          StrId::STR_COVER_STYLE_BACKDROP, StrId::STR_COVER_STYLE_OBI, StrId::STR_COVER_STYLE_SPINE},
+                          StrId::STR_COVER_STYLE_BACKDROP, StrId::STR_COVER_STYLE_OBI, StrId::STR_COVER_STYLE_SPINE,
+                          StrId::STR_COVER_STYLE_OBI_WHITE},
                          "sleepScreenCoverStyle", StrId::STR_CAT_DISPLAY));
   emit(SettingInfo::Enum(StrId::STR_SLEEP_COVER_MODE, &CrossPointSettings::sleepScreenCoverMode,
                          {StrId::STR_FIT, StrId::STR_CROP}, "sleepScreenCoverMode", StrId::STR_CAT_DISPLAY));

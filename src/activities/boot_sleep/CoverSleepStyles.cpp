@@ -31,8 +31,8 @@ constexpr int EDGE_COVER_GAP = 12;  // spine rule to cover
 constexpr int EDGE_TEXT_GAP = 20;   // text columns to spine rule
 constexpr int EDGE_PERCENT_INDENT = 24;
 constexpr int EDGE_PERCENT_GAP = 36;
-// Obi Band: a black band over the cover, like the paper band on a Japanese book.
-constexpr int OBI_FOOTER = 96;  // white strip under the cover
+// Obi Band: a band over the cover, like the paper band on a Japanese book.
+constexpr int OBI_FOOTER = 96;  // strip under the cover
 constexpr int OBI_RIGHT = 68;   // band to the right screen edge
 constexpr int OBI_PADDING = 20;
 constexpr int OBI_TOP = 48;
@@ -40,6 +40,7 @@ constexpr int OBI_OVERHANG = 32;  // band below the cover
 constexpr int OBI_DIVIDER = 24;
 constexpr int OBI_DIVIDER_GAP = 20;
 constexpr int OBI_BAR_WIDTH = 150;
+constexpr int OBI_EDGE = 2;  // White obi: black lines along its sides
 // Spine: a narrow middle slice of the cover between two lines.
 constexpr int SPINE_WIDTH = 140;
 constexpr int SPINE_RIGHT = 44;
@@ -270,16 +271,29 @@ void drawEdge(const GfxRenderer& renderer, const CoverSleepRect& rect, const Cov
   drawSleepingRight(renderer);
 }
 
-void drawObi(const GfxRenderer& renderer, const CoverSleepRect& rect, const CoverSleepInfo& info) {
+// whiteBand: a white band with black text over a black footer (Obi Band (White)); otherwise a
+// black band with white text over a white footer.
+void drawObi(const GfxRenderer& renderer, const CoverSleepRect& rect, const CoverSleepInfo& info,
+             const bool whiteBand) {
   const int screenWidth = renderer.getScreenWidth();
+  const int screenHeight = renderer.getScreenHeight();
   // Rounding can make the drawn cover 1 px taller than its area.
   const int coverBottom = std::max(rect.maxHeight, rect.y + rect.height);
   const int bandLeft = rect.hiddenLeft;
   const int bandWidth = rect.hiddenRight - rect.hiddenLeft;
   const int bandBottom = coverBottom + OBI_OVERHANG;
-  renderer.fillRect(bandLeft, 0, bandWidth, bandBottom);
+  const bool bandInk = whiteBand;     // text on the band
+  const bool footerInk = !whiteBand;  // text on the footer
+  if (whiteBand) {
+    renderer.fillRect(0, coverBottom, screenWidth, screenHeight - coverBottom);
+    renderer.fillRect(bandLeft, 0, bandWidth, bandBottom, false);
+    renderer.fillRect(bandLeft, 0, OBI_EDGE, bandBottom);
+    renderer.fillRect(bandLeft + bandWidth - OBI_EDGE, 0, OBI_EDGE, bandBottom);
+  } else {
+    renderer.fillRect(bandLeft, 0, bandWidth, bandBottom);
+  }
 
-  // One white column: title, a short divider, author.
+  // One column: title, a short divider, author.
   const int titleLine = renderer.getLineHeight(UI_12_FONT_ID);
   const int authorLine = renderer.getLineHeight(UI_10_FONT_ID);
   const int length = bandBottom - OBI_TOP - OBI_PADDING;
@@ -292,33 +306,35 @@ void drawObi(const GfxRenderer& renderer, const CoverSleepRect& rect, const Cove
   if (!info.title.empty()) {
     const std::string title = renderer.truncatedText(UI_12_FONT_ID, info.title.c_str(),
                                                      length - authorLength - dividerSpace, EpdFontFamily::BOLD);
-    renderer.drawTextVertical(UI_12_FONT_ID, bandLeft + (bandWidth + titleLine) / 2, y, title.c_str(), false,
+    renderer.drawTextVertical(UI_12_FONT_ID, bandLeft + (bandWidth + titleLine) / 2, y, title.c_str(), bandInk,
                               EpdFontFamily::BOLD);
     y += renderer.getTextWidth(UI_12_FONT_ID, title.c_str(), EpdFontFamily::BOLD);
   }
   if (authorLength > 0) {
     y += OBI_DIVIDER_GAP;
-    renderer.fillRect(bandLeft + (bandWidth - OBI_DIVIDER) / 2, y, OBI_DIVIDER, GAP_SMALL, false);
+    renderer.fillRect(bandLeft + (bandWidth - OBI_DIVIDER) / 2, y, OBI_DIVIDER, GAP_SMALL, bandInk);
     y += GAP_SMALL + OBI_DIVIDER_GAP;
     renderer.drawTextVertical(UI_10_FONT_ID, bandLeft + (bandWidth + authorLine) / 2, y,
-                              renderer.truncatedText(UI_10_FONT_ID, info.author.c_str(), authorLength).c_str(), false);
+                              renderer.truncatedText(UI_10_FONT_ID, info.author.c_str(), authorLength).c_str(),
+                              bandInk);
   }
 
   // Footer: "Sleeping" on the left; progress bar and percent on the right.
   const int footerY = obiFooterY(renderer);
   renderer.drawText(SMALL_FONT_ID, SIDE_MARGIN,
                     footerY + (renderer.getLineHeight(UI_10_FONT_ID) - renderer.getLineHeight(SMALL_FONT_ID)) / 2,
-                    tr(STR_SLEEPING));
+                    tr(STR_SLEEPING), footerInk);
   if (info.percent >= 0) {
     const std::string percent = percentText(info.percent);
     const int percentWidth = renderer.getTextWidth(UI_10_FONT_ID, percent.c_str(), EpdFontFamily::BOLD);
     const int percentX = screenWidth - SIDE_MARGIN - percentWidth;
-    renderer.drawText(UI_10_FONT_ID, percentX, footerY, percent.c_str(), true, EpdFontFamily::BOLD);
+    renderer.drawText(UI_10_FONT_ID, percentX, footerY, percent.c_str(), footerInk, EpdFontFamily::BOLD);
     const int barX = percentX - PERCENT_GAP - OBI_BAR_WIDTH;
     const int barY = footerY + (authorLine - PROGRESS_BAR_HEIGHT) / 2;
-    renderer.drawRect(barX, barY, OBI_BAR_WIDTH, PROGRESS_BAR_HEIGHT, true);
+    renderer.drawRect(barX, barY, OBI_BAR_WIDTH, PROGRESS_BAR_HEIGHT, footerInk);
     const int filled = OBI_BAR_WIDTH * info.percent / 100;
-    renderer.fillRect(info.rightToLeft ? barX + OBI_BAR_WIDTH - filled : barX, barY, filled, PROGRESS_BAR_HEIGHT);
+    renderer.fillRect(info.rightToLeft ? barX + OBI_BAR_WIDTH - filled : barX, barY, filled, PROGRESS_BAR_HEIGHT,
+                      footerInk);
   }
 }
 
@@ -392,7 +408,8 @@ CoverSleepRect coverSleepLayout(const uint8_t style, const GfxRenderer& renderer
       rect.y = (screenHeight - rect.height) / 2;
       break;
     }
-    case CrossPointSettings::COVER_STYLE_OBI: {
+    case CrossPointSettings::COVER_STYLE_OBI:
+    case CrossPointSettings::COVER_STYLE_OBI_WHITE: {
       rect.maxWidth = screenWidth;
       rect.maxHeight = screenHeight - OBI_FOOTER;
       cropToArea(cover, rect);
@@ -432,7 +449,8 @@ bool drawCoverSleepDecor(const uint8_t style, const GfxRenderer& renderer, const
     case CrossPointSettings::COVER_STYLE_BACKDROP:
       return drawBackdrop(renderer, cover, rect);
     case CrossPointSettings::COVER_STYLE_OBI:
-      drawObi(renderer, rect, info);
+    case CrossPointSettings::COVER_STYLE_OBI_WHITE:
+      drawObi(renderer, rect, info, style == CrossPointSettings::COVER_STYLE_OBI_WHITE);
       return true;
     case CrossPointSettings::COVER_STYLE_SPINE:
     default:
