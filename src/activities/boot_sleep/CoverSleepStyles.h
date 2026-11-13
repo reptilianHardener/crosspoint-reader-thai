@@ -10,9 +10,8 @@ class GfxRenderer;
 struct CoverSleepInfo {
   std::string title;
   std::string author;
-  std::string chapter;
   int percent = -1;          // -1: the book has no saved position
-  bool rightToLeft = false;  // Japanese book: the Vertical style's progress bar fills from the right
+  bool rightToLeft = false;  // Japanese book: the Obi Band progress bar fills from the right
 };
 
 // The cover's place on screen. width/height are what GfxRenderer::drawBitmap draws when given
@@ -24,8 +23,11 @@ struct CoverSleepRect {
   int height = 0;
   int maxWidth = 0;
   int maxHeight = 0;
-  float cropX = 0.0f;  // Info Band crops the cover to fill the top of the screen
+  float cropX = 0.0f;  // Obi Band and Spine crop the cover to their area
   float cropY = 0.0f;
+  // Screen columns [hiddenLeft, hiddenRight) where a band lies over the cover (Obi Band).
+  int hiddenLeft = 0;
+  int hiddenRight = 0;
 };
 
 // Size GfxRenderer::drawBitmap draws this bitmap at for these bounds and crop (it shrinks, never enlarges).
@@ -37,7 +39,7 @@ void bitmapDrawnSize(const Bitmap& bitmap, int maxWidth, int maxHeight, float cr
 CoverSleepRect coverSleepLayout(uint8_t style, const GfxRenderer& renderer, const Bitmap& cover,
                                 const CoverSleepInfo& info);
 
-// Draws everything but the cover in black and white, and clears the cover's area to white.
+// Draws everything but the cover in black and white, and leaves the cover's visible area white.
 // Backdrop reads the cover file, so the caller rewinds it before drawing the cover.
 // Returns false when the cover file cannot be read.
 bool drawCoverSleepDecor(uint8_t style, const GfxRenderer& renderer, const Bitmap& cover, const CoverSleepRect& rect,
