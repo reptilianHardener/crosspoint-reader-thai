@@ -238,9 +238,10 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
   - "Gallery" - The cover in a white frame on black, with the title, author and progress dots below
   - "Backdrop" - The cover in a white frame over a faded, enlarged copy of itself, with no text
   - "Obi Band" - The cover fills the screen above a white strip at the bottom, with a black vertical band over it (like the paper band on a Japanese book) holding the title and author in white vertical text. The progress bar and percentage are in the bottom strip; the bar fills from the right in Japanese EPUB books
+  - "Obi Band (White)" - The same as Obi Band, but the band is white with black text and thin black edges, and the bottom strip is black with white text
   - "Spine" - A narrow slice from the middle of the cover between two lines, beside the title and author in vertical columns, with a progress line at the right edge and the percentage at the bottom left
 
-  In the vertical columns, Japanese kana and kanji stand upright; other text runs along the column like a book spine. Cover Mode and Background apply only to "Full Screen"; Off the Edge, Obi Band and Spine show only part of the cover by design. Sleep Screen Cover Filter applies to all styles; "Inverted" inverts the whole layout. "Cover + Transparent" always shows the full-screen cover.
+  In the vertical columns, Japanese kana and kanji stand upright; other text runs along the column like a book spine. Cover Mode and Background apply only to "Full Screen"; Off the Edge, both Obi Band styles and Spine show only part of the cover by design. Sleep Screen Cover Filter applies to all styles; "Inverted" inverts the whole layout. "Cover + Transparent" always shows the full-screen cover.
 
 - **Sleep Screen Cover Mode**: How to display the book cover or custom sleep image:
   
@@ -622,7 +623,7 @@ The **Sleep Screen** setting controls what is displayed when the device goes to 
 
 #### Cover settings
 
-When using **Cover** or **Cover + Custom**, **Sleep Screen Cover Style** picks the layout: **Full Screen**, **Off the Edge**, **Gallery**, **Backdrop**, **Obi Band** or **Spine** (see [3.6.1 Display](#361-display) for details).
+When using **Cover** or **Cover + Custom**, **Sleep Screen Cover Style** picks the layout: **Full Screen**, **Off the Edge**, **Gallery**, **Backdrop**, **Obi Band**, **Spine** or **Obi Band (White)** (see [3.6.1 Display](#361-display) for details).
 
 When using **Custom**, **Cover**, **Cover + Custom** or **Cover + Transparent**, three additional settings apply. With **Cover** and **Cover + Custom**, Cover Mode and Background apply only to the **Full Screen** style:
 

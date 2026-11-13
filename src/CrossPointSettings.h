@@ -40,11 +40,12 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // Layout of the book cover sleep screen; Full is the cover alone (Cover Mode and Background apply).
   enum SLEEP_SCREEN_COVER_STYLE {
     COVER_STYLE_FULL = 0,
-    COVER_STYLE_EDGE = 1,      // cover runs off the top and right edges beside vertical title columns
-    COVER_STYLE_GALLERY = 2,   // framed cover on black, caption below
-    COVER_STYLE_BACKDROP = 3,  // framed cover over a faded, enlarged copy of itself
-    COVER_STYLE_OBI = 4,       // cover with a black band holding the vertical title
-    COVER_STYLE_SPINE = 5,     // narrow slice of the cover beside vertical title columns
+    COVER_STYLE_EDGE = 1,       // cover runs off the top and right edges beside vertical title columns
+    COVER_STYLE_GALLERY = 2,    // framed cover on black, caption below
+    COVER_STYLE_BACKDROP = 3,   // framed cover over a faded, enlarged copy of itself
+    COVER_STYLE_OBI = 4,        // cover with a black band holding the vertical title
+    COVER_STYLE_SPINE = 5,      // narrow slice of the cover beside vertical title columns
+    COVER_STYLE_OBI_WHITE = 6,  // Obi Band with a white band over a black footer
     SLEEP_SCREEN_COVER_STYLE_COUNT
   };
   enum SLEEP_SCREEN_COVER_FILTER {
