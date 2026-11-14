@@ -102,6 +102,12 @@ TXT and MD books keep their own check in `Txt::validateCache`.
 
 ## `section.bin`
 
+### Version 176
+
+Version 176 is upstream version 75 with this fork's changes added (see Version
+173). Headings are no longer hyphenated. Completed and partial sections are
+rebuilt; book metadata and saved progress are kept.
+
 ### Version 175
 
 Version 175 is upstream version 74 with this fork's changes added (see Version
