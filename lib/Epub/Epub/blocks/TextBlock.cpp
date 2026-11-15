@@ -6,6 +6,7 @@
 #include <Memory.h>
 #include <MemoryManager.h>
 #include <Serialization.h>
+#include <Utf8.h>
 
 #include <cstring>
 #include <string_view>
@@ -151,6 +152,18 @@ bool TextBlock::setWordFonts(const uint8_t* slots, const int32_t (&fonts)[MAX_WO
   memcpy(wordFontData.get(), fonts, sizeof(fonts));
   memcpy(wordFontData.get() + sizeof(fonts), slots, numWords);
   return true;
+}
+
+int TextBlock::lineEndTrim(const GfxRenderer& renderer, const int fontId, const std::string_view word,
+                           const EpdFontFamily::Style style) {
+  // A superscript or subscript mark is about half size: half a full cell would put all of it
+  // past the line end.
+  if (word.empty() || (style & (EpdFontFamily::SUP | EpdFontFamily::SUB)) != 0) return 0;
+  size_t last = word.size() - 1;
+  while (last > 0 && (static_cast<uint8_t>(word[last]) & 0xC0) == 0x80) --last;
+  const auto* cursor = reinterpret_cast<const uint8_t*>(word.data() + last);
+  if (utf8VerticalGlyphShift(utf8NextCodepoint(&cursor)) != VerticalGlyphShift::Corner) return 0;
+  return renderer.getTextAdvanceX(fontId, word.data() + last, style) / 2;
 }
 
 int TextBlock::renderFontId(const GfxRenderer& renderer, const int fontId, const int sectionFontId) {
@@ -441,6 +454,7 @@ void TextBlock::render(const GfxRenderer& renderer, const int sectionFontId, con
         lineWidth = renderer.getTextAdvanceX(wordFont, visibleText, currentStyle, tracking, baseDir,
                                              GfxRenderer::TextMeasureMode::Rendered);
       }
+      lineWidth -= wordLineEndTrim(renderer, i, wordFont, vertical);
 
       for (auto& line : decorationLines) {
         if ((currentStyle & line.style) == 0) {

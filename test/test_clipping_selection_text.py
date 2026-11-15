@@ -81,6 +81,7 @@ struct Block {
   int blockFontId(int fallback) const { return fallback; }
   int wordFontId(uint16_t, int fallback) const { return fallback; }
   bool wordIsCombinedUpright(uint16_t) const { return false; }
+  int wordLineEndTrim(const Renderer&, uint16_t, int, bool) const { return 0; }
   int wordYOffset(const Renderer&, int, uint16_t) const { return 0; }
   static int renderFontId(const Renderer&, int fontId, int) { return fontId; }
   uint16_t wordCount() const {

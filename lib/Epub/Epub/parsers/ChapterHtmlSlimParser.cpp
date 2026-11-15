@@ -857,6 +857,7 @@ void ChapterHtmlSlimParser::flushPartWordBuffer() {
           ? currentTextBlock->sizeSlotFor(std::clamp(inlineScale, 0.5f, 3.0f))
           : 0;
   // Set here, where body text enters a block, because blocks are created in several places.
+  // Layout reads it too (line-end marks); a block with no flushed word has nothing to lay out.
   // List markers are added elsewhere; a number marker ends in ".", so it never stands upright.
   currentTextBlock->setVerticalText(verticalText);
   currentTextBlock->addWord(partWordBuffer, fontStyle, false, nextWordContinues, partWordVisibleOffset, linkId,

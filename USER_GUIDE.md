@@ -324,6 +324,7 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
   
   - Next to Japanese text, a short half-width run stands upright in one character cell: a number of one or two digits (the 25 in 平成25年), a single Latin letter (the A in Aさん), or one or two of ! and ? (the !? in 何!?).
   - Such a run stays sideways when it is next to another half-width letter, digit or punctuation mark ("iPhone 15", "3.5", "OK!"), or when it is much wider than one cell (two digits in a font with wide digits).
+  - A comma (、) or full stop (。) that ends a line needs only half a cell there. The mark stays inside the text area; the blank half of its cell may go into the margin.
 
 - **Reading Orientation**: Set the screen orientation for reading EPUB files:
   

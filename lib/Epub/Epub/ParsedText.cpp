@@ -1042,6 +1042,12 @@ void ParsedText::ensureRubyCapacity() {
   // and no large contiguous reallocation to avoid). Kept for call-site stability.
 }
 
+int ParsedText::lineEndTrim(const size_t wordIndex, const GfxRenderer& renderer, const int fontId) const {
+  // An RTL block is placed from the far edge, so the allowance would shift real ink.
+  if (!verticalText || blockStyle.isRtl) return 0;
+  return TextBlock::lineEndTrim(renderer, wordFontId(wordIndex, fontId), wordAt(wordIndex), getWordStyleAt(wordIndex));
+}
+
 int ParsedText::resolveFirstLineIndent(const bool isFirstLine, const GfxRenderer& renderer, const int fontId) const {
   if (firstLineConsumed || !isFirstLine || !isNaturalAlign) {
     return 0;
@@ -1440,6 +1446,16 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
 
   const size_t totalWordCount = words.size();
 
+  // Line-end trims, looked up once per word rather than once per candidate line. Empty on
+  // horizontal pages.
+  std::vector<uint8_t> lineEndTrims;
+  if (verticalText) {
+    lineEndTrims.reserve(totalWordCount);
+    for (size_t i = 0; i < totalWordCount; ++i) {
+      lineEndTrims.push_back(static_cast<uint8_t>(std::min(lineEndTrim(i, renderer, fontId), 255)));
+    }
+  }
+
   // DP table to store the minimum badness (cost) of lines starting at index i
   std::vector<int> dp(totalWordCount);
   // 'ans[i]' stores the index 'j' of the *last word* in the optimal line starting at 'i'
@@ -1476,7 +1492,9 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
 
       currlen += wordWidths[j] + gap + (j == i ? extraStartOffset : 0);
 
-      if (currlen > effectivePageWidth) {
+      // Length of the line if it ends at word j (see lineEndTrim).
+      const int lineLen = currlen - (lineEndTrims.empty() ? 0 : lineEndTrims[j]);
+      if (lineLen > effectivePageWidth) {
         break;
       }
 
@@ -1488,14 +1506,14 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
 
       const int extraEndOffset = calculateRubyExtraEndOffset(i, j + 1, renderer, fontId);
 
-      if (currlen + extraEndOffset > effectivePageWidth) {
+      if (lineLen + extraEndOffset > effectivePageWidth) {
         continue;  // Cannot split here as it would overflow the right margin
       }
 
       const bool isLastLine = j == totalWordCount - 1;
       // long long throughout: the squared (and, for Thai, cubed) slack overflows int.
       const long long cost_ll =
-          lineBadness(effectivePageWidth - currlen, effectivePageWidth, isLastLine, hasThaiWordBreaks) +
+          lineBadness(effectivePageWidth - lineLen, effectivePageWidth, isLastLine, hasThaiWordBreaks) +
           (isLastLine ? 0 : dp[j + 1]);
       const int cost = cost_ll > MAX_COST ? MAX_COST : static_cast<int>(cost_ll);
 
@@ -1579,12 +1597,16 @@ std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& r
       }
       const int candidateWidth = spacing + wordWidths[currentIndex];
 
-      // Word fits on current line
+      // Word fits on current line. Only a word that may end the line may pass the line end.
       const int extraEndOffset = calculateRubyExtraEndOffset(lineStart, currentIndex + 1, renderer, fontId);
-      if (lineWidth + candidateWidth <= effectivePageWidth) {
+      const bool mayEndLine =
+          currentIndex + 1 == wordWidths.size() ||
+          TokenBoundary::allowsBreak(continuesVec[currentIndex + 1], noSpaceBeforeVec[currentIndex + 1]);
+      const int trim = mayEndLine ? lineEndTrim(currentIndex, renderer, fontId) : 0;
+      if (lineWidth + candidateWidth - trim <= effectivePageWidth) {
         lineWidth += candidateWidth;
         ++currentIndex;
-        if (lineWidth + extraEndOffset <= effectivePageWidth &&
+        if (lineWidth - trim + extraEndOffset <= effectivePageWidth &&
             (currentIndex == wordWidths.size() ||
              TokenBoundary::allowsBreak(continuesVec[currentIndex], noSpaceBeforeVec[currentIndex]))) {
           lastFittingBreak = currentIndex;
@@ -1852,8 +1874,10 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
     }
   }
 
-  // Calculate spacing (account for indent reducing effective page width on first line)
-  const int effectivePageWidth = pageWidth - firstLineIndent;
+  // Calculate spacing (account for indent reducing effective page width on first line).
+  // A line that ends in a comma or full stop is set half a cell longer (see lineEndTrim).
+  const int lastWordTrim = lineEndTrim(lineBreak - 1, renderer, fontId);
+  const int effectivePageWidth = pageWidth - firstLineIndent + lastWordTrim;
   const bool isLastLine = lineBreak == words.size();
 
   // For RTL, implicit/default Left alignment becomes Right alignment.
@@ -2117,6 +2141,7 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
     size_t spanIndex = 0;
     while (spanIndex < lineLinkIdsSeen.size() && lineLinkIdsSeen[spanIndex] != linkId) spanIndex++;
     int width = willReorder ? reorderedWidthsScratch[i] : wordWidths[lastBreakAt + i];
+    if (i + 1 == lineWordCount) width -= lastWordTrim;  // the link box stays in the text area
     const int right = lineXPos[i] + width;
     const int topLift =
         (lineWordStyles[i] & EpdFontFamily::SUP) != 0 ? renderer.getFontAscenderSize(fontId) * 2 / 5 : 0;

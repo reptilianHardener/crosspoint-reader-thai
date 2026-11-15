@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -121,6 +122,17 @@ class TextBlock final : public Block {
   }
   bool wordIsCombinedUpright(uint16_t i) const {
     return wordFontData && (wordFontData[sizeof(int32_t) * MAX_WORD_FONTS + i] & COMBINE_UPRIGHT_SLOT_FLAG);
+  }
+  // Vertical pages: a comma or full stop is drawn in the first half of its cell, so when the
+  // word ends a line the blank second half may pass the line end. Returns that blank part
+  // for `word`, or 0 when it does not end in such a mark. No ink leaves the text area: this
+  // is line-end trimming, not hanging punctuation. `word` must be NUL-terminated.
+  static int lineEndTrim(const GfxRenderer& renderer, int fontId, std::string_view word, EpdFontFamily::Style style);
+  // lineEndTrim() for word i when it is the last word of a vertical line, else 0. Boxes and
+  // rules drawn over the word stop short by this much, so they stay inside the text area.
+  int wordLineEndTrim(const GfxRenderer& renderer, uint16_t i, int wordFont, bool vertical) const {
+    if (!vertical || blockStyle.isRtl || i + 1 != numWords) return 0;
+    return lineEndTrim(renderer, wordFont, {wordText(i), wordTextLen(i)}, wordStyle(i));
   }
   // fontId when it is (or can be) registered with the renderer, else the section font.
   static int renderFontId(const GfxRenderer& renderer, int fontId, int sectionFontId);

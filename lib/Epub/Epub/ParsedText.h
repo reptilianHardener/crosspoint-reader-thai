@@ -139,6 +139,9 @@ class ParsedText {
   int calculateRubyExtraEndOffset(size_t lineStartIdx, size_t lineBreakIdx, const GfxRenderer& renderer,
                                   int fontId) const;
   int resolveFirstLineIndent(bool isFirstLine, const GfxRenderer& renderer, int fontId) const;
+  // Blank part of word i's last cell that may pass the line end when the word ends a line; 0
+  // for most words (see TextBlock::lineEndTrim).
+  int lineEndTrim(size_t wordIndex, const GfxRenderer& renderer, int fontId) const;
   std::vector<size_t> computeLineBreaks(const GfxRenderer& renderer, int fontId, int pageWidth,
                                         std::vector<uint16_t>& wordWidths, std::vector<bool>& continuesVec,
                                         std::vector<bool>& noSpaceBeforeVec);
@@ -187,9 +190,9 @@ class ParsedText {
   void resetFirstLineIndent() { firstLineConsumed = paragraphStartEmitted = false; }
   void setBlockStyle(const BlockStyle& blockStyle) { this->blockStyle = blockStyle; }
   void setHyphenationEnabled(const bool enabled) { hyphenationEnabled = enabled; }
-  // The block is set in vertical (tategaki) lines. A run of one or two ASCII digits, one Latin
-  // letter, or one or two of ! and ? beside CJK text is then laid out as one upright cell
-  // (tate-chu-yoko) instead of lying sideways. Applies to words added later.
+  // The block is set in vertical (tategaki) lines. Words added after this call have short ASCII
+  // runs split out for upright cells (see addWord); layout lets the cell of a line-end comma or
+  // full stop pass the line end (see lineEndTrim).
   void setVerticalText(const bool enabled) { verticalText = enabled; }
   bool isHyphenationEnabled() const { return hyphenationEnabled; }
   BlockStyle& getBlockStyle() { return blockStyle; }

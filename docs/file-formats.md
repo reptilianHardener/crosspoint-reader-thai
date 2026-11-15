@@ -113,8 +113,17 @@ not stand upright beside a dash or leader. Bit 0x10 of the
 word's font slot byte marks it; a line with such a word carries the
 `hasWordFonts` data even when every word uses the block font. Every other run,
 a superscript or subscript run, and a run more than 1.25 em wide are
-unchanged. Completed and partial sections are rebuilt; book metadata and saved
-progress are kept.
+unchanged.
+
+Also on vertical pages, the cell of a comma or full stop (U+3001, U+3002,
+U+FF0C, U+FF0E) that ends a line may pass the line end by half the mark's
+advance. The mark is drawn in the first half of its cell, so it stays inside
+the text area. Justified, right-aligned and centered lines are placed as if the
+line were that much longer. Superscript and subscript marks and horizontal
+pages are unchanged.
+
+Completed and partial sections are rebuilt; book metadata and saved progress
+are kept.
 
 ### Version 176
 
