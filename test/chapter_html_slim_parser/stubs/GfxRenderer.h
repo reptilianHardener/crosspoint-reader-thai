@@ -64,6 +64,11 @@ class GfxRenderer {
     textDraws.push_back({x, text, style, direction});
   }
   void drawTextVertical(int, int, int, const char*, bool, EpdFontFamily::Style, int8_t = 0) const {}
+  mutable std::vector<std::string> combinedUprightDraws;
+  void drawTextCombinedUpright(int, int, int, const char* text, bool, EpdFontFamily::Style) const {
+    combinedUprightDraws.emplace_back(text);
+  }
+  int getVerticalCellAdvance(int fontId) const { return getLineHeight(fontId, 1.0f); }
   int getTextWidth(int font, const char* text, EpdFontFamily::Style style,
                    BidiUtils::BidiBaseDir = BidiUtils::BidiBaseDir::AUTO) const {
     return getTextAdvanceX(font, text, style);

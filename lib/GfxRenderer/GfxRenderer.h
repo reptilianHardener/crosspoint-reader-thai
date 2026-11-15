@@ -379,6 +379,12 @@ class GfxRenderer {
   // sideways along the line.
   void drawTextVertical(int fontId, int x, int y, const char* text, bool black = true,
                         EpdFontFamily::Style style = EpdFontFamily::REGULAR, int8_t tracking = 0) const;
+  // Tate-chu-yoko: a short run set upright, side by side, in one cell of a vertical line.
+  // (x, y) are as for drawTextVertical; the cell is getVerticalCellAdvance() long.
+  void drawTextCombinedUpright(int fontId, int x, int y, const char* text, bool black = true,
+                               EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
+  // Length along a vertical line of one upright cell: the font's em, as for a kanji.
+  int getVerticalCellAdvance(int fontId) const;
   // Draws one glyph at scale256/256 of its size with its baseline at baselineY (drop caps).
   // Outlines are bilinearly resampled from the font bitmap, so no larger font is loaded.
   // Returns the scaled advance in pixels.

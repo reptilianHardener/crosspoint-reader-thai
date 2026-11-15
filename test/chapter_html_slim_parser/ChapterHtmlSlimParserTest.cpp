@@ -711,6 +711,24 @@ TEST_F(ChapterHtmlSlimParserTest, SmallCapsSpanMarksWordsWithoutChangingText) {
   EXPECT_EQ(block.wordStyle(2) & EpdFontFamily::SMALL_CAPS, 0);
 }
 
+TEST_F(ChapterHtmlSlimParserTest, VerticalTextSetsShortDigitRunsUpright) {
+  const char text[] = "平成25年";
+  for (const bool vertical : {false, true}) {
+    parser.setVerticalText(vertical);
+    parser.beginParse();
+    ChapterHtmlSlimParser::startElement(&parser, "p", nullptr);
+    ChapterHtmlSlimParser::characterData(&parser, text, sizeof(text) - 1);
+    ChapterHtmlSlimParser::endElement(&parser, "p");
+
+    ASSERT_NE(parser.currentPage, nullptr);
+    const auto& block = *static_cast<const PageLine&>(*parser.currentPage->elements.back()).getBlock();
+    ASSERT_EQ(block.wordCount(), 4);
+    EXPECT_STREQ(block.wordText(2), "25");
+    EXPECT_EQ(block.wordIsCombinedUpright(2), vertical);
+    EXPECT_FALSE(block.wordIsCombinedUpright(1));
+  }
+}
+
 TEST_F(ChapterHtmlSlimParserTest, SmallCapsMetricsArePreparedForEachInlineFont) {
   renderer.sdFont = true;
   ParsedText text;

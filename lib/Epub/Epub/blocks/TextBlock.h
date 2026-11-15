@@ -44,6 +44,11 @@ class TextBlock final : public Block {
   static constexpr uint8_t DISCRETIONARY_HYPHEN_FLAG = 0x80;
   // Word font slot bit for CSS small caps; the style byte's high bit is the hyphen flag.
   static constexpr uint8_t SMALL_CAPS_SLOT_FLAG = 0x80;
+  // Word font slot bit for a short run (25, A, !?) that a vertical line sets upright in one
+  // cell (tate-chu-yoko). Set by layout; the word's xpos already allows one cell for it.
+  // Not the next bit down from small caps, so an upstream flag is unlikely to land on it.
+  static constexpr uint8_t COMBINE_UPRIGHT_SLOT_FLAG = 0x10;
+  static constexpr uint8_t SLOT_FLAGS = SMALL_CAPS_SLOT_FLAG | COMBINE_UPRIGHT_SLOT_FLAG;
   struct SourceRange {
     uint32_t start = UINT32_MAX;
     uint32_t end = UINT32_MAX;
@@ -107,12 +112,15 @@ class TextBlock final : public Block {
   int blockFontId(const int sectionFontId) const { return blockStyle.fontId ? blockStyle.fontId : sectionFontId; }
 
   static constexpr uint8_t MAX_WORD_FONTS = 3;
-  // slots[i] picks word i's font: 0 = the block font, n = fonts[n-1]; SMALL_CAPS_SLOT_FLAG
-  // marks small caps. Returns false on OOM.
+  // slots[i] picks word i's font: 0 = the block font, n = fonts[n-1]; the SLOT_FLAGS bits
+  // mark small caps and upright runs. Returns false on OOM.
   bool setWordFonts(const uint8_t* slots, const int32_t (&fonts)[MAX_WORD_FONTS]);
   int wordFontId(uint16_t i, int sectionFontId) const;
   bool wordHasSmallCaps(uint16_t i) const {
     return wordFontData && (wordFontData[sizeof(int32_t) * MAX_WORD_FONTS + i] & SMALL_CAPS_SLOT_FLAG);
+  }
+  bool wordIsCombinedUpright(uint16_t i) const {
+    return wordFontData && (wordFontData[sizeof(int32_t) * MAX_WORD_FONTS + i] & COMBINE_UPRIGHT_SLOT_FLAG);
   }
   // fontId when it is (or can be) registered with the renderer, else the section font.
   static int renderFontId(const GfxRenderer& renderer, int fontId, int sectionFontId);

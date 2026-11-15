@@ -9,7 +9,7 @@
 
 - **Thai reading**: dictionary-based word breaking so Thai text wraps between words, correct stacking of vowel and tone marks, a user dictionary for words the built-in list misses (**Settings > Reader > Thai Dictionary**), and Thai-aware wrapping for TXT files.
 - **Thai UI and keyboard**: a Thai translation and a Kedmanee on-screen keyboard layer.
-- **Vertical Japanese (tategaki)**: Japanese-language EPUBs are set in vertical lines running right to left, with upright kana and kanji, ruby to the right of its base, and Latin text and digits lying sideways. Pages advance leftward, so the front Left button and a rightward swipe turn forward. Turn it off under **Settings > Reader > Vertical Japanese Text**.
+- **Vertical Japanese (tategaki)**: Japanese-language EPUBs are set in vertical lines running right to left, with upright kana and kanji, ruby to the right of its base, Latin words and long numbers lying sideways, and short runs (a number of one or two digits, a single Latin letter, one or two of `!` and `?`) standing upright in one cell. Pages advance leftward, so the front Left button and a rightward swipe turn forward. Turn it off under **Settings > Reader > Vertical Japanese Text**.
 - **Tanzaku themes**: a home screen after vertical Japanese print, with the highlighted book's cover (or only its title) beside a row of spines read right to left, and, with the list-style reader menu, a sheet of tiles for the EPUB reader menu.
 - **Bold Text**: a reader setting that lays the whole book out in bold.
 

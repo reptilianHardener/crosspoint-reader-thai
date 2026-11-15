@@ -320,6 +320,11 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
 
 - **Thai Dictionary**: Thai words to add to the built-in word list, such as names it does not know. A word in this list is never split across lines. An entry must have 2 to 20 Thai characters and must start and end where a Thai line may break. A very short entry can also stop breaks between neighbouring words. Books are laid out again the next time they are opened after the list changes.
 
+- **Vertical Japanese Text**: Whether Japanese-language EPUB books are set in vertical lines that run from right to left across the page; options are "ON" (default) or "OFF". Kana and kanji stand upright. Half-width Latin words and numbers of three or more digits lie sideways along the line.
+  
+  - Next to Japanese text, a short half-width run stands upright in one character cell: a number of one or two digits (the 25 in 平成25年), a single Latin letter (the A in Aさん), or one or two of ! and ? (the !? in 何!?).
+  - Such a run stays sideways when it is next to another half-width letter, digit or punctuation mark ("iPhone 15", "3.5", "OK!"), or when it is much wider than one cell (two digits in a font with wide digits).
+
 - **Reading Orientation**: Set the screen orientation for reading EPUB files:
   
   - "Portrait" (default) - Standard portrait orientation

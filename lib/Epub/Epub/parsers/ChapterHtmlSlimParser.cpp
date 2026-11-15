@@ -856,6 +856,9 @@ void ChapterHtmlSlimParser::flushPartWordBuffer() {
       inlineScale > 0.0f && (inlineSize.valid || inlineScale != currentTextBlock->getBlockStyle().fontScale)
           ? currentTextBlock->sizeSlotFor(std::clamp(inlineScale, 0.5f, 3.0f))
           : 0;
+  // Set here, where body text enters a block, because blocks are created in several places.
+  // List markers are added elsewhere; a number marker ends in ".", so it never stands upright.
+  currentTextBlock->setVerticalText(verticalText);
   currentTextBlock->addWord(partWordBuffer, fontStyle, false, nextWordContinues, partWordVisibleOffset, linkId,
                             sizeSlot, effectivePreserveWhitespace, nextWordZeroWidthBreak);
   nextWordZeroWidthBreak = false;

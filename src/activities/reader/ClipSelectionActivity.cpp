@@ -230,7 +230,9 @@ bool ClipSelectionActivity::extractWords() {
 
         const auto style = static_cast<EpdFontFamily::Style>(block->wordStyle(i) & ~EpdFontFamily::UNDERLINE);
         const int wordFont = TextBlock::renderFontId(renderer, block->wordFontId(i, fontId), fontId);
-        int width = renderer.getTextAdvanceX(wordFont, text, style, characterSpacing);
+        // An upright run fills one cell of its line, whatever its text measures.
+        int width = block->wordIsCombinedUpright(i) ? renderer.getVerticalCellAdvance(wordFont)
+                                                    : renderer.getTextAdvanceX(wordFont, text, style, characterSpacing);
         if (width <= 0) continue;
         if (i + 1 < block->wordCount() && block->wordXpos(i + 1) > block->wordXpos(i)) {
           width = std::min(width, static_cast<int>(block->wordXpos(i + 1) - block->wordXpos(i)));
