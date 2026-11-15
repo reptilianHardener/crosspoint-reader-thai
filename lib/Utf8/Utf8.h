@@ -160,8 +160,10 @@ inline bool utf8IsVerticalUpright(const uint32_t cp) {
 // Where an upright glyph sits in its vertical cell when that differs from the horizontal cell.
 enum class VerticalGlyphShift : uint8_t {
   None,
-  Corner,  // ideographic comma and full stop: lower left of the cell becomes upper right
-  Small,   // small kana: nudged toward the upper right
+  // Ideographic comma and full stop: lower left of the cell becomes upper right. Layout
+  // relies on this set too (TextBlock::lineEndTrim), so changing it changes cached line breaks.
+  Corner,
+  Small,  // small kana: nudged toward the upper right
 };
 
 inline VerticalGlyphShift utf8VerticalGlyphShift(uint32_t cp) {

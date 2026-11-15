@@ -97,6 +97,7 @@ class ParsedText {
   // then weights slack more heavily (see lineBadness in ParsedText.cpp).
   bool hasThaiWordBreaks = false;
   bool droppedWords = false;
+  bool verticalText = false;
   int linesAfterCurrent = -1;
   bool firstLineConsumed = false;
   // Separate from firstLineConsumed: a <br> line suppresses the indent but still starts a
@@ -111,6 +112,16 @@ class ParsedText {
   std::vector<uint16_t> visualOrderScratch;
 
   std::string_view wordAt(const size_t i) const { return wordStore.view(words[i]); }
+  // Tokenizes one source word; addWord() calls it once, or once per piece when it splits
+  // upright runs out of the word. sizeSlot may carry TextBlock::SLOT_FLAGS bits: mask
+  // them off before using it as an index.
+  void addTokens(std::string word, EpdFontFamily::Style fontStyle, bool underline, bool attachToPrevious,
+                 uint32_t visibleTextOffset, uint8_t linkId, uint8_t sizeSlot, bool noSpaceBefore,
+                 bool zeroWidthBreakBefore);
+  bool keepsCombinedUpright(size_t wordIndex, int naturalWidth, int cellAdvance) const;
+  void resolveCombinedUprightWidths(const GfxRenderer& renderer, int fontId, std::vector<uint16_t>& wordWidths);
+  // Width of word i for ruby overhang: as measured, or one cell for an upright run.
+  int rubyBaseWordWidth(size_t wordIndex, const GfxRenderer& renderer, int fontId) const;
   bool storeWord(std::string_view text, WordStore::StoredWord& out);
   uint32_t visibleOffsetBaseAt(size_t wordIndex) const;
   uint32_t visibleOffsetAt(size_t wordIndex) const;
@@ -128,6 +139,9 @@ class ParsedText {
   int calculateRubyExtraEndOffset(size_t lineStartIdx, size_t lineBreakIdx, const GfxRenderer& renderer,
                                   int fontId) const;
   int resolveFirstLineIndent(bool isFirstLine, const GfxRenderer& renderer, int fontId) const;
+  // Blank part of word i's last cell that may pass the line end when the word ends a line; 0
+  // for most words (see TextBlock::lineEndTrim).
+  int lineEndTrim(size_t wordIndex, const GfxRenderer& renderer, int fontId) const;
   std::vector<size_t> computeLineBreaks(const GfxRenderer& renderer, int fontId, int pageWidth,
                                         std::vector<uint16_t>& wordWidths, std::vector<bool>& continuesVec,
                                         std::vector<bool>& noSpaceBeforeVec);
@@ -176,6 +190,10 @@ class ParsedText {
   void resetFirstLineIndent() { firstLineConsumed = paragraphStartEmitted = false; }
   void setBlockStyle(const BlockStyle& blockStyle) { this->blockStyle = blockStyle; }
   void setHyphenationEnabled(const bool enabled) { hyphenationEnabled = enabled; }
+  // The block is set in vertical (tategaki) lines. Words added after this call have short ASCII
+  // runs split out for upright cells (see addWord); layout lets the cell of a line-end comma or
+  // full stop pass the line end (see lineEndTrim).
+  void setVerticalText(const bool enabled) { verticalText = enabled; }
   bool isHyphenationEnabled() const { return hyphenationEnabled; }
   BlockStyle& getBlockStyle() { return blockStyle; }
   size_t size() const { return words.size(); }

@@ -94,7 +94,9 @@ namespace {
 //       letters are not dictionary words; an overlong Thai run is cut between words.
 // v175: Upstream v74 (TrueType advances defer rounding until pixel placement) plus the fork's changes.
 // v176: Upstream v75 (headings are not hyphenated) plus the fork's changes.
-constexpr uint8_t SECTION_FILE_VERSION = 176;
+// v177: Vertical lines set short runs (25, A, !?) upright in one cell (word font slot bit 0x10);
+//       the blank half of a line-end comma or full stop's cell may pass the line end.
+constexpr uint8_t SECTION_FILE_VERSION = 177;
 // Written into the version field while a build is in progress; patched to
 // SECTION_FILE_VERSION only when the build is finalized. An abandoned /
 // crash-interrupted .bin therefore carries version 0, which loadSectionFile rejects

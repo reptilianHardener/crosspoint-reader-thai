@@ -85,6 +85,16 @@ int clippingWordFont(const GfxRenderer& renderer, const int fontId, const TextBl
   return TextBlock::renderFontId(renderer, block.wordFontId(i, fontId), fontId);
 }
 
+// Word i's length along its line: its text as measured, or one cell for an upright run. The
+// blank half cell of a line-end comma or full stop is left out, so boxes stay in the text area.
+int clippingWordAdvance(const GfxRenderer& renderer, const int fontId, const TextBlock& block, const uint16_t i,
+                        const EpdFontFamily::Style style, const bool vertical) {
+  const int wordFont = clippingWordFont(renderer, fontId, block, i);
+  if (block.wordIsCombinedUpright(i)) return renderer.getVerticalCellAdvance(wordFont);
+  return renderer.getTextAdvanceX(wordFont, block.wordText(i), style, block.getBlockStyle().characterSpacing) -
+         block.wordLineEndTrim(renderer, i, wordFont, vertical);
+}
+
 Rect clippingWordRect(const GfxRenderer& renderer, const int fontId, const PageLine& line, const uint16_t i,
                       const int top, const int left, const int wordWidth, const bool vertical) {
   // The word's box on screen. left is the page origin from pageOriginX(): on a vertical page
@@ -1575,6 +1585,14 @@ uint32_t EpubReaderActivity::clippingLayoutSignature() const {
     signature = (signature ^ SETTINGS.scriptLineSpacing) * 16777619U;
     if (signature == 0) signature = 1;  // 0 means "no signature"
   }
+  // Upright runs and line-end marks (section cache 177) changed how vertical pages split
+  // words and end lines, so older clippings must not match by signature. The value stays
+  // clear of the line spacing values mixed in above.
+  if (verticalLayout) {
+    constexpr uint32_t VERTICAL_LAYOUT_REVISION = 0x100;
+    signature = (signature ^ VERTICAL_LAYOUT_REVISION) * 16777619U;
+    if (signature == 0) signature = 1;
+  }
   return signature;
 }
 
@@ -2576,8 +2594,7 @@ int EpubReaderActivity::clippingAtPoint(const Page& page, const int x, const int
       const char* text = block->wordText(i);
       if (!clippingText::hasVisibleText(text)) continue;
       const auto style = static_cast<EpdFontFamily::Style>(block->wordStyle(i) & ~EpdFontFamily::UNDERLINE);
-      const int width = renderer.getTextAdvanceX(clippingWordFont(renderer, fontId, *block, i), text, style,
-                                                 block->getBlockStyle().characterSpacing);
+      const int width = clippingWordAdvance(renderer, fontId, *block, i, style, verticalLayout);
       if (width <= 0) continue;
       const uint16_t index = wordIndex++;
       const Rect rect =
@@ -2646,8 +2663,7 @@ void EpubReaderActivity::drawClippingHighlights(const Page& page, const int font
       const char* text = block->wordText(i);
       if (!clippingText::hasVisibleText(text)) continue;
       const auto style = static_cast<EpdFontFamily::Style>(block->wordStyle(i) & ~EpdFontFamily::UNDERLINE);
-      int width = renderer.getTextAdvanceX(clippingWordFont(renderer, fontId, *block, i), text, style,
-                                           block->getBlockStyle().characterSpacing);
+      int width = clippingWordAdvance(renderer, fontId, *block, i, style, verticalLayout);
       if (width <= 0) continue;
       const uint16_t wordIndex = pageWordIndex++;
       if (!isHighlighted(wordIndex, block->wordSourceRange(i))) {

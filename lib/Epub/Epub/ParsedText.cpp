@@ -433,6 +433,42 @@ bool isWordCharacter(uint32_t cp) {
   return true;
 }
 
+// ASCII runs that a vertical line may set upright in one cell (tate-chu-yoko).
+enum class UprightRunKind : uint8_t { None, Digit, Letter, Mark };
+
+UprightRunKind uprightRunKind(const unsigned char c) {
+  if (c >= '0' && c <= '9') return UprightRunKind::Digit;
+  if ((c | 0x20) >= 'a' && (c | 0x20) <= 'z') return UprightRunKind::Letter;
+  if (c == '!' || c == '?') return UprightRunKind::Mark;
+  return UprightRunKind::None;
+}
+
+// Longest run of each kind that still fits a cell: 25, A, !?. Longer runs stay sideways.
+size_t maxUprightRunLength(const UprightRunKind kind) { return kind == UprightRunKind::Letter ? 1 : 2; }
+// A combined run may measure up to this percentage of its cell; a wider run would crowd the
+// neighboring lines and stays sideways.
+constexpr int MAX_UPRIGHT_RUN_WIDTH_PERCENT = 125;
+
+// A run stands upright only at the edge of its word or paragraph (cp == 0), beside CJK
+// text, beside a symbol that itself stands upright, such as the reference mark, or beside
+// the dashes, leaders and bullet of Japanese prose. Beside other Latin letters, digits or
+// ASCII punctuation it belongs to a sideways run ("iPhone 15", "3.5", "OK!"). A letter
+// beside a dash or leader also stays sideways: English prose has those ("Yes—I—think").
+bool allowsUprightRunBeside(const uint32_t cp, const UprightRunKind kind) {
+  switch (cp) {
+    case 0:
+    case 0x2022:  // bullet (also the list marker)
+      return true;
+    case 0x2014:  // em dash
+    case 0x2015:  // horizontal bar
+    case 0x2025:  // two dot leader
+    case 0x2026:  // ellipsis
+      return kind != UprightRunKind::Letter;
+    default:
+      return utf8IsCjkCodepoint(cp) || utf8IsVerticalUpright(cp);
+  }
+}
+
 }  // namespace
 
 uint32_t ParsedText::visibleOffsetBaseAt(const size_t wordIndex) const {
@@ -576,6 +612,67 @@ bool ParsedText::storeWord(const std::string_view text, WordStore::StoredWord& o
 void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle, const bool underline,
                          const bool attachToPrevious, const uint32_t visibleTextOffset, const uint8_t linkId,
                          const uint8_t sizeSlot, const bool noSpaceBefore, const bool zeroWidthBreakBefore) {
+  // Superscript and subscript runs are note marks or formula parts, not part of the text line.
+  if (!verticalText || (fontStyle & (EpdFontFamily::SUP | EpdFontFamily::SUB)) != 0) {
+    addTokens(std::move(word), fontStyle, underline, attachToPrevious, visibleTextOffset, linkId, sizeSlot,
+              noSpaceBefore, zeroWidthBreakBefore);
+    return;
+  }
+
+  // Give each short run of digits, Latin letters or ! and ? its own token, marked for an
+  // upright cell. The pieces are glued as they were in the source, so addTokens() applies its
+  // usual break rules between them.
+  size_t pieceStart = 0;
+  uint32_t pieceOffset = visibleTextOffset;
+  bool firstPiece = true;
+  const auto addPiece = [&](const size_t end, const uint32_t endOffset, const bool combined) {
+    if (end == pieceStart) return;
+    addTokens(word.substr(pieceStart, end - pieceStart), fontStyle, underline, firstPiece ? attachToPrevious : true,
+              pieceOffset, linkId,
+              combined ? static_cast<uint8_t>(sizeSlot | TextBlock::COMBINE_UPRIGHT_SLOT_FLAG) : sizeSlot,
+              firstPiece && noSpaceBefore, firstPiece && zeroWidthBreakBefore);
+    firstPiece = false;
+    pieceStart = end;
+    pieceOffset = endOffset;
+  };
+
+  const auto* const begin = reinterpret_cast<const unsigned char*>(word.data());
+  const auto* const end = begin + word.size();
+  const auto* cursor = begin;
+  uint32_t offset = visibleTextOffset;
+  uint32_t previous = 0;
+  while (cursor < end) {
+    const UprightRunKind kind = uprightRunKind(*cursor);
+    if (kind == UprightRunKind::None) {
+      previous = utf8NextCodepoint(&cursor);
+      if (previous == 0) break;  // the decoder does not step over a NUL
+      ++offset;
+      continue;
+    }
+    const auto* runEnd = cursor;
+    while (runEnd < end && uprightRunKind(*runEnd) == kind) ++runEnd;
+    const size_t length = static_cast<size_t>(runEnd - cursor);
+    const auto* peek = runEnd;
+    const uint32_t next = runEnd < end ? utf8NextCodepoint(&peek) : 0;
+    if (length <= maxUprightRunLength(kind) && allowsUprightRunBeside(previous, kind) &&
+        allowsUprightRunBeside(next, kind)) {
+      addPiece(static_cast<size_t>(cursor - begin), offset, false);
+      addPiece(static_cast<size_t>(runEnd - begin), offset + static_cast<uint32_t>(length), true);
+    }
+    previous = runEnd[-1];
+    offset += static_cast<uint32_t>(length);
+    cursor = runEnd;
+  }
+  // The rest (the whole word when nothing was split off) needs no copy.
+  if (pieceStart == word.size()) return;
+  word.erase(0, pieceStart);
+  addTokens(std::move(word), fontStyle, underline, firstPiece ? attachToPrevious : true, pieceOffset, linkId, sizeSlot,
+            firstPiece && noSpaceBefore, firstPiece && zeroWidthBreakBefore);
+}
+
+void ParsedText::addTokens(std::string word, const EpdFontFamily::Style fontStyle, const bool underline,
+                           const bool attachToPrevious, const uint32_t visibleTextOffset, const uint8_t linkId,
+                           const uint8_t sizeSlot, const bool noSpaceBefore, const bool zeroWidthBreakBefore) {
   if (word.empty()) return;
 
   // The device fonts carry no combining-mark positioning, so EPUB text stored in NFD
@@ -637,7 +734,10 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
   // previous one in the source) may be turned into a gap-less break opportunity. When real
   // whitespace separated the two words, that space is content and must be rendered: Korean
   // is a space-delimited script written in Hangul, which utf8IsCjkBreakable() covers.
-  if (attachToPrevious && !words.empty() && endsWithBreakableHyphen(wordStore.view(words.back()))) {
+  // An upright ! or ? run split off after a dash or ellipsis must not start a line.
+  const bool gluedUprightRun = (sizeSlot & TextBlock::COMBINE_UPRIGHT_SLOT_FLAG) != 0 &&
+                               CjkBreaks::isNoBreakBeforeCjkPunctuation(firstCodepoint(word));
+  if (attachToPrevious && !words.empty() && !gluedUprightRun && endsWithBreakableHyphen(wordStore.view(words.back()))) {
     effectiveAttachToPrevious = true;
     effectiveNoSpaceBefore = true;
   } else if (attachToPrevious && !words.empty() &&
@@ -760,7 +860,9 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
   }
 
   // Already-bold text should stay fully bold; focus splitting would make its suffix regular later.
-  if (!this->focusReadingEnabled || (baseStyle & EpdFontFamily::BOLD) != 0) {
+  // An upright run is one cell, not a word to emphasize.
+  if (!this->focusReadingEnabled || (baseStyle & EpdFontFamily::BOLD) != 0 ||
+      (sizeSlot & TextBlock::COMBINE_UPRIGHT_SLOT_FLAG) != 0) {
     if (auto breakOffsets = explicitHyphenBreakByteOffsets(word, effectiveAttachToPrevious); !breakOffsets.empty()) {
       ensureTokenCapacity(breakOffsets.size() + 1);
       bool firstToken = true;
@@ -940,6 +1042,12 @@ void ParsedText::ensureRubyCapacity() {
   // and no large contiguous reallocation to avoid). Kept for call-site stability.
 }
 
+int ParsedText::lineEndTrim(const size_t wordIndex, const GfxRenderer& renderer, const int fontId) const {
+  // An RTL block is placed from the far edge, so the allowance would shift real ink.
+  if (!verticalText || blockStyle.isRtl) return 0;
+  return TextBlock::lineEndTrim(renderer, wordFontId(wordIndex, fontId), wordAt(wordIndex), getWordStyleAt(wordIndex));
+}
+
 int ParsedText::resolveFirstLineIndent(const bool isFirstLine, const GfxRenderer& renderer, const int fontId) const {
   if (firstLineConsumed || !isFirstLine || !isNaturalAlign) {
     return 0;
@@ -1091,8 +1199,7 @@ int ParsedText::calculateRubyExtraStartOffset(const size_t wordIdx, const size_t
   }
   int groupActualWidth = 0;
   for (size_t k = 0; k < groupWordCount; ++k) {
-    groupActualWidth += measureWordWidth(renderer, fontId, wordAt(wordIdx + k), getWordStyleAt(wordIdx + k),
-                                         blockStyle.characterSpacing, wordSpacingPercent);
+    groupActualWidth += rubyBaseWordWidth(wordIdx + k, renderer, fontId);
   }
   const int rubyWidth =
       renderer.getTextAdvanceX(fontId, rubyTexts[wordIdx].c_str(), EpdFontFamily::SUP, blockStyle.characterSpacing);
@@ -1131,8 +1238,7 @@ int ParsedText::calculateRubyExtraEndOffset(const size_t lineStartIdx, const siz
   // Measure the group.
   int groupActualWidth = 0;
   for (size_t k = leaderIdx; k < lineBreakIdx; ++k) {
-    groupActualWidth += measureWordWidth(renderer, fontId, wordAt(k), getWordStyleAt(k), blockStyle.characterSpacing,
-                                         wordSpacingPercent);
+    groupActualWidth += rubyBaseWordWidth(k, renderer, fontId);
   }
   const int rubyWidth =
       renderer.getTextAdvanceX(fontId, rubyTexts[leaderIdx].c_str(), EpdFontFamily::SUP, blockStyle.characterSpacing);
@@ -1146,7 +1252,7 @@ int ParsedText::calculateRubyExtraEndOffset(const size_t lineStartIdx, const siz
 }
 
 int ParsedText::wordFontId(const size_t wordIndex, const int blockFontId) const {
-  const uint8_t slot = wordSizeSlots[wordIndex] & ~TextBlock::SMALL_CAPS_SLOT_FLAG;
+  const uint8_t slot = wordSizeSlots[wordIndex] & ~TextBlock::SLOT_FLAGS;
   return slot == 0 || sizeSlotFontIds[slot] == 0 ? blockFontId : sizeSlotFontIds[slot];
 }
 
@@ -1163,6 +1269,43 @@ uint8_t ParsedText::sizeSlotFor(const float scale) {
   return nearest;
 }
 
+// addWord() marks runs by what surrounds them inside their own source word. The words on
+// either side and the width of the run in this font are known only at layout.
+// A missing neighbor counts as an edge. That holds across partial layouts: a layout that
+// stops early never emits its last line, so a trailing run is judged again once the next
+// word is there, and a cleared mark is never set again.
+bool ParsedText::keepsCombinedUpright(const size_t wordIndex, const int naturalWidth, const int cellAdvance) const {
+  if (naturalWidth * 100 > cellAdvance * MAX_UPRIGHT_RUN_WIDTH_PERCENT) return false;
+  const UprightRunKind kind = uprightRunKind(static_cast<unsigned char>(wordAt(wordIndex).front()));
+  if (wordIndex > 0 && !allowsUprightRunBeside(lastCodepoint(wordAt(wordIndex - 1)), kind)) return false;
+  return wordIndex + 1 >= words.size() || allowsUprightRunBeside(firstCodepoint(wordAt(wordIndex + 1)), kind);
+}
+
+int ParsedText::rubyBaseWordWidth(const size_t wordIndex, const GfxRenderer& renderer, const int fontId) const {
+  if ((wordSizeSlots[wordIndex] & TextBlock::COMBINE_UPRIGHT_SLOT_FLAG) != 0) {
+    return renderer.getVerticalCellAdvance(wordFontId(wordIndex, fontId));
+  }
+  return measureWordWidth(renderer, fontId, wordAt(wordIndex), getWordStyleAt(wordIndex), blockStyle.characterSpacing,
+                          wordSpacingPercent);
+}
+
+// Gives each marked run one cell of width, or clears its mark so it stays sideways.
+void ParsedText::resolveCombinedUprightWidths(const GfxRenderer& renderer, const int fontId,
+                                              std::vector<uint16_t>& wordWidths) {
+  for (size_t i = 0; i < words.size(); ++i) {
+    if ((wordSizeSlots[i] & TextBlock::COMBINE_UPRIGHT_SLOT_FLAG) == 0) continue;
+    const int wordFont = wordFontId(i, fontId);
+    const int cell = renderer.getVerticalCellAdvance(wordFont);
+    // The run is drawn without character spacing, so it is measured without it.
+    const int naturalWidth = measureWordWidth(renderer, wordFont, wordAt(i), getWordStyleAt(i), 0, wordSpacingPercent);
+    if (keepsCombinedUpright(i, naturalWidth, cell)) {
+      wordWidths[i] = static_cast<uint16_t>(cell);
+    } else {
+      wordSizeSlots[i] &= static_cast<uint8_t>(~TextBlock::COMBINE_UPRIGHT_SLOT_FLAG);
+    }
+  }
+}
+
 std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& renderer, const int fontId) {
   std::vector<uint16_t> wordWidths;
   wordWidths.reserve(words.size());
@@ -1171,6 +1314,7 @@ std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& rendere
     wordWidths.push_back(measureFocusWordWidth(renderer, wordFontId(i, fontId), wordAt(i), getWordStyleAt(i),
                                                wordFocusBoundary[i], blockStyle.characterSpacing, wordSpacingPercent));
   }
+  resolveCombinedUprightWidths(renderer, fontId, wordWidths);
 
   // Adjust widths for ruby groups to comply with JLReq standards
   if (!rubyTexts.empty()) {
@@ -1302,6 +1446,16 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
 
   const size_t totalWordCount = words.size();
 
+  // Line-end trims, looked up once per word rather than once per candidate line. Empty on
+  // horizontal pages.
+  std::vector<uint8_t> lineEndTrims;
+  if (verticalText) {
+    lineEndTrims.reserve(totalWordCount);
+    for (size_t i = 0; i < totalWordCount; ++i) {
+      lineEndTrims.push_back(static_cast<uint8_t>(std::min(lineEndTrim(i, renderer, fontId), 255)));
+    }
+  }
+
   // DP table to store the minimum badness (cost) of lines starting at index i
   std::vector<int> dp(totalWordCount);
   // 'ans[i]' stores the index 'j' of the *last word* in the optimal line starting at 'i'
@@ -1338,7 +1492,9 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
 
       currlen += wordWidths[j] + gap + (j == i ? extraStartOffset : 0);
 
-      if (currlen > effectivePageWidth) {
+      // Length of the line if it ends at word j (see lineEndTrim).
+      const int lineLen = currlen - (lineEndTrims.empty() ? 0 : lineEndTrims[j]);
+      if (lineLen > effectivePageWidth) {
         break;
       }
 
@@ -1350,14 +1506,14 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
 
       const int extraEndOffset = calculateRubyExtraEndOffset(i, j + 1, renderer, fontId);
 
-      if (currlen + extraEndOffset > effectivePageWidth) {
+      if (lineLen + extraEndOffset > effectivePageWidth) {
         continue;  // Cannot split here as it would overflow the right margin
       }
 
       const bool isLastLine = j == totalWordCount - 1;
       // long long throughout: the squared (and, for Thai, cubed) slack overflows int.
       const long long cost_ll =
-          lineBadness(effectivePageWidth - currlen, effectivePageWidth, isLastLine, hasThaiWordBreaks) +
+          lineBadness(effectivePageWidth - lineLen, effectivePageWidth, isLastLine, hasThaiWordBreaks) +
           (isLastLine ? 0 : dp[j + 1]);
       const int cost = cost_ll > MAX_COST ? MAX_COST : static_cast<int>(cost_ll);
 
@@ -1441,12 +1597,16 @@ std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& r
       }
       const int candidateWidth = spacing + wordWidths[currentIndex];
 
-      // Word fits on current line
+      // Word fits on current line. Only a word that may end the line may pass the line end.
       const int extraEndOffset = calculateRubyExtraEndOffset(lineStart, currentIndex + 1, renderer, fontId);
-      if (lineWidth + candidateWidth <= effectivePageWidth) {
+      const bool mayEndLine =
+          currentIndex + 1 == wordWidths.size() ||
+          TokenBoundary::allowsBreak(continuesVec[currentIndex + 1], noSpaceBeforeVec[currentIndex + 1]);
+      const int trim = mayEndLine ? lineEndTrim(currentIndex, renderer, fontId) : 0;
+      if (lineWidth + candidateWidth - trim <= effectivePageWidth) {
         lineWidth += candidateWidth;
         ++currentIndex;
-        if (lineWidth + extraEndOffset <= effectivePageWidth &&
+        if (lineWidth - trim + extraEndOffset <= effectivePageWidth &&
             (currentIndex == wordWidths.size() ||
              TokenBoundary::allowsBreak(continuesVec[currentIndex], noSpaceBeforeVec[currentIndex]))) {
           lastFittingBreak = currentIndex;
@@ -1714,8 +1874,10 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
     }
   }
 
-  // Calculate spacing (account for indent reducing effective page width on first line)
-  const int effectivePageWidth = pageWidth - firstLineIndent;
+  // Calculate spacing (account for indent reducing effective page width on first line).
+  // A line that ends in a comma or full stop is set half a cell longer (see lineEndTrim).
+  const int lastWordTrim = lineEndTrim(lineBreak - 1, renderer, fontId);
+  const int effectivePageWidth = pageWidth - firstLineIndent + lastWordTrim;
   const bool isLastLine = lineBreak == words.size();
 
   // For RTL, implicit/default Left alignment becomes Right alignment.
@@ -1979,6 +2141,7 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
     size_t spanIndex = 0;
     while (spanIndex < lineLinkIdsSeen.size() && lineLinkIdsSeen[spanIndex] != linkId) spanIndex++;
     int width = willReorder ? reorderedWidthsScratch[i] : wordWidths[lastBreakAt + i];
+    if (i + 1 == lineWordCount) width -= lastWordTrim;  // the link box stays in the text area
     const int right = lineXPos[i] + width;
     const int topLift =
         (lineWordStyles[i] & EpdFontFamily::SUP) != 0 ? renderer.getFontAscenderSize(fontId) * 2 / 5 : 0;
@@ -2007,7 +2170,8 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
   const auto attachWordFonts = [&](TextBlock& block) {
     int32_t fonts[TextBlock::MAX_WORD_FONTS] = {};
     uint8_t slots[128];
-    if (lineWordCount > sizeof(slots)) return true;  // pathological line: keep the block font
+    // Pathological line: keep the block font. An upright run on it is drawn sideways.
+    if (lineWordCount > sizeof(slots)) return true;
     bool mixed = false;
     for (size_t i = 0; i < lineWordCount; ++i) {
       const size_t logical = lastBreakAt + (willReorder ? visualOrderScratch[i] : i);
@@ -2020,7 +2184,7 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
         if (slot > TextBlock::MAX_WORD_FONTS) slot = 0;
         if (slot > 0) fonts[slot - 1] = wordFont;
       }
-      slots[i] = static_cast<uint8_t>(slot | (wordSizeSlots[logical] & TextBlock::SMALL_CAPS_SLOT_FLAG));
+      slots[i] = static_cast<uint8_t>(slot | (wordSizeSlots[logical] & TextBlock::SLOT_FLAGS));
       mixed = mixed || slots[i] != 0;
     }
     return !mixed || block.setWordFonts(slots, fonts);

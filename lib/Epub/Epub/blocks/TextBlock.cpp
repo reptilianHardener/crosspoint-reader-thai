@@ -6,6 +6,7 @@
 #include <Memory.h>
 #include <MemoryManager.h>
 #include <Serialization.h>
+#include <Utf8.h>
 
 #include <cstring>
 #include <string_view>
@@ -153,13 +154,25 @@ bool TextBlock::setWordFonts(const uint8_t* slots, const int32_t (&fonts)[MAX_WO
   return true;
 }
 
+int TextBlock::lineEndTrim(const GfxRenderer& renderer, const int fontId, const std::string_view word,
+                           const EpdFontFamily::Style style) {
+  // A superscript or subscript mark is about half size: half a full cell would put all of it
+  // past the line end.
+  if (word.empty() || (style & (EpdFontFamily::SUP | EpdFontFamily::SUB)) != 0) return 0;
+  size_t last = word.size() - 1;
+  while (last > 0 && (static_cast<uint8_t>(word[last]) & 0xC0) == 0x80) --last;
+  const auto* cursor = reinterpret_cast<const uint8_t*>(word.data() + last);
+  if (utf8VerticalGlyphShift(utf8NextCodepoint(&cursor)) != VerticalGlyphShift::Corner) return 0;
+  return renderer.getTextAdvanceX(fontId, word.data() + last, style) / 2;
+}
+
 int TextBlock::renderFontId(const GfxRenderer& renderer, const int fontId, const int sectionFontId) {
   return fontId == sectionFontId || renderer.ensureFontLoaded(fontId) ? fontId : sectionFontId;
 }
 
 int TextBlock::wordFontId(const uint16_t i, const int sectionFontId) const {
   if (!wordFontData) return blockFontId(sectionFontId);
-  const uint8_t slot = wordFontData[sizeof(int32_t) * MAX_WORD_FONTS + i] & ~SMALL_CAPS_SLOT_FLAG;
+  const uint8_t slot = wordFontData[sizeof(int32_t) * MAX_WORD_FONTS + i] & ~SLOT_FLAGS;
   if (slot == 0) return blockFontId(sectionFontId);
   int32_t font = 0;
   memcpy(&font, wordFontData.get() + sizeof(int32_t) * (slot - 1), sizeof(font));
@@ -213,6 +226,9 @@ void TextBlock::render(const GfxRenderer& renderer, const int sectionFontId, con
     }
   };
 
+  // A combined upright run takes one cell along the line, whatever its text measures.
+  const auto isCombined = [&](const uint16_t i) { return vertical && wordIsCombinedUpright(i); };
+
   const bool scanning = renderer.isFontCacheScanning();
   // Words in other sizes share the baseline set by the line's tallest font.
   const int ascender = lineAscent(renderer, sectionFontId);
@@ -254,8 +270,9 @@ void TextBlock::render(const GfxRenderer& renderer, const int sectionFontId, con
             static_cast<BidiUtils::BidiBaseDir>(BidiUtils::detectParagraphLevel(wordText(i), blockStyle.isRtl ? 1 : 0));
 
         const int lastWordIdx = i + groupWordCount - 1;
-        const int lastWordWidth =
-            renderer.getTextAdvanceX(fontId, wordText(lastWordIdx), wordStyle(lastWordIdx), tracking);
+        const int lastWordWidth = isCombined(lastWordIdx) ? renderer.getVerticalCellAdvance(fontId)
+                                                          : renderer.getTextAdvanceX(fontId, wordText(lastWordIdx),
+                                                                                     wordStyle(lastWordIdx), tracking);
         const int groupActualWidth = (xposArr[lastWordIdx] + lastWordWidth) - xposArr[i];
 
         RubyDrawInfo& info = rubies[i];
@@ -362,7 +379,10 @@ void TextBlock::render(const GfxRenderer& renderer, const int sectionFontId, con
 
     const int drawX = wordX;
 
-    if (boundary > 0) {
+    const bool combined = isCombined(i);
+    if (combined && !scanning) {
+      renderer.drawTextCombinedUpright(wordFont, x - wordY, y + drawX, word, true, currentStyle);
+    } else if (boundary > 0) {
       // Place the logical prefix on the right for RTL words. Each run is reordered by drawText.
       // The bold prefix is bounded to 9 codepoints by the clamp on targetBoldChars in
       // ParsedText::addWord; 9 UTF-8 codepoints occupy at most 9 * 4 = 36 bytes, +1 for null = 37.
@@ -421,8 +441,9 @@ void TextBlock::render(const GfxRenderer& renderer, const int sectionFontId, con
 
     if (EpdFontFamily::hasTextDecoration(currentStyle)) {
       int lineStartX = drawX;
-      int lineWidth = renderer.getTextAdvanceX(wordFont, word, currentStyle, tracking, baseDir,
-                                               GfxRenderer::TextMeasureMode::Rendered);
+      int lineWidth = combined ? renderer.getVerticalCellAdvance(wordFont)
+                               : renderer.getTextAdvanceX(wordFont, word, currentStyle, tracking, baseDir,
+                                                          GfxRenderer::TextMeasureMode::Rendered);
 
       // Do not decorate the synthetic em-space used for paragraph indentation.
       if (wordTextLen(i) >= 3 && static_cast<uint8_t>(word[0]) == 0xE2 && static_cast<uint8_t>(word[1]) == 0x80 &&
@@ -433,6 +454,7 @@ void TextBlock::render(const GfxRenderer& renderer, const int sectionFontId, con
         lineWidth = renderer.getTextAdvanceX(wordFont, visibleText, currentStyle, tracking, baseDir,
                                              GfxRenderer::TextMeasureMode::Rendered);
       }
+      lineWidth -= wordLineEndTrim(renderer, i, wordFont, vertical);
 
       for (auto& line : decorationLines) {
         if ((currentStyle & line.style) == 0) {
@@ -646,7 +668,7 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(HalFile& file) {
     }
     const uint8_t* slots = block->wordFontData.get() + sizeof(int32_t) * MAX_WORD_FONTS;
     for (uint16_t i = 0; i < wc; ++i) {
-      const uint8_t slot = slots[i] & ~SMALL_CAPS_SLOT_FLAG;
+      const uint8_t slot = slots[i] & ~SLOT_FLAGS;
       int32_t font = 1;
       if (slot > 0 && slot <= MAX_WORD_FONTS) {
         memcpy(&font, block->wordFontData.get() + sizeof(int32_t) * (slot - 1), sizeof(font));

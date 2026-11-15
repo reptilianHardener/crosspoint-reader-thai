@@ -540,6 +540,10 @@ static void renderCharScaled(const GfxRenderer& renderer, GfxRenderer::RenderMod
                   scaleDen);
 }
 
+// An upright cell of a vertical line rests on the ideographic baseline, 12% of an em below
+// the Latin one.
+static int verticalCellDescent(const int advance) { return (advance * 12 + 50) / 100; }
+
 // Placement of a glyph in a vertical line: the baseline is the screen column baselineX, the
 // line's top faces right, and the pen moves down from penY. Metrics are in pixels.
 static glyphBitmap::Frame verticalGlyphFrame(const uint32_t cp, const int left, const int top, const int width,
@@ -550,8 +554,8 @@ static glyphBitmap::Frame verticalGlyphFrame(const uint32_t cp, const int left, 
   }
 
   // Upright: the glyph keeps its place in its em box. The box spans the advance along the
-  // line and, across it, rests on the ideographic baseline 12% of an em below the Latin one.
-  const int descent = (advance * 12 + 50) / 100;
+  // line and, across it, rests on the ideographic baseline.
+  const int descent = verticalCellDescent(advance);
   const int boxLeft = baselineX - descent + 1;
   int x = boxLeft + left;
   int y = penY + advance - descent - top;
@@ -799,6 +803,21 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
 void GfxRenderer::drawTextVertical(const int fontId, const int x, const int y, const char* text, const bool black,
                                    const EpdFontFamily::Style style, const int8_t tracking) const {
   drawTextRun(fontId, x, y, text, black, style, BidiUtils::BidiBaseDir::AUTO, tracking, true);
+}
+
+int GfxRenderer::getVerticalCellAdvance(const int fontId) const { return getLineHeight(fontId, 1.0f); }
+
+void GfxRenderer::drawTextCombinedUpright(const int fontId, const int x, const int y, const char* text,
+                                          const bool black, const EpdFontFamily::Style style) const {
+  // The cell is the em box of an upright glyph (see verticalGlyphFrame): the run is drawn as
+  // horizontal text on that box's baseline, centered across the line.
+  const int cell = getVerticalCellAdvance(fontId);
+  const int descent = verticalCellDescent(cell);
+  const int ascender = getFontAscenderSize(fontId);
+  const int width = getTextAdvanceX(fontId, text, style, 0, BidiUtils::BidiBaseDir::LTR, TextMeasureMode::Rendered);
+  const int boxLeft = x - ascender - descent + 1;
+  drawText(fontId, boxLeft + (cell - width) / 2, y + cell - descent - ascender, text, black, style,
+           BidiUtils::BidiBaseDir::LTR);
 }
 
 void GfxRenderer::drawTextRun(const int fontId, const int x, const int y, const char* text, const bool black,

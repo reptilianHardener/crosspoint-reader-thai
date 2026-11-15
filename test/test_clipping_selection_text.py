@@ -80,6 +80,8 @@ struct Block {
   int getRubyShift(int) const { return 0; }
   int blockFontId(int fallback) const { return fallback; }
   int wordFontId(uint16_t, int fallback) const { return fallback; }
+  bool wordIsCombinedUpright(uint16_t) const { return false; }
+  int wordLineEndTrim(const Renderer&, uint16_t, int, bool) const { return 0; }
   int wordYOffset(const Renderer&, int, uint16_t) const { return 0; }
   static int renderFontId(const Renderer&, int fontId, int) { return fontId; }
   uint16_t wordCount() const {
@@ -158,6 +160,7 @@ struct Renderer {
   bool isSdCardFont(int) const { return sdFont; }
   int getFontAscenderSize(int) const { return 12; }
   int getLineHeight(int) const { return 16; }
+  int getVerticalCellAdvance(int) const { return 16; }
   RenderMode getRenderMode() const { return BW; }
   void getOrientedViewableTRBL(int* top, int* right, int* bottom, int* left) const {
     *top = *right = *bottom = *left = 0;
