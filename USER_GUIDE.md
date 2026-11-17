@@ -78,10 +78,10 @@ The Control Center is available on all touch devices. Devices with a frontlight 
 
 * **Open the panel:** Swipe down from the top edge of the screen, from almost any screen (Home, Browse Files, Reading Mode, etc.). You can also tap the status bar on Home, Browse Files, or Settings. On devices with a frontlight, drag the brightness slider (and the warmth slider, where available) to adjust the light live, or tap the sun icon to turn it on or off.
 * **Quick controls:** The panel has one row of icons: moon for night mode, circular arrows to refresh the screen, an underlined **T** to cycle reading direction, and the Settings Controls pointer to toggle reader touch controls. On builds with Bluetooth support, a fifth button enables or disables the Bluetooth page turner. Its crossed-out icon means disabled. The **T** rotates with the selected direction. A filled toggle means enabled; an outlined toggle means disabled. Refresh and direction always have outlines. Turning reader touch controls off leaves the panel usable. Bluetooth reconnection follows the normal rules after you close the panel; enabling it does not pair a new remote.
-* **Quick toggle (X4 Pro only):** Double-click the **Power** button to turn the frontlight on or off instantly, without opening the panel.
+* **Quick toggle:** On devices with a frontlight, set **Settings → Controls → Power button → Double click** to **Frontlight** (the default on X4 Pro and EEGO A4), then double-click the **Power** button to turn the frontlight on or off instantly, without opening the panel.
 
 > [!NOTE]
-> Frontlight brightness and warmth are intentionally not listed in **[Display Settings](#361-display)** — the swipe panel is the only place to adjust them. On the X4 Pro, the on/off state can also be toggled with the Power-button double-click above.
+> Frontlight brightness and warmth are intentionally not listed in **[Display Settings](#361-display)** — the swipe panel is the only place to adjust them. The on/off state can also be toggled with the Power-button double-click above.
 
 If the frontlight doesn't come back on after the device wakes from sleep, check **Restore Light on Wake** in **[Display Settings](#361-display)** (on by default). Turning it off is intentional if you'd rather have the light stay off on wake and switch it on yourself each time — but it's easy to forget you changed it.
 
@@ -128,17 +128,18 @@ The Browse Files screen acts as a file and folder browser. The full path to the 
 
 The Library indexes up to 4,096 supported books on the SD card and shows their titles and authors without requiring you to remember their folders. Its four tabs provide different views. An arrow beside an indexed tab shows the sort direction:
 
-- **Recent** lists the ten books you opened most recently, then the rest by when they arrived on the card. To remove a book from this list, hold it and choose **Remove from Recents**.
+- **Recent** shows the books you opened most recently (up to ten) at the top, followed by the rest of the library ordered by when each file arrived on the card. Down shows the newest first; up shows the oldest files first, without the opened books on top. With **Hide New Files in Recent** turned on, the tab lists only the books you opened: down shows the most recently opened first, and up shows the least recently opened first. The setting applies only while no search is active; search results include books you have not opened. To remove a book from the opened list, hold it and choose **Remove from Recents**.
 - **Title** groups books by the first letter of the title. Up sorts A-Z and down sorts Z-A. Titles beginning with numbers or punctuation appear under `#`; letters from non-English scripts, including Hebrew, have their own groups. Thai titles, authors and series are filed by their first consonant, as in a Thai dictionary: one that starts with เ แ โ ใ or ไ is filed under the consonant after that vowel.
 - **Author** groups books by author. Up sorts A-Z and down sorts Z-A.
 - **Series** lists the series named in the books' metadata, with how many books each has. Select a series to see its books in volume order. Each book shows the percent of it you have read, and the series opens on the book you read most recently if that book is in the **Recent** list. **Back** returns to the series list. Books with no volume number come last. Series has no sort direction, and a search from this tab looks only through books that are in a series. Needs **Use book metadata** turned on.
+
+`My Clippings.txt` and `crash_report.txt` are not listed in the Library. They remain available in the file browser.
 
 On a button-only device:
 
 - Use **Up/Down** or **Left/Right** to move one row at a time. Hold a direction to move a page at a time.
 - Press **Confirm** to open the selected book.
-- Press **Back** from the book list to focus the tabs. Use **Left/Right** to select another tab, press **Confirm** to reverse its sort direction, or press **Down** to return to the list.
-- While the tabs are focused, hold **Confirm** to open Search.
+- Press **Back** from the book list to focus the tabs. While the tabs are focused, press **Confirm** to switch to the next tab, hold **Confirm** to reverse the sort direction, press **Up** to open Search, or press **Down** to return to the list. Hold **Up** or **Down** to step through the tabs.
 - Hold **Confirm** on a book to open its menu (see below). In the Title or Author views, choose **Jump to group** to collapse the list to its letter or author groups. The matching group remains selected. Press **Confirm** to enter a group, or **Back** to restore the exact book and position you came from.
 - Hold **Confirm** on a series to open it or to change the **Show** filter.
 
@@ -146,7 +147,7 @@ Search looks through titles and authors. Each word you type must match the start
 
 On a touch device, tap tabs, books, and the Search icon directly. Tap an active indexed tab again to reverse its sort direction. Swipe to scroll. Long-press a book to open its menu. In a Title or Author view, choose **Jump to group** from it to collapse to the group list, then tap a group to expand it. In the Series view, tap a series to open it.
 
-The book menu has **Open**, **Remove from Recents** (the ten most recently opened books in Recent), **Mark as finished**, **Mark as unread**, **Show**, **Jump to group** (Title and Author views, when not searching), **Delete**, and **Refresh library**. **Show** filters the list by reading state:
+The book menu has **Open**, **Remove from Recents** (the ten most recently opened books in Recent), **Mark as finished**, **Mark as unread**, **Show**, **Jump to group** (Title and Author views, when not searching), **Delete**, and **Refresh Library**. **Show** filters the list by reading state:
 
 - **Unread**: books you have not opened, or marked as unread.
 - **Reading**: books you have opened. A book counts as opened as soon as you leave the reader, even at 0%.
@@ -154,7 +155,7 @@ The book menu has **Open**, **Remove from Recents** (the ten most recently opene
 
 The filter works on every tab and together with Search. The header shows it, for example "Library (Reading)". Press **Back** from the tabs to clear it. The Library starts with **All** each time you open it. The first time you choose a filter, a "Checking reading history..." message appears while the Library reads the saved progress of books you opened before this feature existed. **Mark as unread** does not delete your saved reading position. Clearing a book's cache keeps its reading state; deleting the book removes it.
 
-The index is created automatically the first time the Library is opened. To pick up later file changes or updated metadata, use **Settings → System → Rebuild library index**. The **Use book metadata** setting controls whether the index reads titles, authors, and series stored inside books.
+The index is created automatically the first time the Library is opened, and it is rebuilt after books are added through file transfer. To pick up other file changes or updated metadata, choose **Refresh Library** from a book's menu. **Settings → Library → Refresh Library** does the same from any screen, including when the Library shows no books. The **Use book metadata** setting controls whether the index reads titles, authors, and series stored inside books.
 
 ### 3.5 File Transfer Screen
 
@@ -217,7 +218,7 @@ Books cannot be removed from your device through Calibre. Use the web interface 
 
 ### 3.6 Settings
 
-Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **Library**, and **Connectivity**. System contains language, keyboard layouts, hidden-file visibility, file-extension visibility, Clock (where available), firmware updates, and About. Library contains Use Book Metadata, Clear Read Books from Recent List, and Move Finished Books to Read Folder. Time to Sleep is under Display; Clear Reading Cache is under Reader. Connectivity contains Wi-Fi, Bluetooth Page Turner, CrossPoint Sync, OPDS, and the Plugins toggle. The options below describe these settings.
+Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **Library**, and **Connectivity**. System contains language, keyboard layouts, hidden-file visibility, file-extension visibility, Clock (where available), Display Refresh, firmware updates, and About. Library contains Use Book Metadata, Hide New Files in Recent, Clear Read Books from Recent List, Move Finished Books to Read Folder, and Refresh Library. Time to Sleep is under Display; Clear Reading Cache is under Reader. Connectivity contains Wi-Fi, Bluetooth Page Turner, CrossPoint Sync, OPDS, and the Plugins toggle. The options below describe these settings.
 
 #### 3.6.1 Display
 
@@ -403,9 +404,11 @@ Side buttons, and Taps and gestures where supported by the device. See the
 
 - **Clear Reading Cache** (**Settings → Reader**): Clear the internal SD card cache.
 
+- **Display Refresh** (**Settings → System**): Alternate full black and white screens ten times to clear image retention. Press **Back** to stop; the screen always ends white.
+
 - **Use book metadata**: Read the title, author, and series stored inside each book when the Library index is rebuilt. When disabled or unavailable, the Library uses the filename.
 
-- **Rebuild library index**: Rescan the SD card for books while preserving the arrival history of books already in the index.
+- **Refresh Library** (**Settings → Library**): Rescan the SD card for books while preserving the arrival history of books already in the index.
 
 - **Check for updates**: Check for Crosspoint firmware updates over Wi-Fi. Firmware can also be updated without a USB connection by placing a `firmware.bin` file on the SD card. Neither option is available on the BOOX Picco, which is updated over USB.
 
@@ -716,7 +719,7 @@ This feature can be disabled in the **[Controls Settings](#363-controls)** to he
 
 When you turn past the last page, the reader suggests up to three books to read next, followed by **Home**:
 
-- If the book is part of a series and has a volume number, the next volume comes first, wherever it is on the card. It shows the book's title with its volume number and series name. Other editions of the volume you just finished are skipped. This needs **Use book metadata** turned on, and it uses the Library index: if you have just copied the next volume onto the card, use **Settings → System → Rebuild library index** first.
+- If the book is part of a series and has a volume number, the next volume comes first, wherever it is on the card. It shows the book's title with its volume number and series name. Other editions of the volume you just finished are skipped. This needs **Use book metadata** turned on, and it uses the Library index: if you have just copied the next volume onto the card, use **Settings → Library → Refresh Library** first.
 - The other suggestions are the books that come after this one in its folder, in file name order.
 
 Press **Confirm** to open the selected book, or **Back** to return to the last page. On a touch device, tap a book or **Home**.
