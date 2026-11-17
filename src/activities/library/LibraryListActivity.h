@@ -176,6 +176,8 @@ class LibraryListActivity final : public UiTabListActivity {
   int pinnedCount() const;
   // Store book shown at a pinned entry, or nullptr past the pins.
   const RecentBook* pinnedBook(int entry) const;
+  // Setting: the Recent tab lists opened books only.
+  bool openedOnly() const;
   // Re-match the store against the index (chunked scan). Call whenever the
   // index or the store changes.
   void resolvePinned();

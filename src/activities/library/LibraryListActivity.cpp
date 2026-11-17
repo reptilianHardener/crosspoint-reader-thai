@@ -166,15 +166,24 @@ int LibraryListActivity::selectedEntry() const {
 // list the reader narrowed down on purpose, and the ascending toggle asks for
 // oldest-first, which pinned fresh reads would contradict.
 int LibraryListActivity::pinnedCount() const {
+  if (openedOnly()) return pinnedVisibleCount;
   if (activeTabIndex != RECENT_TAB || !query.empty() || !isDescending(sortOrder)) return 0;
   return pinnedVisibleCount;
 }
 
+// The ascending toggle on the opened-only Recent tab reads the store backwards.
 const RecentBook* LibraryListActivity::pinnedBook(const int entry) const {
-  if (entry < 0 || entry >= pinnedCount()) return nullptr;
+  const int count = pinnedCount();
+  if (entry < 0 || entry >= count) return nullptr;
   const auto& books = RECENT_BOOKS.getBooks();
-  const size_t book = pinnedVisible[entry];
+  const size_t book = pinnedVisible[isDescending(sortOrder) ? entry : count - 1 - entry];
   return book < books.size() ? &books[book] : nullptr;
+}
+
+// With the setting on, the unfiltered Recent tab is the store alone, in either
+// direction. Search still covers the whole index.
+bool LibraryListActivity::openedOnly() const {
+  return SETTINGS.libraryRecentOpenedOnly != 0 && activeTabIndex == RECENT_TAB && query.empty();
 }
 
 void LibraryListActivity::resolvePinned() {
@@ -642,7 +651,7 @@ void LibraryListActivity::promptDeleteBookByPath(const std::string& path, const 
         if (!removeBookFile(path)) LOG_ERR("LIB", "cannot delete %s", path.c_str());
         // removeBookFile dropped the record from the file; keep the loaded copy in step.
         if (!Storage.exists(path.c_str())) readingStatus.erase(ReadingStatusStore::keyFor(path));
-        if (RECENT_BOOKS.removeByPath(path)) RECENT_BOOKS.saveToFile();
+        RECENT_BOOKS.removeByPath(path);  // saves on removal
         GUI.drawPopup(renderer, tr(STR_LIBRARY_REBUILDING));
         rebuildIndex();
       }
@@ -744,6 +753,7 @@ fui::TabIndicator LibraryListActivity::tabIndicator(const int index) const {
 
 int LibraryListActivity::bookRowCount() const {
   if (!query.empty()) return static_cast<int>(filteredCount);
+  if (openedOnly()) return pinnedCount();
   const int listed = statusFilterActive() ? static_cast<int>(filteredCount) : static_cast<int>(index.bookCount());
   if (isSeriesSort(sortOrder)) {
     if (seriesGroup >= 0) return std::max(0, seriesGroupEnd(seriesGroup) - groupStarts[seriesGroup]);
@@ -1431,6 +1441,8 @@ void LibraryListActivity::buildScreen(UiScreen& screen) {
     } else if (query.empty()) {
       if (statusFilterActive() && index.bookCount() > 0) {
         message = tr(STR_LIBRARY_FILTER_EMPTY);
+      } else if (openedOnly() && index.bookCount() > 0) {
+        message = tr(STR_LIBRARY_NO_OPENED);
       } else if (isSeriesSort(sortOrder) && index.bookCount() > 0) {
         message = index.seriesDegraded() ? tr(STR_LIBRARY_SERIES_UNAVAILABLE) : tr(STR_LIBRARY_NO_SERIES);
       } else {

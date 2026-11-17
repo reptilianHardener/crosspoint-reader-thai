@@ -71,33 +71,42 @@ inline void applyOrientation(GfxRenderer& renderer, const uint8_t orientation) {
   }
 }
 
+struct FrontPageTurnButtons {
+  MappedInputManager::Button previous;
+  MappedInputManager::Button next;
+};
+
+// rtlPages: the book's pages advance leftward (vertical Japanese), so the front Left button
+// turns forward and Right turns back. The side buttons have no left or right and keep their
+// roles.
+inline FrontPageTurnButtons getFrontPageTurnButtons(const MappedInputManager& input, const bool rtlPages = false) {
+  const bool swapped = input.isNavDirectionSwapped() != rtlPages;
+  return {swapped ? MappedInputManager::Button::Right : MappedInputManager::Button::Left,
+          swapped ? MappedInputManager::Button::Left : MappedInputManager::Button::Right};
+}
+
 struct PageTurnResult {
   bool prev;
   bool next;
   bool fromTilt;
 };
 
-// rtlPages: the book's pages advance leftward (vertical Japanese), so the front Left button
-// turns forward and Right turns back. The side buttons have no left or right and keep their
-// roles.
 inline PageTurnResult detectPageTurn(const MappedInputManager& input, const bool rtlPages = false) {
   const bool usePress = SETTINGS.longPressButtonBehavior == SETTINGS.OFF;
   const bool tiltNext = SETTINGS.tiltPageTurn && halTiltSensor.wasTiltedForward();
   const bool tiltPrev = SETTINGS.tiltPageTurn && halTiltSensor.wasTiltedBack();
-  const bool swapFront = input.isNavDirectionSwapped() != rtlPages;
-  const auto prevButton = swapFront ? MappedInputManager::Button::Right : MappedInputManager::Button::Left;
-  const auto nextButton = swapFront ? MappedInputManager::Button::Left : MappedInputManager::Button::Right;
+  const auto frontButtons = getFrontPageTurnButtons(input, rtlPages);
   const auto pageButtonTriggered = [&](const MappedInputManager::Button button) {
     if (usePress) return input.wasPressed(button);
     return input.wasLongPressed(button, SKIP_HOLD_MS) || input.wasReleased(button);
   };
-  const bool prev =
-      tiltPrev || (pageButtonTriggered(MappedInputManager::Button::PageBack) || pageButtonTriggered(prevButton));
-  const bool powerTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN &&
-                         input.wasReleased(MappedInputManager::Button::Power);
+  const bool prev = tiltPrev || (pageButtonTriggered(MappedInputManager::Button::PageBack) ||
+                                 pageButtonTriggered(frontButtons.previous));
+  const bool powerTurn =
+      SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN && input.wasPowerSingleClick();
   const bool next = input.homeButtonAction() == HomeButtonAction::NextPage || tiltNext ||
                     pageButtonTriggered(MappedInputManager::Button::PageForward) || powerTurn ||
-                    pageButtonTriggered(nextButton);
+                    pageButtonTriggered(frontButtons.next);
   return {prev, next, tiltPrev || tiltNext};
 }
 
