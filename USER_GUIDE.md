@@ -234,12 +234,14 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
   - "Cover + Transparent" - The transparent overlay image drawn over the cover of the last opened book, falls back to "Transparent" behavior if there is no book cover
 - **Sleep Screen Cover Style**: How the book cover is laid out with "Cover" and "Cover + Custom":
   - "Full Screen" (default) - The cover alone, as set by Sleep Screen Cover Mode and Background
-  - "Off the Edge" - The cover runs off the top and right edges of the screen, beside the title and author written in vertical columns. A full-height line left of the cover thickens from the top as you read; the percentage sits under the cover
-  - "Gallery" - The cover in a white frame on black, with the title, author and progress dots below
+  - "Off the Edge" - The cover runs off the top and right edges of the screen, beside the title and author written in vertical columns. A full-height line left of the cover thickens from the top as you read; the percentage sits under the cover and the series is at the bottom right
+  - "Gallery" - The cover in a white frame on black, with the title, author and progress dots below and the series at the bottom
   - "Backdrop" - The cover in a white frame over a faded, enlarged copy of itself, with no text
-  - "Obi Band" - The cover fills the screen above a white strip at the bottom, with a black vertical band over it (like the paper band on a Japanese book) holding the title and author in white vertical text. The progress bar and percentage are in the bottom strip; the bar fills from the right in Japanese EPUB books
+  - "Obi Band" - The cover fills the screen above a white strip at the bottom, with a black vertical band over it (like the paper band on a Japanese book) holding the title and author in white vertical text. The series is at the left of the bottom strip, with the progress bar and percentage at the right; the bar fills from the right in Japanese EPUB books
   - "Obi Band (White)" - The same as Obi Band, but the band is white with black text and thin black edges, and the bottom strip is black with white text
-  - "Spine" - A narrow slice from the middle of the cover between two lines, beside the title and author in vertical columns, with a progress line at the right edge and the percentage at the bottom left
+  - "Spine" - A narrow slice from the middle of the cover between two lines, beside the title and author in vertical columns, with a progress line at the right edge, the percentage at the bottom left and the series under it
+
+  The series line shows the series name and the volume number, for EPUB books that give them; other books and books outside a series have no line, and "Backdrop" shows no text at all.
 
   In the vertical columns, Japanese kana and kanji stand upright; other text runs along the column like a book spine. Cover Mode and Background apply only to "Full Screen"; Off the Edge, both Obi Band styles and Spine show only part of the cover by design. Sleep Screen Cover Filter applies to all styles; "Inverted" inverts the whole layout. "Cover + Transparent" always shows the full-screen cover.
 
