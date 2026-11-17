@@ -3,11 +3,13 @@
 #include <Bitmap.h>
 #include <GfxRenderer.h>
 #include <I18n.h>
+#include <LibraryText.h>
 #include <Logging.h>
 #include <Memory.h>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <vector>
 
 #include "CrossPointSettings.h"
@@ -59,6 +61,7 @@ constexpr int GAP_BEFORE_FOOTER = 12;
 constexpr int GALLERY_SIDE = 40;
 constexpr int GALLERY_FOOTER_GAP = 16;
 constexpr int PERCENT_GAP = 16;
+constexpr int SERIES_VOLUME_GAP = 6;  // series name to volume label
 // The big percent: UI_12 bold glyphs scaled up 1.75x. The UI font is not compressed, so drawing it
 // needs no decompression buffer on the sleep path.
 constexpr int BIG_PERCENT_SCALE = 448;
@@ -97,7 +100,7 @@ int galleryCaptionHeight(const GfxRenderer& renderer, const CoverSleepInfo& info
 
 int edgeRuleX(const GfxRenderer& renderer) { return renderer.getScreenWidth() / 3; }
 
-// Top of the Obi Band footer row (the progress bar, percent and "Sleeping").
+// Top of the Obi Band footer row (the series line, progress bar and percent).
 int obiFooterY(const GfxRenderer& renderer) {
   return renderer.getScreenHeight() - BOTTOM_MARGIN - renderer.getLineHeight(UI_10_FONT_ID);
 }
@@ -114,10 +117,14 @@ void drawBigPercent(const GfxRenderer& renderer, int x, const int top, const int
   }
 }
 
-// Top of the big percent in the Spine style, above "Sleeping".
+// Top of the series line along the bottom edge.
+int seriesLineY(const GfxRenderer& renderer) {
+  return renderer.getScreenHeight() - BOTTOM_MARGIN - renderer.getLineHeight(SMALL_FONT_ID);
+}
+
+// Top of the big percent in the Spine style, above the series line.
 int spinePercentY(const GfxRenderer& renderer) {
-  return renderer.getScreenHeight() - BOTTOM_MARGIN - renderer.getLineHeight(SMALL_FONT_ID) - GAP_BEFORE_FOOTER -
-         bigPercentHeight(renderer);
+  return seriesLineY(renderer) - GAP_BEFORE_FOOTER - bigPercentHeight(renderer);
 }
 
 // Title (up to two columns) and author as vertical text, from right to left. A column occupies
@@ -151,11 +158,40 @@ void drawProgressRule(const GfxRenderer& renderer, const int x, const int lineWi
   }
 }
 
-void drawSleepingRight(const GfxRenderer& renderer) {
-  const char* sleeping = tr(STR_SLEEPING);
-  renderer.drawText(SMALL_FONT_ID,
-                    renderer.getScreenWidth() - SIDE_MARGIN - renderer.getTextWidth(SMALL_FONT_ID, sleeping),
-                    renderer.getScreenHeight() - BOTTOM_MARGIN - renderer.getLineHeight(SMALL_FONT_ID), sleeping);
+// The series name and the volume label, drawn as two runs: the renderer picks one fallback font per
+// run, so a Thai name with the Japanese label (or the reverse) needs one run each.
+struct SeriesLine {
+  std::string name;
+  std::string volume;
+  int nameWidth = 0;
+  int width = 0;  // both runs and the gap between them
+  bool empty() const { return width == 0; }
+};
+
+// The series and volume on one line that fits maxWidth; a long series name is shortened, never the
+// volume. Empty when the book is in no series.
+SeriesLine seriesLine(const GfxRenderer& renderer, const CoverSleepInfo& info, const int maxWidth) {
+  SeriesLine line;
+  if (info.series.empty() || maxWidth <= 0) return line;
+  int volumeWidth = 0;
+  if (info.seriesIndex >= 0.0f) {
+    char label[32];
+    snprintf(label, sizeof(label), tr(STR_LIBRARY_SERIES_VOLUME),
+             library::seriesPositionText(info.seriesIndex).c_str());
+    line.volume = label;
+    volumeWidth = renderer.getTextWidth(SMALL_FONT_ID, label) + SERIES_VOLUME_GAP;
+  }
+  line.name = renderer.truncatedText(SMALL_FONT_ID, info.series.c_str(), std::max(0, maxWidth - volumeWidth));
+  line.nameWidth = renderer.getTextWidth(SMALL_FONT_ID, line.name.c_str());
+  line.width = line.nameWidth + volumeWidth;
+  return line;
+}
+
+void drawSeriesLine(const GfxRenderer& renderer, const SeriesLine& line, const int x, const int y,
+                    const bool black = true) {
+  renderer.drawText(SMALL_FONT_ID, x, y, line.name.c_str(), black);
+  if (!line.volume.empty())
+    renderer.drawText(SMALL_FONT_ID, x + line.nameWidth + SERIES_VOLUME_GAP, y, line.volume.c_str(), black);
 }
 
 uint8_t bayer4x4(const int x, const int y) {
@@ -244,8 +280,8 @@ void drawGallery(const GfxRenderer& renderer, const CoverSleepRect& rect, const 
       }
     }
   }
-  renderer.drawCenteredText(SMALL_FONT_ID, screenHeight - BOTTOM_MARGIN - renderer.getLineHeight(SMALL_FONT_ID),
-                            tr(STR_SLEEPING), false);
+  const SeriesLine series = seriesLine(renderer, info, textWidth);
+  if (!series.empty()) drawSeriesLine(renderer, series, (screenWidth - series.width) / 2, seriesLineY(renderer), false);
 }
 
 bool drawBackdrop(const GfxRenderer& renderer, const Bitmap& cover, const CoverSleepRect& rect) {
@@ -264,11 +300,13 @@ void drawEdge(const GfxRenderer& renderer, const CoverSleepRect& rect, const Cov
   drawTextColumns(renderer, info, ruleX - EDGE_TEXT_GAP, SIDE_MARGIN, TOP_MARGIN, screenHeight - BOTTOM_MARGIN);
   if (info.percent >= 0) {
     const int y = rect.y + rect.height + EDGE_PERCENT_GAP;
-    const int sleepingY = screenHeight - BOTTOM_MARGIN - renderer.getLineHeight(SMALL_FONT_ID);
-    if (y + bigPercentHeight(renderer) <= sleepingY)
+    if (y + bigPercentHeight(renderer) <= seriesLineY(renderer))
       drawBigPercent(renderer, rect.x + EDGE_PERCENT_INDENT, y, info.percent);
   }
-  drawSleepingRight(renderer);
+  // Right-aligned, right of the rule.
+  const int right = renderer.getScreenWidth() - SIDE_MARGIN;
+  const SeriesLine series = seriesLine(renderer, info, right - (ruleX + EDGE_COVER_GAP));
+  if (!series.empty()) drawSeriesLine(renderer, series, right - series.width, seriesLineY(renderer));
 }
 
 // whiteBand: a white band with black text over a black footer (Obi Band (White)); otherwise a
@@ -319,11 +357,9 @@ void drawObi(const GfxRenderer& renderer, const CoverSleepRect& rect, const Cove
                               bandInk);
   }
 
-  // Footer: "Sleeping" on the left; progress bar and percent on the right.
+  // Footer: the series on the left; progress bar and percent on the right.
   const int footerY = obiFooterY(renderer);
-  renderer.drawText(SMALL_FONT_ID, SIDE_MARGIN,
-                    footerY + (renderer.getLineHeight(UI_10_FONT_ID) - renderer.getLineHeight(SMALL_FONT_ID)) / 2,
-                    tr(STR_SLEEPING), footerInk);
+  int seriesRight = bandLeft - PERCENT_GAP;  // not under the band
   if (info.percent >= 0) {
     const std::string percent = percentText(info.percent);
     const int percentWidth = renderer.getTextWidth(UI_10_FONT_ID, percent.c_str(), EpdFontFamily::BOLD);
@@ -335,7 +371,12 @@ void drawObi(const GfxRenderer& renderer, const CoverSleepRect& rect, const Cove
     const int filled = OBI_BAR_WIDTH * info.percent / 100;
     renderer.fillRect(info.rightToLeft ? barX + OBI_BAR_WIDTH - filled : barX, barY, filled, PROGRESS_BAR_HEIGHT,
                       footerInk);
+    seriesRight = std::min(seriesRight, barX - PERCENT_GAP);
   }
+  const SeriesLine series = seriesLine(renderer, info, seriesRight - SIDE_MARGIN);
+  if (!series.empty())
+    drawSeriesLine(renderer, series, SIDE_MARGIN, footerY + (authorLine - renderer.getLineHeight(SMALL_FONT_ID)) / 2,
+                   footerInk);
 }
 
 void drawSpine(const GfxRenderer& renderer, const CoverSleepRect& rect, const CoverSleepInfo& info) {
@@ -351,8 +392,8 @@ void drawSpine(const GfxRenderer& renderer, const CoverSleepRect& rect, const Co
   if (info.percent >= 0) {
     drawBigPercent(renderer, SIDE_MARGIN, percentY, info.percent);
   }
-  renderer.drawText(SMALL_FONT_ID, SIDE_MARGIN, screenHeight - BOTTOM_MARGIN - renderer.getLineHeight(SMALL_FONT_ID),
-                    tr(STR_SLEEPING));
+  const SeriesLine series = seriesLine(renderer, info, rect.x - RULE_WIDTH - SPINE_TEXT_GAP - SIDE_MARGIN);
+  if (!series.empty()) drawSeriesLine(renderer, series, SIDE_MARGIN, seriesLineY(renderer));
 }
 }  // namespace
 
@@ -390,10 +431,11 @@ CoverSleepRect coverSleepLayout(const uint8_t style, const GfxRenderer& renderer
     }
     case CrossPointSettings::COVER_STYLE_GALLERY: {
       const int frame = GALLERY_FRAME_GAP;
-      const int sleepingArea = BOTTOM_MARGIN + renderer.getLineHeight(SMALL_FONT_ID) + GALLERY_FOOTER_GAP;
+      const int footerArea =
+          BOTTOM_MARGIN + (info.series.empty() ? 0 : renderer.getLineHeight(SMALL_FONT_ID) + GALLERY_FOOTER_GAP);
       rect.maxWidth = screenWidth - (GALLERY_SIDE + frame) * 2;
       rect.maxHeight =
-          std::max(1, screenHeight - TOP_MARGIN - frame * 2 - galleryCaptionHeight(renderer, info) - sleepingArea);
+          std::max(1, screenHeight - TOP_MARGIN - frame * 2 - galleryCaptionHeight(renderer, info) - footerArea);
       fitCover(cover, rect);
       rect.x = (screenWidth - rect.width) / 2;
       rect.y = TOP_MARGIN + frame;

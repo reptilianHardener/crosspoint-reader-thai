@@ -10,8 +10,10 @@ class GfxRenderer;
 struct CoverSleepInfo {
   std::string title;
   std::string author;
-  int percent = -1;          // -1: the book has no saved position
-  bool rightToLeft = false;  // Japanese book: the Obi Band progress bar fills from the right
+  std::string series;         // empty when the book is in no series
+  float seriesIndex = -1.0f;  // volume number; below 0 when the book gives none
+  int percent = -1;           // -1: the book has no saved position
+  bool rightToLeft = false;   // Japanese book: the Obi Band progress bar fills from the right
 };
 
 // The cover's place on screen. width/height are what GfxRenderer::drawBitmap draws when given

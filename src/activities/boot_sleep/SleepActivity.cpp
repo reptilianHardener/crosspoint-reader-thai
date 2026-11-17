@@ -14,6 +14,7 @@
 #include <I18n.h>
 #include <Memory.h>
 #include <PNGdec.h>
+#include <Utf8.h>
 #include <Xtc.h>
 
 #include <algorithm>
@@ -1285,6 +1286,15 @@ void SleepActivity::renderCoverSleepScreen() const {
       info.author = lastEpub.getAuthor();
       info.rightToLeft = ReaderUtils::isJapaneseBookLanguage(lastEpub.getLanguage());
       info.percent = loadEpubProgress(lastEpub);
+      // Backdrop shows no text. TXT and Markdown have no package metadata.
+      if (style != CrossPointSettings::COVER_STYLE_BACKDROP && FsHelpers::hasEpubExtension(APP_STATE.openEpubPath)) {
+        // Off the stack: the parse result holds several strings.
+        auto package = makeUniqueNoThrow<Epub::SyncMetadata>();
+        if (package && lastEpub.loadSyncMetadata(*package)) {
+          info.series = utf8ComposeNfc(package->series);  // title and author are composed too
+          info.seriesIndex = package->seriesIndex.value_or(-1.0f);
+        }
+      }
     }
   } else {
     return (this->*renderNoCoverSleepScreen)();
