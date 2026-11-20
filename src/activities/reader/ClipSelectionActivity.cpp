@@ -232,8 +232,9 @@ bool ClipSelectionActivity::extractWords() {
         const int wordFont = TextBlock::renderFontId(renderer, block->wordFontId(i, fontId), fontId);
         // An upright run fills one cell of its line, whatever its text measures. The blank
         // half cell of a line-end comma or full stop is left out of the box.
-        int width = block->wordIsCombinedUpright(i) ? renderer.getVerticalCellAdvance(wordFont)
-                                                    : renderer.getTextAdvanceX(wordFont, text, style, characterSpacing);
+        int width = block->wordIsCombinedUpright(i)
+                        ? renderer.getVerticalCellAdvance(wordFont)
+                        : renderer.getTextAdvanceX(wordFont, block->laidOutWord(i), style, characterSpacing);
         width -= block->wordLineEndTrim(renderer, i, wordFont, vertical);
         if (width <= 0) continue;
         if (i + 1 < block->wordCount() && block->wordXpos(i + 1) > block->wordXpos(i)) {
@@ -650,7 +651,6 @@ void ClipSelectionActivity::loop() {
     return;
   } else if (mappedInput.wasScreenTouchPressed(touchX, touchY)) {
     if (rangeStart >= 0) {
-      if (actionAt(touchX, touchY) >= 0) return;
       const int first = std::min(rangeStart, selected);
       const int last = std::max(rangeStart, selected);
       for (int endpoint = 0; endpoint < 2; ++endpoint) {
@@ -672,6 +672,7 @@ void ClipSelectionActivity::loop() {
         touchDragPageEndIndex = -1;
         return;
       }
+      if (actionAt(touchX, touchY) >= 0) return;
       return;
     }
     const int hit = wordAt(touchX, touchY);
@@ -843,7 +844,8 @@ int ClipSelectionActivity::selectionBottom() const {
   const int last = std::max(rangeStart, selected);
   int bottom = 0;
   for (int i = first; i <= last; ++i) {
-    if (words[i].pageOffset == currentPageOffset) bottom = std::max(bottom, words[i].y + words[i].height);
+    if (words[i].pageOffset == currentPageOffset)
+      bottom = std::max(bottom, static_cast<int>(words[i].y + words[i].height));
   }
   return bottom;
 }
@@ -876,15 +878,10 @@ Rect ClipSelectionActivity::actionRect() const {
   int first = std::min(rangeStart, selected);
   const int last = std::max(rangeStart, selected);
   while (first < last && words[first].pageOffset < currentPageOffset) ++first;
-  Rect bar = selectionGeometry::actions(safe, selectionTop(), height + padding * 2, metrics.verticalSpacing, width,
-                                        words[first].x - padding);
-  const int selectedBottom = selectionBottom();
-  if (vertical && selectedBottom > 0) {
-    // Columns start at the top margin, so there is rarely room above: go below the selection and its end handle.
-    const int below = std::max(safe.y, selectedBottom + handleSize() + metrics.verticalSpacing);
-    if (below + bar.height <= safe.y + safe.height) bar.y = below;
-  }
-  return bar;
+  const int wordHeight = words[first].height > 0 ? words[first].height : lineHeight;
+  return selectionGeometry::actions(safe, selectionTop(), height + padding * 2, metrics.verticalSpacing, width,
+                                    words[first].x - padding, selectionBottom(), wordHeight, handleSize(),
+                                    words[first].y);
 }
 
 int ClipSelectionActivity::textOffset() const {

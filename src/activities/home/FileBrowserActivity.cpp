@@ -506,6 +506,7 @@ void FileBrowserActivity::renameSelectedFile(const std::string& oldPath, const s
     return;
   }
 
+  sleepImageChanged(newPath.c_str());
   RECENT_BOOKS.updatePath(oldPath, newPath, oldCachePath, newCachePath);
   // Like recent books, moves made from the web server or WebDAV do not carry the state.
   ReadingStatusStore::rename(oldPath, newPath);

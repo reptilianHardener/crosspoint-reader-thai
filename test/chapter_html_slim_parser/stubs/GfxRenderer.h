@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 #include <tuple>
+#include <vector>
 
 namespace BidiUtils {
 enum class BidiBaseDir : signed char { AUTO = -1, LTR = 0, RTL = 1 };
@@ -52,12 +53,17 @@ class GfxRenderer {
     top = 10;
     return true;
   }
+  struct LaidOutText {
+    const char* text;
+    const char* display;
+  };
   struct TextDraw {
     int x;
     std::string text;
     EpdFontFamily::Style style;
     BidiUtils::BidiBaseDir direction;
   };
+  // Every string drawText received, in order (a laid-out word's display form when it has one).
   mutable std::vector<TextDraw> textDraws;
   void drawText(int, int x, int, const char* text, bool, EpdFontFamily::Style style,
                 BidiUtils::BidiBaseDir direction = BidiUtils::BidiBaseDir::AUTO, int8_t = 0) const {
@@ -69,6 +75,10 @@ class GfxRenderer {
     combinedUprightDraws.emplace_back(text);
   }
   int getVerticalCellAdvance(int fontId) const { return getLineHeight(fontId, 1.0f); }
+  void drawText(int font, int x, int y, const LaidOutText& text, bool black, EpdFontFamily::Style style,
+                BidiUtils::BidiBaseDir baseDir = BidiUtils::BidiBaseDir::AUTO, int8_t tracking = 0) const {
+    drawText(font, x, y, text.display ? text.display : text.text, black, style, baseDir, tracking);
+  }
   int getTextWidth(int font, const char* text, EpdFontFamily::Style style,
                    BidiUtils::BidiBaseDir = BidiUtils::BidiBaseDir::AUTO) const {
     return getTextAdvanceX(font, text, style);
@@ -118,6 +128,11 @@ class GfxRenderer {
     }
     return width;
   }
+  int getTextAdvanceX(int font, const LaidOutText& text, EpdFontFamily::Style style, int8_t tracking = 0,
+                      BidiUtils::BidiBaseDir baseDir = BidiUtils::BidiBaseDir::AUTO,
+                      TextMeasureMode mode = TextMeasureMode::Layout) const {
+    return getTextAdvanceX(font, text.display ? text.display : text.text, style, tracking, baseDir, mode);
+  }
   int getKerning(int, uint32_t left, uint32_t right, EpdFontFamily::Style, int8_t tracking = 0) const {
     return trackingBetween(left, right, tracking);
   }
@@ -148,6 +163,15 @@ class GfxRenderer {
     if (includeSpace) ensureSdCardFontReady(fontId, " ", mask);
     if (includeHyphen) ensureSdCardFontReady(fontId, "-", mask);
   }
+
+  bool resolveForDisplay(int, const char*, EpdFontFamily::Style, std::string&) const { return false; }
+  inline static unsigned shapingMemoStarts = 0;
+  struct ShapingMemoScope {
+    explicit ShapingMemoScope(bool enabled = true) {
+      if (enabled) ++shapingMemoStarts;
+    }
+    ~ShapingMemoScope() {}
+  };
 
  private:
   FontVariantProvider fontVariantProvider_;

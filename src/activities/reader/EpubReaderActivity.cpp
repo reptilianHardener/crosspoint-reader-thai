@@ -92,7 +92,7 @@ int clippingWordAdvance(const GfxRenderer& renderer, const int fontId, const Tex
                         const EpdFontFamily::Style style, const bool vertical) {
   const int wordFont = clippingWordFont(renderer, fontId, block, i);
   if (block.wordIsCombinedUpright(i)) return renderer.getVerticalCellAdvance(wordFont);
-  return renderer.getTextAdvanceX(wordFont, block.wordText(i), style, block.getBlockStyle().characterSpacing) -
+  return renderer.getTextAdvanceX(wordFont, block.laidOutWord(i), style, block.getBlockStyle().characterSpacing) -
          block.wordLineEndTrim(renderer, i, wordFont, vertical);
 }
 
@@ -1604,6 +1604,7 @@ bool EpubReaderActivity::launchKOReaderSync() {
     }
     // The destructor can no longer save the back-stack once epub is gone.
     if (footnoteDepth > 0) saveLinkStack();
+    rememberBookOnceRendered();
     epub.reset();
   }
   LOG_DBG("KOSync", "Epub released (heap after: %u)", (unsigned)ESP.getFreeHeap());
@@ -2077,6 +2078,9 @@ void EpubReaderActivity::renderBook() {
             if (buildPopupPending && millis() - buildStartMs >= BUILD_POPUP_DEADLINE_MS) {
               showBuildPopup(renderer, pagesUntilFullRefresh);
             }
+            // The render lock is held for the whole build, so the main loop
+            // cannot power the EEGO A4 panel down; left powered it fuzzes.
+            if (BoardConfig::isEegoA4()) display.controllerIdle();
             if (!section->buildSomeMore(BUILD_PAGES_PER_CHUNK)) {
               LOG_ERR("ERS", "Failed during incremental section build");
               section.reset();
@@ -2387,6 +2391,12 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
   } ditherScope{renderer};
   renderer.setDitherImagesInBw(!imageGrayscale);
   const bool pageHasImages = imageGrayscale && page->hasImages();
+  // Images keep every gray level on panels that otherwise render the text
+  // overlay with fewer.
+  struct FullToneScope {
+    ~FullToneScope() { display.setOverlayFullTone(false); }
+  } fullToneScope;
+  display.setOverlayFullTone(pageHasImages);
   const bool pageHasImagesNeedingDecode = pageHasImages && page->hasImagesNeedingDecode();
   const bool manualRefreshPending = forcedRefreshPending;
   forcedRefreshPending = false;
