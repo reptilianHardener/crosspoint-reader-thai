@@ -20,16 +20,10 @@ class I18n {
   // The same string in another language; English when that language is not built in.
   const char* get(StrId id, Language lang) const;
 
-  const char* operator[](StrId id) const { return get(id); }
-
   Language getLanguage() const { return _language; }
   void setLanguage(Language lang);
   const char* getLanguageName(Language lang) const;
   static Language languageFromCode(const char* code);
-
-  // Get all unique characters used in a specific language
-  // Returns a sorted string of unique characters
-  static const char* getCharacterSet(Language lang);
 
  private:
   I18n() : _language(Language::EN) {}

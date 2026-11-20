@@ -16,8 +16,6 @@ struct RecentBook {
   std::string series;
   float seriesIndex = -1.0f;  // volume number in the series; below 0 when the book gives none
   bool seriesKnown = false;
-
-  bool operator==(const RecentBook& other) const { return path == other.path; }
 };
 
 class RecentBooksStore : public PersistableStore<RecentBooksStore> {

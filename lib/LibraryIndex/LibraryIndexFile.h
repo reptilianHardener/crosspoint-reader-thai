@@ -46,9 +46,7 @@ class LibraryIndexFile {
   LibraryIndexFile(const LibraryIndexFile&) = delete;
   LibraryIndexFile& operator=(const LibraryIndexFile&) = delete;
 
-  // Open and validate. On failure `validity()` says why, so a rebuild loop
-  // caused by a format bug is visible in the log rather than looking like a slow
-  // first boot.
+  // Open and validate. Log the reason if validation fails.
   bool open(const char* path);
   // Accept an otherwise valid stale fold so a rebuild can preserve arrival
   // history without exposing stale sort/search keys to the browser.
@@ -57,7 +55,6 @@ class LibraryIndexFile {
   bool isOpen() const { return opened; }
   bool ioFailed() const { return readFailed; }
 
-  ClixValidity validity() const { return lastValidity; }
   const ClixHeader& header() const { return head; }
   uint16_t bookCount() const { return opened ? head.bookCount : 0; }
   uint16_t seriesCount() const { return opened ? head.seriesCount : 0; }

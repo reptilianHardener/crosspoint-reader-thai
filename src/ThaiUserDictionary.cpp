@@ -28,7 +28,12 @@ bool load(std::vector<std::string>& words) {
   }
   const char* buf = buffer.get();
 
-  const size_t bytesRead = Storage.readFileToBuffer(FILE_PATH, buffer.get(), MAX_FILE_BYTES);
+  size_t bytesRead = 0;
+  HalFile file;
+  if (Storage.openFileForRead("THAI", FILE_PATH, file)) {
+    const int read = file.read(buffer.get(), MAX_FILE_BYTES);
+    bytesRead = read > 0 ? static_cast<size_t>(read) : 0;
+  }
   words.reserve(32);
   size_t lineStart = 0;
   for (size_t i = 0; i <= bytesRead && words.size() < MAX_WORDS; ++i) {

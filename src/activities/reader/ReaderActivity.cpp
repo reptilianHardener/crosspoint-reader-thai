@@ -105,6 +105,9 @@ void ReaderActivity::rememberBookOnceRendered() {
 void ReaderActivity::onExit() {
   Activity::onExit();
 
+  // The first page can finish rendering after the last reader loop.
+  rememberBookOnceRendered();
+
   // Record how far the reader got, for the home screen's recent books.
   // Once per reading session (and only when the value changed), never per page turn.
   // A reader that cannot tell right now (no section loaded) reports 0, which must not

@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "ThaiMarkStack.h"
+#include "ShapingTokens.h"
 
 void EpdFont::getTextBounds(const char* string, const int startX, const int startY, int* minX, int* minY, int* maxX,
                             int* maxY) const {
@@ -25,10 +26,13 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
   ThaiMarkStack thaiStack;
   uint32_t cp;
   uint32_t prevCp = 0;
+  shaping::PendingGlyph shaped;
   while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&string)))) {
-    const bool isCombining = utf8IsCombiningMark(cp);
+    if (shaped.consume(cp)) continue;
+    const bool isShaped = shaping::isGlyphToken(cp);
+    const bool isCombining = !isShaped && utf8IsCombiningMark(cp);
 
-    if (!isCombining) {
+    if (!isCombining && !isShaped) {
       cp = applyLigatures(cp, string);
     }
 
@@ -39,12 +43,15 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
       // combining marks to stale base metrics.
       if (!isCombining) {
         lastBaseX += fp4::toPixel(prevAdvanceFP);  // flush pending advance before resetting
+        // A missing shaped glyph still moves the pen by its shaped advance, as in drawText.
+        if (isShaped) lastBaseX += fp4::toPixel(shaped.advanceOr(0));
         prevCp = 0;
         prevAdvanceFP = 0;
         lastBaseLeft = 0;
         lastBaseWidth = 0;
         lastBaseTop = 0;
       }
+      shaped.reset();
       continue;
     }
 
@@ -58,16 +65,16 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
                                       : 0;
 
     if (!isCombining && prevCp != 0) {
-      const auto kernFP = getKerning(prevCp, cp);  // 4.4 fixed-point kern
+      const auto kernFP = isShaped || shaping::isGlyphToken(prevCp) ? 0 : getKerning(prevCp, cp);  // 4.4 kern
       lastBaseX += fp4::toPixel(prevAdvanceFP + kernFP);
     }
 
     // Thai marks draw at the pen position that follows the base (see GfxRenderer::drawText).
-    const int glyphBaseX = isThaiMark    ? lastBaseX + fp4::toPixel(prevAdvanceFP)
+    const int glyphBaseX = isThaiMark    ? lastBaseX + fp4::toPixel(prevAdvanceFP) + shaped.dx
                            : isCombining ? combiningMark::anchorOver(anchor, lastBaseX, lastBaseLeft, lastBaseWidth,
                                                                      glyph->left, glyph->width)
-                                         : lastBaseX;
-    const int glyphBaseY = startY - raiseBy;
+                                         : lastBaseX + shaped.dx;
+    const int glyphBaseY = startY - raiseBy + shaped.dy;
 
     *minX = std::min(*minX, glyphBaseX + glyph->left);
     *maxX = std::max(*maxX, glyphBaseX + glyph->left + glyph->width);
@@ -78,9 +85,10 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
       lastBaseLeft = glyph->left;
       lastBaseWidth = glyph->width;
       lastBaseTop = glyph->top;
-      prevAdvanceFP = glyph->advanceX;  // 12.4 fixed-point
+      prevAdvanceFP = shaped.advanceOr(glyph->advanceX);  // 12.4 fixed-point
       prevCp = cp;
     }
+    shaped.reset();
   }
 }
 

@@ -1,6 +1,7 @@
 #include "Section.h"
 
 #include <BufferedFile.h>
+#include <ComplexShaper.h>
 #include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
@@ -96,7 +97,9 @@ namespace {
 // v176: Upstream v75 (headings are not hyphenated) plus the fork's changes.
 // v177: Vertical lines set short runs (25, A, !?) upright in one cell (word font slot bit 0x10);
 //       the blank half of a line-end comma or full stop's cell may pass the line end.
-constexpr uint8_t SECTION_FILE_VERSION = 177;
+// v178: Upstream v76 (Indic text is shaped; TextBlocks store each complex-script word's drawn
+//       form) plus the fork's changes.
+constexpr uint8_t SECTION_FILE_VERSION = 178;
 // Written into the version field while a build is in progress; patched to
 // SECTION_FILE_VERSION only when the build is finalized. An abandoned /
 // crash-interrupted .bin therefore carries version 0, which loadSectionFile rejects
@@ -519,6 +522,7 @@ bool Section::startBuild(const ReaderRenderSpec& spec, const std::function<void(
   ctx->parser->setGlyphExtentScale(spec.glyphExtentScale);
   ctx->parser->setParagraphIndentSpaces(spec.paragraphIndentSpaces);
   Hyphenator::setPreferredLanguage(epub->getLanguage());
+  ComplexShaper::setDocumentLanguage(epub->getLanguage().c_str());
   build_ = std::move(ctx);
 
   if (!build_->parser->beginParse()) {

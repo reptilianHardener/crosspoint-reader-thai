@@ -96,6 +96,7 @@ class ParsedText {
   // Set once a Thai run was split at dictionary word boundaries; the optimal-fit breaker
   // then weights slack more heavily (see lineBadness in ParsedText.cpp).
   bool hasThaiWordBreaks = false;
+  bool hasComplexWord = false;
   bool droppedWords = false;
   bool verticalText = false;
   int linesAfterCurrent = -1;
