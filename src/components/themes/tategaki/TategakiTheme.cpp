@@ -445,7 +445,7 @@ bool TategakiTheme::homeBookColumns(const GfxRenderer& renderer, const Rect tile
 void TategakiTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
                                         const std::vector<RecentBook>& recentBooks, const int selectorIndex,
                                         bool& coverRendered, bool& coverBufferStored, bool& bufferRestored,
-                                        std::function<bool()> storeCoverBuffer) const {
+                                        std::function<bool()> storeCoverBuffer, int /*progress*/) const {
   // Spines are text and rectangles, quicker to draw than to snapshot, and the one cover
   // changes with the selection: no cover buffer is kept.
   (void)coverRendered;
