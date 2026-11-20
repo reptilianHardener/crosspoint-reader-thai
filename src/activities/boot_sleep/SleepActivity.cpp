@@ -1044,9 +1044,17 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const bool pre
 
 // Styled cover: the B/W frame holds the whole layout, and the gray planes redraw only the cover. Absolute
 // planes keep the B/W layout around it (its black and white are the bits of gray levels 0 and 3).
-void SleepActivity::renderStyledCoverSleepScreen(const Bitmap& cover, const uint8_t style,
-                                                 const CoverSleepInfo& info) const {
+void SleepActivity::renderStyledCoverSleepScreen(const Bitmap& cover, const uint8_t style, CoverSleepInfo& info) const {
   const CoverSleepRect rect = coverSleepLayout(style, renderer, cover, info);
+  // The Bunko styles print on paper that follows the Cover Background setting.
+  if (style == CrossPointSettings::COVER_STYLE_BUNKO || style == CrossPointSettings::COVER_STYLE_BUNKO_WIDE) {
+    if (SETTINGS.sleepScreenCoverBackground == CrossPointSettings::COVER_BACKGROUND_DARK) {
+      info.darkPaper = true;
+    } else if (SETTINGS.sleepScreenCoverBackground == CrossPointSettings::COVER_BACKGROUND_AUTO) {
+      info.darkPaper =
+          imageEdgesAreDark(cover, BitmapRect{rect.x, rect.y, rect.x + rect.width, rect.y + rect.height}, renderer);
+    }
+  }
   const auto drawPiece = [&](const GfxRenderer::RenderMode mode) {
     if (cover.rewindToData() != BmpReaderError::Ok) return false;
     renderer.setRenderMode(mode);
