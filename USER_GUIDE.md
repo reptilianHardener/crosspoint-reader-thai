@@ -241,17 +241,19 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
   - "Obi Band" - The cover fills the screen above a white strip at the bottom, with a black vertical band over it (like the paper band on a Japanese book) holding the title and author in white vertical text. The series is at the left of the bottom strip, with the progress bar and percentage at the right; the bar fills from the right in Japanese EPUB books
   - "Obi Band (White)" - The same as Obi Band, but the band is white with black text and thin black edges, and the bottom strip is black with white text
   - "Spine" - A narrow slice from the middle of the cover between two lines, beside the title and author in vertical columns, with a progress line at the right edge, the percentage at the bottom left and the series under it
+  - "Bunko" - Like a paperback cover: the cover fills the middle of a page that is white (or black, see Sleep Screen Cover Background) and runs off the top, with the title in a vertical column at the left and the author in one at the right. Under the cover are the title, the author, and a progress bar with the percentage; the series stands in a vertical line at the bottom right
+  - "Bunko (Wide)" - The same idea with a wider cover that runs off the top and left edges, and one column at the right holding the title and author. The series, the progress bar and the percentage are under the cover
 
-  The series line shows the series name and the volume number, for EPUB books that give them; other books and books outside a series have no line, and "Backdrop" shows no text at all.
+  The series line shows the series name and the volume number, for EPUB books that give them; other books and books outside a series have no line, and "Backdrop" shows no text at all. For "Bunko" and "Bunko (Wide)", Sleep Screen Cover Background sets the paper: Light is white, Dark is black with white text, and Auto picks black when the cover's edges are mostly dark.
 
-  In the vertical columns, Japanese kana and kanji stand upright; other text runs along the column like a book spine. Cover Mode and Background apply only to "Full Screen"; Off the Edge, both Obi Band styles and Spine show only part of the cover by design. Sleep Screen Cover Filter applies to all styles; "Inverted" inverts the whole layout. "Cover + Transparent" always shows the full-screen cover.
+  In the vertical columns, Japanese kana and kanji stand upright; other text runs along the column like a book spine. Cover Mode applies only to "Full Screen", and Background only to "Full Screen", "Bunko" and "Bunko (Wide)"; Off the Edge, both Obi Band styles, Spine and both Bunko styles show only part of the cover by design. Sleep Screen Cover Filter applies to all styles; "Inverted" inverts the whole layout. "Cover + Transparent" always shows the full-screen cover.
 
 - **Sleep Screen Cover Mode**: How to display the book cover or custom sleep image:
   
   - "Fit" (default) - Scale the image to fit centered on the screen, padding with borders as necessary (see Sleep Screen Cover Background)
   - "Crop" - Scale the image and crop as necessary to try to fill the screen
 
-- **Sleep Screen Cover Background**: The color of the borders around a sleep image that does not fill the screen:
+- **Sleep Screen Cover Background**: The color of the borders around a sleep image that does not fill the screen, and of the paper in the Bunko styles:
   
   - "Light" (default) - White borders
   - "Dark" - Black borders
@@ -634,12 +636,12 @@ The **Sleep Screen** setting controls what is displayed when the device goes to 
 
 #### Cover settings
 
-When using **Cover** or **Cover + Custom**, **Sleep Screen Cover Style** picks the layout: **Full Screen**, **Off the Edge**, **Gallery**, **Backdrop**, **Obi Band**, **Spine** or **Obi Band (White)** (see [3.6.1 Display](#361-display) for details).
+When using **Cover** or **Cover + Custom**, **Sleep Screen Cover Style** picks the layout: **Full Screen**, **Off the Edge**, **Gallery**, **Backdrop**, **Obi Band**, **Spine**, **Obi Band (White)**, **Bunko** or **Bunko (Wide)** (see [3.6.1 Display](#361-display) for details).
 
-When using **Custom**, **Cover**, **Cover + Custom** or **Cover + Transparent**, three additional settings apply. With **Cover** and **Cover + Custom**, Cover Mode and Background apply only to the **Full Screen** style:
+When using **Custom**, **Cover**, **Cover + Custom** or **Cover + Transparent**, three additional settings apply. With **Cover** and **Cover + Custom**, Cover Mode applies only to the **Full Screen** style, and Background applies to **Full Screen**, **Bunko** and **Bunko (Wide)**:
 
 - **Sleep Screen Cover Mode**: **Fit** (scale to fit, with borders) or **Crop** (scale and crop to fill the screen).
-- **Sleep Screen Cover Background**: **Light**, **Dark**, or **Auto** (matches the image's edges) borders around an image that does not fill the screen.
+- **Sleep Screen Cover Background**: **Light**, **Dark**, or **Auto** (matches the image's edges) borders around an image that does not fill the screen, or paper in the Bunko styles.
 - **Sleep Screen Cover Filter**: **None** (grayscale), **Contrast** (black & white), or **Inverted** (inverted black & white).
 
 #### Custom images

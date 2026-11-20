@@ -48,6 +48,20 @@ constexpr int SPINE_WIDTH = 140;
 constexpr int SPINE_RIGHT = 44;
 constexpr int SPINE_TEXT_GAP = 24;
 constexpr int SPINE_PROGRESS_INSET = 29;  // progress line to the right screen edge
+// Bunko: a paperback cover. The art bleeds off the top; title and author stand in vertical columns
+// either side of it, and the footer holds the progress.
+constexpr int BUNKO_RIGHT_DIV = 6;      // right column is screenWidth / this
+constexpr int BUNKO_LEFT_PERCENT = 16;  // left column, share of the screen width
+constexpr int BUNKO_ART_PERCENT = 70;   // art height, share of the screen height
+constexpr int BUNKO_COLUMN_TOP = 48;
+constexpr int BUNKO_FOOTER_GAP = 32;  // art to the footer text
+constexpr int BUNKO_BAR_WIDTH = 180;
+constexpr int BUNKO_AUTHOR_TOP_DIV = 4;  // author column starts at screenHeight / 4
+// Bunko (Wide): the art runs off the top and left edges; one column holds the title and author.
+constexpr int WIDE_COLUMN = 84;
+constexpr int WIDE_ART_PERCENT = 72;
+constexpr int WIDE_FOOTER_GAP = 36;
+constexpr int WIDE_BAR_WIDTH = 220;
 // Off the Edge and Spine: a thin rule with a thick top part that shows progress.
 constexpr int RULE_WIDTH = 3;
 constexpr int PROGRESS_RULE_WIDTH = 11;
@@ -194,6 +208,70 @@ void drawSeriesLine(const GfxRenderer& renderer, const SeriesLine& line, const i
     renderer.drawText(SMALL_FONT_ID, x + line.nameWidth + SERIES_VOLUME_GAP, y, line.volume.c_str(), black);
 }
 
+// Progress bar of width at (x, y); it fills from the right in Japanese books.
+void drawProgressBar(const GfxRenderer& renderer, const CoverSleepInfo& info, const int x, const int y, const int width,
+                     const bool black) {
+  renderer.drawRect(x, y, width, PROGRESS_BAR_HEIGHT, black);
+  const int filled = width * info.percent / 100;
+  renderer.fillRect(info.rightToLeft ? x + width - filled : x, y, filled, PROGRESS_BAR_HEIGHT, black);
+}
+
+// One vertical column: the title, a short divider, then the author, from top down `length` px.
+void drawTitleDividerAuthor(const GfxRenderer& renderer, const CoverSleepInfo& info, const int columnLeft,
+                            const int columnWidth, const int top, const int length, const bool black) {
+  const int titleLine = renderer.getLineHeight(UI_12_FONT_ID);
+  const int authorLine = renderer.getLineHeight(UI_10_FONT_ID);
+  int authorLength = 0;
+  if (!info.author.empty()) {
+    authorLength = std::min(renderer.getTextWidth(UI_10_FONT_ID, info.author.c_str()), length / 3);
+  }
+  const int dividerSpace = authorLength > 0 ? OBI_DIVIDER_GAP * 2 + GAP_SMALL : 0;
+  int y = top;
+  if (!info.title.empty()) {
+    const std::string title = renderer.truncatedText(UI_12_FONT_ID, info.title.c_str(),
+                                                     length - authorLength - dividerSpace, EpdFontFamily::BOLD);
+    renderer.drawTextVertical(UI_12_FONT_ID, columnLeft + (columnWidth + titleLine) / 2, y, title.c_str(), black,
+                              EpdFontFamily::BOLD);
+    y += renderer.getTextWidth(UI_12_FONT_ID, title.c_str(), EpdFontFamily::BOLD);
+  }
+  if (authorLength > 0) {
+    y += OBI_DIVIDER_GAP;
+    renderer.fillRect(columnLeft + (columnWidth - OBI_DIVIDER) / 2, y, OBI_DIVIDER, GAP_SMALL, black);
+    y += GAP_SMALL + OBI_DIVIDER_GAP;
+    renderer.drawTextVertical(UI_10_FONT_ID, columnLeft + (columnWidth + authorLine) / 2, y,
+                              renderer.truncatedText(UI_10_FONT_ID, info.author.c_str(), authorLength).c_str(), black);
+  }
+}
+
+// Vertical lines as columns, right to left, the group centered in the column; columns that do not
+// fit are dropped.
+void drawCenteredColumns(const GfxRenderer& renderer, const int fontId, const EpdFontFamily::Style style,
+                         const std::vector<std::string>& lines, const int columnLeft, const int columnWidth,
+                         const int top, const int length, const bool black) {
+  const int lineHeight = renderer.getLineHeight(fontId);
+  const int fit = std::max(1, (columnWidth + COLUMN_GAP) / (lineHeight + COLUMN_GAP));
+  const int count = std::min(static_cast<int>(lines.size()), fit);
+  if (count <= 0 || length <= 0) return;
+  const int total = count * lineHeight + (count - 1) * COLUMN_GAP;
+  int right = columnLeft + (columnWidth + total) / 2;
+  for (int i = 0; i < count; i++) {
+    renderer.drawTextVertical(fontId, right, top,
+                              renderer.truncatedText(fontId, lines[i].c_str(), length, style).c_str(), black, style);
+    right -= lineHeight + COLUMN_GAP;
+  }
+}
+
+// The series as one vertical run ending at `bottom`, centered in the column.
+void drawSeriesVertical(const GfxRenderer& renderer, const SeriesLine& line, const int columnLeft,
+                        const int columnWidth, const int bottom, const bool black) {
+  const int x = columnLeft + (columnWidth + renderer.getLineHeight(SMALL_FONT_ID)) / 2;
+  const int y = bottom - line.width;
+  renderer.drawTextVertical(SMALL_FONT_ID, x, y, line.name.c_str(), black);
+  if (!line.volume.empty()) {
+    renderer.drawTextVertical(SMALL_FONT_ID, x, y + line.nameWidth + SERIES_VOLUME_GAP, line.volume.c_str(), black);
+  }
+}
+
 uint8_t bayer4x4(const int x, const int y) {
   static constexpr uint8_t BAYER[16] = {0, 128, 32, 160, 192, 64, 224, 96, 48, 176, 16, 144, 240, 112, 208, 80};
   return BAYER[((y & 0x03) << 2) | (x & 0x03)];
@@ -331,34 +409,11 @@ void drawObi(const GfxRenderer& renderer, const CoverSleepRect& rect, const Cove
     renderer.fillRect(bandLeft, 0, bandWidth, bandBottom);
   }
 
-  // One column: title, a short divider, author.
-  const int titleLine = renderer.getLineHeight(UI_12_FONT_ID);
-  const int authorLine = renderer.getLineHeight(UI_10_FONT_ID);
-  const int length = bandBottom - OBI_TOP - OBI_PADDING;
-  int authorLength = 0;
-  if (!info.author.empty()) {
-    authorLength = std::min(renderer.getTextWidth(UI_10_FONT_ID, info.author.c_str()), length / 3);
-  }
-  const int dividerSpace = authorLength > 0 ? OBI_DIVIDER_GAP * 2 + GAP_SMALL : 0;
-  int y = OBI_TOP;
-  if (!info.title.empty()) {
-    const std::string title = renderer.truncatedText(UI_12_FONT_ID, info.title.c_str(),
-                                                     length - authorLength - dividerSpace, EpdFontFamily::BOLD);
-    renderer.drawTextVertical(UI_12_FONT_ID, bandLeft + (bandWidth + titleLine) / 2, y, title.c_str(), bandInk,
-                              EpdFontFamily::BOLD);
-    y += renderer.getTextWidth(UI_12_FONT_ID, title.c_str(), EpdFontFamily::BOLD);
-  }
-  if (authorLength > 0) {
-    y += OBI_DIVIDER_GAP;
-    renderer.fillRect(bandLeft + (bandWidth - OBI_DIVIDER) / 2, y, OBI_DIVIDER, GAP_SMALL, bandInk);
-    y += GAP_SMALL + OBI_DIVIDER_GAP;
-    renderer.drawTextVertical(UI_10_FONT_ID, bandLeft + (bandWidth + authorLine) / 2, y,
-                              renderer.truncatedText(UI_10_FONT_ID, info.author.c_str(), authorLength).c_str(),
-                              bandInk);
-  }
+  drawTitleDividerAuthor(renderer, info, bandLeft, bandWidth, OBI_TOP, bandBottom - OBI_TOP - OBI_PADDING, bandInk);
 
   // Footer: the series on the left; progress bar and percent on the right.
   const int footerY = obiFooterY(renderer);
+  const int authorLine = renderer.getLineHeight(UI_10_FONT_ID);
   int seriesRight = bandLeft - PERCENT_GAP;  // not under the band
   if (info.percent >= 0) {
     const std::string percent = percentText(info.percent);
@@ -367,10 +422,7 @@ void drawObi(const GfxRenderer& renderer, const CoverSleepRect& rect, const Cove
     renderer.drawText(UI_10_FONT_ID, percentX, footerY, percent.c_str(), footerInk, EpdFontFamily::BOLD);
     const int barX = percentX - PERCENT_GAP - OBI_BAR_WIDTH;
     const int barY = footerY + (authorLine - PROGRESS_BAR_HEIGHT) / 2;
-    renderer.drawRect(barX, barY, OBI_BAR_WIDTH, PROGRESS_BAR_HEIGHT, footerInk);
-    const int filled = OBI_BAR_WIDTH * info.percent / 100;
-    renderer.fillRect(info.rightToLeft ? barX + OBI_BAR_WIDTH - filled : barX, barY, filled, PROGRESS_BAR_HEIGHT,
-                      footerInk);
+    drawProgressBar(renderer, info, barX, barY, OBI_BAR_WIDTH, footerInk);
     seriesRight = std::min(seriesRight, barX - PERCENT_GAP);
   }
   const SeriesLine series = seriesLine(renderer, info, seriesRight - SIDE_MARGIN);
@@ -394,6 +446,87 @@ void drawSpine(const GfxRenderer& renderer, const CoverSleepRect& rect, const Co
   }
   const SeriesLine series = seriesLine(renderer, info, rect.x - RULE_WIDTH - SPINE_TEXT_GAP - SIDE_MARGIN);
   if (!series.empty()) drawSeriesLine(renderer, series, SIDE_MARGIN, seriesLineY(renderer));
+}
+
+// Bunko and Bunko (Wide): black text on light paper, white on dark (info.darkPaper).
+void drawBunko(const GfxRenderer& renderer, const CoverSleepRect& rect, const CoverSleepInfo& info, const bool wide) {
+  const int screenWidth = renderer.getScreenWidth();
+  const int screenHeight = renderer.getScreenHeight();
+  const bool ink = !info.darkPaper;
+  if (info.darkPaper) {
+    renderer.fillRect(0, 0, screenWidth, screenHeight);
+    renderer.fillRect(rect.x, rect.y, rect.width, rect.height, false);
+  }
+  const int artBottom = rect.maxHeight;
+  const int lineSmall = renderer.getLineHeight(SMALL_FONT_ID);
+  const int lineTitle = renderer.getLineHeight(UI_12_FONT_ID);
+  const int lineAuthor = renderer.getLineHeight(UI_10_FONT_ID);
+
+  if (wide) {
+    const int columnLeft = screenWidth - WIDE_COLUMN;
+    drawTitleDividerAuthor(renderer, info, columnLeft, WIDE_COLUMN, BUNKO_COLUMN_TOP,
+                           artBottom - BUNKO_COLUMN_TOP - OBI_PADDING, ink);
+    int y = artBottom + WIDE_FOOTER_GAP;
+    const SeriesLine series = seriesLine(renderer, info, screenWidth - SIDE_MARGIN * 2);
+    if (!series.empty()) {
+      drawSeriesLine(renderer, series, SIDE_MARGIN, y, ink);
+      y += lineSmall + GAP_BEFORE_PROGRESS;
+    }
+    if (info.percent >= 0) {
+      const std::string percent = percentText(info.percent);
+      drawProgressBar(renderer, info, SIDE_MARGIN, y + (lineAuthor - PROGRESS_BAR_HEIGHT) / 2, WIDE_BAR_WIDTH, ink);
+      renderer.drawText(UI_10_FONT_ID, SIDE_MARGIN + WIDE_BAR_WIDTH + PERCENT_GAP, y, percent.c_str(), ink,
+                        EpdFontFamily::BOLD);
+    }
+    return;
+  }
+
+  const int leftColumn = screenWidth * BUNKO_LEFT_PERCENT / 100;
+  const int rightColumn = screenWidth / BUNKO_RIGHT_DIV;
+  const int rightColumnLeft = screenWidth - rightColumn;
+  // Title on the left, author on the right, both from the top down along the art.
+  std::vector<std::string> titleLines;
+  if (!info.title.empty()) {
+    titleLines =
+        renderer.wrappedText(UI_12_FONT_ID, info.title.c_str(), artBottom - BUNKO_COLUMN_TOP, 2, EpdFontFamily::BOLD);
+  }
+  drawCenteredColumns(renderer, UI_12_FONT_ID, EpdFontFamily::BOLD, titleLines, 0, leftColumn, BUNKO_COLUMN_TOP,
+                      artBottom - BUNKO_COLUMN_TOP, ink);
+  const int authorTop = screenHeight / BUNKO_AUTHOR_TOP_DIV;
+  if (!info.author.empty()) {
+    drawCenteredColumns(renderer, UI_12_FONT_ID, EpdFontFamily::BOLD, {info.author}, rightColumnLeft, rightColumn,
+                        authorTop, artBottom - authorTop, ink);
+  }
+
+  // Footer under the art: title, author, progress.
+  const int footerWidth = rightColumnLeft - leftColumn;
+  int y = artBottom + BUNKO_FOOTER_GAP;
+  if (!info.title.empty()) {
+    renderer.drawText(
+        UI_12_FONT_ID, leftColumn, y,
+        renderer.truncatedText(UI_12_FONT_ID, info.title.c_str(), footerWidth, EpdFontFamily::BOLD).c_str(), ink,
+        EpdFontFamily::BOLD);
+    y += lineTitle + GAP_SMALL * 2;
+  }
+  if (!info.author.empty()) {
+    renderer.drawText(UI_10_FONT_ID, leftColumn, y,
+                      renderer.truncatedText(UI_10_FONT_ID, info.author.c_str(), footerWidth).c_str(), ink);
+    y += lineAuthor;
+  }
+  if (info.percent >= 0) {
+    y += GAP_BEFORE_PROGRESS + GAP_SMALL * 4;
+    const std::string percent = percentText(info.percent);
+    const int percentWidth = renderer.getTextWidth(UI_10_FONT_ID, percent.c_str(), EpdFontFamily::BOLD);
+    const int barWidth = std::min(BUNKO_BAR_WIDTH, footerWidth - percentWidth - PERCENT_GAP);
+    if (barWidth > 0)
+      drawProgressBar(renderer, info, leftColumn, y + (lineAuthor - PROGRESS_BAR_HEIGHT) / 2, barWidth, ink);
+    renderer.drawText(UI_10_FONT_ID, leftColumn + std::max(0, barWidth) + PERCENT_GAP, y, percent.c_str(), ink,
+                      EpdFontFamily::BOLD);
+  }
+  // The series stands in the right column, ending at the bottom margin.
+  const int bottom = screenHeight - BOTTOM_MARGIN;
+  const SeriesLine series = seriesLine(renderer, info, bottom - (artBottom + BUNKO_FOOTER_GAP));
+  if (!series.empty()) drawSeriesVertical(renderer, series, rightColumnLeft, rightColumn, bottom, ink);
 }
 }  // namespace
 
@@ -462,6 +595,25 @@ CoverSleepRect coverSleepLayout(const uint8_t style, const GfxRenderer& renderer
       rect.hiddenLeft = rect.hiddenRight - renderer.getLineHeight(UI_12_FONT_ID) - OBI_PADDING * 2;
       break;
     }
+    case CrossPointSettings::COVER_STYLE_BUNKO: {
+      const int left = screenWidth * BUNKO_LEFT_PERCENT / 100;
+      rect.maxWidth = screenWidth - left - screenWidth / BUNKO_RIGHT_DIV;
+      rect.maxHeight = screenHeight * BUNKO_ART_PERCENT / 100;
+      cropToArea(cover, rect);
+      fitCover(cover, rect);
+      rect.x = left + (rect.maxWidth - rect.width) / 2;
+      rect.y = 0;
+      break;
+    }
+    case CrossPointSettings::COVER_STYLE_BUNKO_WIDE: {
+      rect.maxWidth = screenWidth - WIDE_COLUMN;
+      rect.maxHeight = screenHeight * WIDE_ART_PERCENT / 100;
+      cropToArea(cover, rect);
+      fitCover(cover, rect);
+      rect.x = (rect.maxWidth - rect.width) / 2;
+      rect.y = 0;
+      break;
+    }
     case CrossPointSettings::COVER_STYLE_SPINE:
     default: {
       // Keep the middle SPINE_WIDTH columns of the cover.
@@ -493,6 +645,10 @@ bool drawCoverSleepDecor(const uint8_t style, const GfxRenderer& renderer, const
     case CrossPointSettings::COVER_STYLE_OBI:
     case CrossPointSettings::COVER_STYLE_OBI_WHITE:
       drawObi(renderer, rect, info, style == CrossPointSettings::COVER_STYLE_OBI_WHITE);
+      return true;
+    case CrossPointSettings::COVER_STYLE_BUNKO:
+    case CrossPointSettings::COVER_STYLE_BUNKO_WIDE:
+      drawBunko(renderer, rect, info, style == CrossPointSettings::COVER_STYLE_BUNKO_WIDE);
       return true;
     case CrossPointSettings::COVER_STYLE_SPINE:
     default:
