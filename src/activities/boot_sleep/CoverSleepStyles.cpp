@@ -48,8 +48,8 @@ constexpr int SPINE_WIDTH = 140;
 constexpr int SPINE_RIGHT = 44;
 constexpr int SPINE_TEXT_GAP = 24;
 constexpr int SPINE_PROGRESS_INSET = 29;  // progress line to the right screen edge
-// Bunko: a paperback cover. The art bleeds off the top; title and author stand in vertical columns
-// either side of it, and the footer holds the progress.
+// Bunko: a paperback cover. The whole cover sits at the top; title and author stand in vertical
+// columns either side of it, and the footer holds the progress.
 constexpr int BUNKO_RIGHT_DIV = 6;      // right column is screenWidth / this
 constexpr int BUNKO_LEFT_PERCENT = 16;  // left column, share of the screen width
 constexpr int BUNKO_ART_PERCENT = 70;   // art height, share of the screen height
@@ -57,7 +57,7 @@ constexpr int BUNKO_COLUMN_TOP = 48;
 constexpr int BUNKO_FOOTER_GAP = 32;  // art to the footer text
 constexpr int BUNKO_BAR_WIDTH = 180;
 constexpr int BUNKO_AUTHOR_TOP_DIV = 4;  // author column starts at screenHeight / 4
-// Bunko (Wide): the art runs off the top and left edges; one column holds the title and author.
+// Bunko (Wide): the whole cover sits at the top left; one column holds the title and author.
 constexpr int WIDE_COLUMN = 84;
 constexpr int WIDE_ART_PERCENT = 72;
 constexpr int WIDE_FOOTER_GAP = 36;
@@ -457,7 +457,7 @@ void drawBunko(const GfxRenderer& renderer, const CoverSleepRect& rect, const Co
     renderer.fillRect(0, 0, screenWidth, screenHeight);
     renderer.fillRect(rect.x, rect.y, rect.width, rect.height, false);
   }
-  const int artBottom = rect.maxHeight;
+  const int artBottom = rect.y + rect.height;  // the cover is shown whole, so it may stop short of its area
   const int lineSmall = renderer.getLineHeight(SMALL_FONT_ID);
   const int lineTitle = renderer.getLineHeight(UI_12_FONT_ID);
   const int lineAuthor = renderer.getLineHeight(UI_10_FONT_ID);
@@ -599,8 +599,7 @@ CoverSleepRect coverSleepLayout(const uint8_t style, const GfxRenderer& renderer
       const int left = screenWidth * BUNKO_LEFT_PERCENT / 100;
       rect.maxWidth = screenWidth - left - screenWidth / BUNKO_RIGHT_DIV;
       rect.maxHeight = screenHeight * BUNKO_ART_PERCENT / 100;
-      cropToArea(cover, rect);
-      fitCover(cover, rect);
+      fitCover(cover, rect);  // the whole cover; the footer follows its bottom edge
       rect.x = left + (rect.maxWidth - rect.width) / 2;
       rect.y = 0;
       break;
@@ -608,9 +607,8 @@ CoverSleepRect coverSleepLayout(const uint8_t style, const GfxRenderer& renderer
     case CrossPointSettings::COVER_STYLE_BUNKO_WIDE: {
       rect.maxWidth = screenWidth - WIDE_COLUMN;
       rect.maxHeight = screenHeight * WIDE_ART_PERCENT / 100;
-      cropToArea(cover, rect);
       fitCover(cover, rect);
-      rect.x = (rect.maxWidth - rect.width) / 2;
+      rect.x = 0;
       rect.y = 0;
       break;
     }

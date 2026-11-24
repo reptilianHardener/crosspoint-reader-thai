@@ -49,7 +49,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     COVER_STYLE_SPINE = 5,       // narrow slice of the cover beside vertical title columns
     COVER_STYLE_OBI_WHITE = 6,   // Obi Band with a white band over a black footer
     COVER_STYLE_BUNKO = 7,       // paperback cover: art between vertical title and author columns
-    COVER_STYLE_BUNKO_WIDE = 8,  // Bunko with the art running off the top and left edges
+    COVER_STYLE_BUNKO_WIDE = 8,  // Bunko with a wider cover at the top left
     SLEEP_SCREEN_COVER_STYLE_COUNT
   };
   enum SLEEP_SCREEN_COVER_FILTER {
