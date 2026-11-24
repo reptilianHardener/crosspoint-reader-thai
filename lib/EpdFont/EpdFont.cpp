@@ -8,7 +8,7 @@
 #include "ShapingTokens.h"
 
 void EpdFont::getTextBounds(const char* string, const int startX, const int startY, int* minX, int* minY, int* maxX,
-                            int* maxY) const {
+                            int* maxY, const EpdFont* fallback) const {
   *minX = startX;
   *minY = startY;
   *maxX = startX;
@@ -32,12 +32,14 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
     const bool isShaped = shaping::isGlyphToken(cp);
     const bool isCombining = !isShaped && utf8IsCombiningMark(cp);
 
-    if (!isCombining && !isShaped) {
+    if (!isCombining && !isShaped && (!fallback || hasCodepoint(cp))) {
       cp = applyLigatures(cp, string);
     }
 
     EpdGlyph solidFallback;
-    const EpdGlyph* glyph = getGlyphMetrics(cp, solidFallback);
+    const EpdFont* face = fontForCodepoint(cp, fallback);
+    if (fallback && !face) continue;
+    const EpdGlyph* glyph = face->getGlyphMetrics(cp, solidFallback);
     if (!glyph) {
       // Keep cursor movement stable when a base glyph is missing, but don't attach subsequent
       // combining marks to stale base metrics.
@@ -65,7 +67,9 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
                                       : 0;
 
     if (!isCombining && prevCp != 0) {
-      const auto kernFP = isShaped || shaping::isGlyphToken(prevCp) ? 0 : getKerning(prevCp, cp);  // 4.4 kern
+      const auto kernFP = isShaped || shaping::isGlyphToken(prevCp) || face != fontForCodepoint(prevCp, fallback)
+                              ? 0
+                              : face->getKerning(prevCp, cp);  // 4.4 kern
       lastBaseX += fp4::toPixel(prevAdvanceFP + kernFP);
     }
 
@@ -92,10 +96,10 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
   }
 }
 
-void EpdFont::getTextDimensions(const char* string, int* w, int* h) const {
+void EpdFont::getTextDimensions(const char* string, int* w, int* h, const EpdFont* fallback) const {
   int minX = 0, minY = 0, maxX = 0, maxY = 0;
 
-  getTextBounds(string, 0, 0, &minX, &minY, &maxX, &maxY);
+  getTextBounds(string, 0, 0, &minX, &minY, &maxX, &maxY, fallback);
 
   *w = maxX - minX;
   *h = maxY - minY;
@@ -228,6 +232,11 @@ uint32_t EpdFont::applyLigatures(uint32_t cp, const char*& text) const {
     cp = lig;
   }
   return cp;
+}
+
+const EpdFont* EpdFont::fontForCodepoint(const uint32_t cp, const EpdFont* fallback) const {
+  if (!fallback || hasCodepoint(cp)) return this;
+  return fallback != this && fallback->hasCodepoint(cp) ? fallback : nullptr;
 }
 
 const EpdGlyph* EpdFont::getGlyph(const uint32_t cp) const {

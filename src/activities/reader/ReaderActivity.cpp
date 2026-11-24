@@ -3,6 +3,7 @@
 #include <FontCacheManager.h>
 #include <FsHelpers.h>
 #include <HalStorage.h>
+#include <KOReaderCredentialStore.h>
 #include <KOReaderDocumentId.h>
 #include <Memory.h>
 #include <TrustedTime.h>
@@ -19,6 +20,8 @@
 #include "RecentBooksStore.h"
 #include "SdCardFontSystem.h"
 #include "XtcReaderActivity.h"
+#include "activities/RenderLock.h"
+#include "sync/ReadingSessionLog.h"
 #include "util/PluginEvents.h"
 
 ReaderActivity::ReaderActivity(const char* name, GfxRenderer& renderer, MappedInputManager& mappedInput,
@@ -78,7 +81,7 @@ void ReaderActivity::onEnter() {
 
   {
     // ensureLoaded() can free and reload UI fallback fonts the render task draws with.
-    RenderLock lock(*this);
+    RenderLock lock;
     sdFontSystem.ensureLoaded(renderer);
   }
   applyInitialOrientation();
@@ -158,17 +161,25 @@ void ReaderActivity::flushReaderSession() {
   APP_STATE.readingMsPerPage = readingSpeed.msPerPage();
   APP_STATE.readingSpeedSamples = readingSpeed.samples();
 
-  if (!readerSession.isEmitWorthy() || !pluginevents::anySubscriber(pluginevents::Event::ReaderSession)) {
+  if (!readerSession.isEmitWorthy()) {
     readerSession.reset();
     return;
   }
 
-  const std::string document = KOReaderDocumentId::calculate(bookPath);
+  // The history uses the id progress sync uses, so the server files a session under the same book.
+  // Plugins always receive the binary id; hash the file only when one of the two needs it.
+  const bool subscribed = pluginevents::anySubscriber(pluginevents::Event::ReaderSession);
+  const bool binaryMatch = KOREADER_STORE.getMatchMethod() == DocumentMatchMethod::BINARY;
+  const std::string document = (subscribed || binaryMatch) ? KOReaderDocumentId::calculate(bookPath) : std::string();
+  readingSessionLog::append(binaryMatch ? document : KOReaderDocumentId::calculateFromFilename(bookPath), bookPath,
+                            getBookTitle(), readerSession.startTime(), readerSession.durationSeconds(),
+                            readerSession.startProgressBp(), readerSession.endProgressBp());
+
   const bool validDocument =
       document.size() == 32 && std::all_of(document.begin(), document.end(), [](const unsigned char c) {
         return std::isdigit(c) || (c >= 'a' && c <= 'f');
       });
-  if (validDocument) {
+  if (subscribed && validDocument) {
     char startTime[24];
     char endTime[24];
     char duration[16];

@@ -101,6 +101,9 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
   // SD card font family name — not in SettingsList, save manually. Written even when
   // empty: a missing key reads as DEFAULT_SD_FONT_FAMILY.
   doc["sdFontFamilyName"] = sdFontFamilyName;
+  if (uiFontFamilyName[0] != '\0') {
+    doc["uiFontFamilyName"] = uiFontFamilyName;
+  }
   // Dictionary folder name — uses dynamic getter/setter in SettingsList, save manually
   if (dictionaryName[0] != '\0') {
     doc["dictionaryName"] = dictionaryName;
@@ -288,6 +291,9 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   const char* sfn = doc["sdFontFamilyName"] | DEFAULT_SD_FONT_FAMILY;
   strncpy(sdFontFamilyName, sfn, sizeof(sdFontFamilyName) - 1);
   sdFontFamilyName[sizeof(sdFontFamilyName) - 1] = '\0';
+  const char* ufn = doc["uiFontFamilyName"] | "";
+  strncpy(uiFontFamilyName, ufn, sizeof(uiFontFamilyName) - 1);
+  uiFontFamilyName[sizeof(uiFontFamilyName) - 1] = '\0';
   if (sdFontFamilyName[0] == '\0') {
     switch (storedFontFamily) {
       case LEGACY_NOTOSERIF:
